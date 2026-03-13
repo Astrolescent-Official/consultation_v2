@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "account_id": "e5e9a5099aba6726b5ec31344afb1b64",
+  "name": "radix-consultation",
+  "compatibility_date": "2026-02-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/server.ts",
+  // Custom domain requires astrolescent.com zone in this CF account
+  // "routes": [
+  //   { "pattern": "consultations.astrolescent.com", "custom_domain": true }
+  // ],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf"
+  }
+}

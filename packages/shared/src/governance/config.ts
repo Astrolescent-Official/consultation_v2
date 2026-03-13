@@ -36,10 +36,14 @@ export class GovernanceConfig extends Context.Tag('@Governance/Config')<
   })
 
   static MainnetLive = Layer.succeed(this, {
-    packageAddress: PackageAddress.make('TODO_MAINNET_PACKAGE_ADDRESS'),
-    componentAddress: ComponentAddress.make('TODO_MAINNET_COMPONENT_ADDRESS'),
+    packageAddress: PackageAddress.make(
+      'package_rdx1p5w0ckjksr2q7ww5f5u76dzmvvekmyae2t7p6k2xm9v26ysddqvsvk'
+    ),
+    componentAddress: ComponentAddress.make(
+      'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
+    ),
     adminBadgeAddress: FungibleResourceAddress.make(
-      'TODO_MAINNET_ADMIN_BADGE_ADDRESS'
+      'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
     ),
     xrdResourceAddress: FungibleResourceAddress.make(
       'resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd'
