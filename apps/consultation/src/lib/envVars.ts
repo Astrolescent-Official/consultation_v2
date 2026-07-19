@@ -10,8 +10,7 @@ class EnvVars extends Schema.Class<EnvVars>('EnvVars')({
     decodingFallback: () => Either.right('prod' as const)
   }),
   DAPP_DEFINITION_ADDRESS: AccountAddress,
-  NETWORK_ID: Schema.NumberFromString,
-  VOTE_COLLECTOR_URL: Schema.String
+  NETWORK_ID: Schema.NumberFromString
 }) {}
 
 const isVitest = typeof import.meta.env.VITEST !== 'undefined'
@@ -21,8 +20,7 @@ const vitestMockEnvVars: typeof EnvVars.Encoded = {
   DAPP_DEFINITION_ADDRESS: AccountAddress.make(
     'account_rdx129xqyvgkn9h73atyrzndal004fwye3tzw49kkygv9ltm2kyrv2lmda'
   ),
-  NETWORK_ID: '1',
-  VOTE_COLLECTOR_URL: 'http://localhost:3001'
+  NETWORK_ID: '1'
 }
 
 export const envVars = pipe(
@@ -32,8 +30,7 @@ export const envVars = pipe(
       ENV: import.meta.env.VITE_ENV as unknown,
       DAPP_DEFINITION_ADDRESS: import.meta.env
         .VITE_PUBLIC_DAPP_DEFINITION_ADDRESS as unknown,
-      NETWORK_ID: import.meta.env.VITE_PUBLIC_NETWORK_ID as unknown,
-      VOTE_COLLECTOR_URL: import.meta.env.VITE_VOTE_COLLECTOR_URL as unknown
+      NETWORK_ID: import.meta.env.VITE_PUBLIC_NETWORK_ID as unknown
     } satisfies Record<keyof typeof EnvVars.Encoded, unknown>)
   }),
   Schema.decodeUnknownEither(EnvVars),

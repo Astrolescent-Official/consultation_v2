@@ -1,65 +1,114 @@
 {
-  "id": "2f3120e7-1064-4731-8f44-a157919b3b5d",
-  "prevId": "985505c0-b543-4eee-904b-6a03674519eb",
-  "version": "7",
-  "dialect": "postgresql",
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "2ae3586a-fcb0-468c-b099-fa935ae12cf5",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "public.config": {
+    "config": {
       "name": "config",
-      "schema": "",
       "columns": {
         "key": {
           "name": "key",
-          "type": "varchar(255)",
+          "type": "text",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "value": {
           "name": "value",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.vote_calculation_account_votes": {
+    "poll_lease": {
+      "name": "poll_lease",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "vote_calculation_account_votes": {
       "name": "vote_calculation_account_votes",
-      "schema": "",
       "columns": {
         "state_id": {
           "name": "state_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "account_address": {
           "name": "account_address",
-          "type": "varchar(255)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "vote": {
           "name": "vote",
-          "type": "varchar(255)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "vote_power": {
           "name": "vote_power",
-          "type": "numeric",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'0'"
+        },
+        "vote_power_sort_key": {
+          "name": "vote_power_sort_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "vote_calculation_account_votes_entity_power_idx": {
+          "name": "vote_calculation_account_votes_entity_power_idx",
+          "columns": [
+            "state_id",
+            "vote_power_sort_key"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "vote_calculation_account_votes_state_id_vote_calculation_state_id_fk": {
           "name": "vote_calculation_account_votes_state_id_vote_calculation_state_id_fk",
@@ -77,40 +126,40 @@
       },
       "compositePrimaryKeys": {
         "vote_calculation_account_votes_state_id_account_address_vote_pk": {
-          "name": "vote_calculation_account_votes_state_id_account_address_vote_pk",
           "columns": [
             "state_id",
             "account_address",
             "vote"
-          ]
+          ],
+          "name": "vote_calculation_account_votes_state_id_account_address_vote_pk"
         }
       },
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.vote_calculation_results": {
+    "vote_calculation_results": {
       "name": "vote_calculation_results",
-      "schema": "",
       "columns": {
         "state_id": {
           "name": "state_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "vote": {
           "name": "vote",
-          "type": "varchar(255)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "vote_power": {
           "name": "vote_power",
-          "type": "numeric",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": "'0'"
         }
       },
@@ -132,75 +181,73 @@
       },
       "compositePrimaryKeys": {
         "vote_calculation_results_state_id_vote_pk": {
-          "name": "vote_calculation_results_state_id_vote_pk",
           "columns": [
             "state_id",
             "vote"
-          ]
+          ],
+          "name": "vote_calculation_results_state_id_vote_pk"
         }
       },
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "checkConstraints": {}
     },
-    "public.vote_calculation_state": {
+    "vote_calculation_state": {
       "name": "vote_calculation_state",
-      "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "serial",
+          "type": "integer",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": true
         },
         "type": {
           "name": "type",
-          "type": "varchar(50)",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "entity_id": {
           "name": "entity_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "autoincrement": false
         },
         "last_vote_count": {
           "name": "last_vote_count",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false,
           "default": 0
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
+      "indexes": {
         "vote_calculation_state_type_entity_id_unique": {
           "name": "vote_calculation_state_type_entity_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "type",
             "entity_id"
-          ]
+          ],
+          "isUnique": true
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
-  "enums": {},
-  "schemas": {},
-  "sequences": {},
-  "roles": {},
-  "policies": {},
   "views": {},
+  "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
   }
 }

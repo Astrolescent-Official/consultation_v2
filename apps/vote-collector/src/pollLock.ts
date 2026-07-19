@@ -1,9 +1,8 @@
-import { config } from 'db/src/schema'
-import { eq, lte } from 'drizzle-orm'
-import { Array as A, Config, Data, DateTime, Duration, Effect } from 'effect'
-import { ORM } from './db/orm'
+import { Config, Data, Duration, Effect } from 'effect'
+import { first, run, VoteDatabase } from './db/d1'
+import { type PollLeaseIdentity, withPollLease } from './pollLease'
 
-const LOCK_KEY = 'poll_lock'
+const LOCK_ID = 1
 
 export class PollLockNotAcquired extends Data.TaggedError(
   'PollLockNotAcquired'
@@ -11,48 +10,72 @@ export class PollLockNotAcquired extends Data.TaggedError(
 
 export class PollLock extends Effect.Service<PollLock>()('PollLock', {
   effect: Effect.gen(function* () {
-    const db = yield* ORM
-    const POLL_TIMEOUT_DURATION = yield* Config.duration(
-      'POLL_TIMEOUT_DURATION'
-    ).pipe(Config.withDefault(Duration.seconds(120)), Effect.orDie)
+    const database = yield* VoteDatabase
+    const timeout = yield* Config.duration('POLL_TIMEOUT_DURATION').pipe(
+      Config.withDefault(Duration.seconds(120)),
+      Effect.orDie
+    )
+    const durationMs = Duration.toMillis(timeout)
 
     const acquireLock = Effect.gen(function* () {
-      const lockedAt = DateTime.unsafeNow()
-      const threshold = lockedAt.pipe(
-        DateTime.subtractDuration(POLL_TIMEOUT_DURATION)
-      )
+      const now = Date.now()
+      const lease: PollLeaseIdentity = {
+        owner: crypto.randomUUID(),
+        durationMs
+      }
+      const expiresAt = now + durationMs
+      const acquired = yield* first<{ owner: string }>(
+        'acquire poll lease',
+        database
+          .prepare(
+            `INSERT INTO poll_lease (id, owner, expires_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               owner = excluded.owner,
+               expires_at = excluded.expires_at
+             WHERE poll_lease.expires_at <= ? OR poll_lease.owner = excluded.owner
+             RETURNING owner`
+          )
+          .bind(LOCK_ID, lease.owner, expiresAt, now)
+      ).pipe(Effect.orDie)
 
-      const rows = yield* db
-        .insert(config)
-        .values({ key: LOCK_KEY, value: lockedAt.epochMillis.toString() })
-        .onConflictDoUpdate({
-          target: config.key,
-          set: { value: lockedAt.epochMillis.toString() },
-          setWhere: lte(config.value, threshold.epochMillis.toString())
-        })
-        .returning({ key: config.key })
-        .pipe(Effect.orDie)
-
-      if (A.isEmptyArray(rows)) {
+      if (acquired?.owner !== lease.owner) {
         return yield* new PollLockNotAcquired()
       }
 
-      yield* Effect.log('Poll lock acquired')
+      yield* Effect.logInfo('Poll lease acquired', {
+        owner: lease.owner,
+        expiresAt
+      })
+      return lease
     })
 
-    const releaseLock = Effect.gen(function* () {
-      yield* db
-        .delete(config)
-        .where(eq(config.key, LOCK_KEY))
-        .pipe(Effect.orDie)
-      yield* Effect.log('Poll lock released')
-    })
+    const releaseLock = (lease: PollLeaseIdentity) =>
+      run(
+        'release poll lease',
+        database
+          .prepare(
+            `UPDATE poll_lease
+             SET owner = '', expires_at = 0
+             WHERE id = ? AND owner = ?`
+          )
+          .bind(LOCK_ID, lease.owner)
+      ).pipe(
+        Effect.tap(() =>
+          Effect.logInfo('Poll lease released', { owner: lease.owner })
+        ),
+        Effect.catchAll((error) =>
+          Effect.logError('Failed to release poll lease', error)
+        )
+      )
 
-    return <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    return <A, E, R>(
+      effect: Effect.Effect<A, E, R>
+    ): Effect.Effect<A, E | PollLockNotAcquired, R> =>
       Effect.acquireUseRelease(
         acquireLock,
-        () => effect,
-        () => releaseLock
+        (lease) => withPollLease(lease, effect),
+        releaseLock
       )
   })
 }) {}

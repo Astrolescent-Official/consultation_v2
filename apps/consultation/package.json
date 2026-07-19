@@ -6,9 +6,14 @@
 		"dev": "vite dev --port 3000",
 		"build": "vite build",
 		"build:preview": "CLOUDFLARE_ENV=preview vite build --mode test",
-		"upload:preview": "pnpm build:preview && wrangler versions upload --preview-alias test",
+		"deploy": "pnpm build && wrangler deploy --config dist/server/wrangler.json",
+		"deploy:preview": "pnpm build:preview && wrangler deploy --config dist/server/wrangler.json",
+		"d1:migrate:local": "wrangler d1 migrations apply DB --local",
+		"d1:migrate:preview": "wrangler d1 migrations apply DB --remote --env preview",
+		"d1:migrate:production": "wrangler d1 migrations apply DB --remote",
 		"preview": "vite preview",
 		"check-types": "tsc --noEmit",
+		"test:worker": "vitest run --config vitest.worker.config.ts",
 		"format": "biome format",
 		"lint": "biome lint",
 		"check": "biome check"
@@ -54,11 +59,13 @@
 		"tailwindcss": "^4.0.6",
 		"tw-animate-css": "^1.3.6",
 		"vaul": "^1.1.2",
-		"vite-tsconfig-paths": "^5.1.4"
+		"vite-tsconfig-paths": "^5.1.4",
+		"vote-collector": "workspace:*"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
-		"@cloudflare/vite-plugin": "^1.25.5",
+		"@cloudflare/vite-plugin": "^1.45.1",
+		"@cloudflare/vitest-pool-workers": "catalog:",
 		"@tanstack/devtools-vite": "^0.3.11",
 		"@testing-library/dom": "^10.4.0",
 		"@testing-library/react": "^16.2.0",
@@ -72,6 +79,6 @@
 		"vite": "catalog:",
 		"vitest": "catalog:",
 		"web-vitals": "^5.1.0",
-		"wrangler": "^4.68.1"
+		"wrangler": "^4.112.0"
 	}
 }

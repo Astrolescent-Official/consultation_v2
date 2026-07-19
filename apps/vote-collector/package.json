@@ -1,54 +1,32 @@
 {
 	"name": "vote-collector",
 	"type": "module",
+	"exports": {
+		"./worker": "./src/worker.ts"
+	},
 	"scripts": {
-		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"dev": "tsx --watch src/http-server.ts",
-		"dev:inspect": "tsx --inspect-brk src/index.ts",
 		"tally": "tsx scripts/tally.ts",
-		"test": "vitest",
-		"sst:dev": "sst dev --stage local",
-		"sst:remove:local": "sst remove --stage local",
-		"sst:deploy:test": "sst deploy --stage test",
-		"sst:remove:test": "sst remove --stage test",
-		"sst:deploy:stokenet": "sst deploy --stage stokenet",
-		"sst:remove:stokenet": "sst remove --stage stokenet",
-		"sst:deploy:mainnet": "sst deploy --stage production",
-		"sst:remove:mainnet": "sst remove --stage production"
+		"test": "vitest"
 	},
 	"dependencies": {
-		"@effect/opentelemetry": "catalog:",
-		"@effect/platform": "catalog:",
-		"@effect/platform-node": "catalog:",
-		"@effect/rpc": "catalog:",
-		"@effect/sql": "catalog:",
-		"@effect/sql-drizzle": "catalog:",
-		"@effect/sql-pg": "catalog:",
 		"@radix-effects/gateway": "catalog:",
 		"@radix-effects/shared": "catalog:",
 		"@radixdlt/babylon-gateway-api-sdk": "catalog:",
-		"@types/node": "catalog:",
 		"bignumber.js": "catalog:",
 		"db": "workspace:*",
 		"decimal.js": "catalog:",
-		"drizzle-orm": "catalog:",
 		"effect": "catalog:",
-		"@hono/node-server": "^1.14.0",
-		"hono": "^4.11.10",
-		"pg": "^8.16.0",
 		"sbor-ez-mode": "catalog:",
 		"shared": "workspace:*"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260702.1",
+		"@effect/platform-node": "catalog:",
 		"@effect/language-service": "catalog:",
 		"@effect/vitest": "catalog:",
 		"@radix-effects/tx-tool": "^0.0.6",
-		"@testcontainers/postgresql": "^11.10.0",
-		"@types/aws-lambda": "8.10.160",
-		"@types/pg": "^8.16.0",
-		"sst": "3.17.38",
-		"tsdown": "catalog:",
+		"@types/node": "catalog:",
 		"tsx": "catalog:",
 		"vitest": "catalog:"
 	}

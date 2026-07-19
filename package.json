@@ -7,13 +7,10 @@
 		"format": "biome format --write",
 		"format:fix": "biome check --write --unsafe",
 		"check-types": "turbo run check-types",
-		"db:migrate": "turbo run db:migrate",
 		"db:generate": "turbo run db:generate",
-		"db:studio": "turbo run db:studio",
 		"test": "turbo run test",
-		"deploy:vote-collector:test": "./deploy.sh test",
-		"deploy:vote-collector:stokenet": "./deploy.sh stokenet",
-		"deploy:vote-collector:mainnet": "./deploy.sh mainnet"
+		"deploy:preview": "./deploy.sh preview",
+		"deploy:production": "./deploy.sh production"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.8",

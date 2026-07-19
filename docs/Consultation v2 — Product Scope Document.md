@@ -8,7 +8,7 @@
 
 **Components:**
 1. **Consultation dApp** — TanStack Start web app for creating/voting/viewing governance items
-2. **Vote Collector** — Node.js CLI for calculating vote results from on-ledger data
+2. **Vote Collector** — scheduled Cloudflare Worker module for calculating vote results from on-ledger data
 
 **Core Flow:**
 
@@ -19,8 +19,8 @@ Community votes on options → Winner determined
 ```
 
 **Tech Stack:**
-*   dApp: TanStack Start, Radix dApp Toolkit, PostgreSQL
-*   Vote Collector: Node.js, Radix Gateway API, PostgreSQL
+*   dApp: TanStack Start, Radix dApp Toolkit, Cloudflare Workers
+*   Vote Collector: Effect, Radix Gateway API, Cloudflare D1
 *   On-ledger: Scrypto components
 *   Network: Configurable (Stokenet / Mainnet)
 * * *
@@ -147,18 +147,18 @@ Promoted from TC → Voting Open → Deadline Reached →
 
 ### 5.1 Purpose
 
-Node.js CLI that calculates vote results by:
+Scheduled Worker module that calculates vote results by:
 1. Reading votes from on-ledger governance contract state
 2. Fetching LSU holdings for each voter at snapshot time
 3. Converting LSU → XRD voting power via validator redemption rates
-4. Storing calculated results in PostgreSQL
+4. Storing calculated results in Cloudflare D1
 
 ### 5.2 Data Flow
 
 ```scss
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Radix Gateway  │────▶│  Vote Collector │────▶│   PostgreSQL    │
-│      API        │     │     (Node.js)   │     │                 │
+│  Radix Gateway  │────▶│  Vote Collector │────▶│ Cloudflare D1   │
+│      API        │     │    (Worker)     │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -171,32 +171,26 @@ Node.js CLI that calculates vote results by:
 | Voter LSU holdings | Account fungible resources at snapshot |
 | LSU → XRD rate | Validator component state |
 
-### 5.4 Outputs (to PostgreSQL)
+### 5.4 Outputs (to D1)
 
 | Table | Contents |
 | ---| --- |
-| `tc_results` | TC id, status, total\_for, total\_against, quorum\_met, passed |
-| `rfp_results` | RFP id, status, winning\_option, quorum\_met |
-| `voter_power` | vote\_id, account, vote\_choice, voting\_power |
+| `vote_calculation_state` | Entity id/type and last processed vote count |
+| `vote_calculation_results` | Exact aggregate power per vote option |
+| `vote_calculation_account_votes` | Account, vote choice, and exact voting power |
 
 ### 5.5 Invocation
 
-```bash
-# Calculate results for specific TC
-vote-collector tc <tc_id>
-
-# Calculate results for specific RFP
-vote-collector rfp <rfp_id>
-```
+Cloudflare Cron Triggers invoke the same Worker that serves the dApp and vote APIs.
 
 ### 5.6 Configuration
 
 | Env Var | Description |
 | ---| --- |
-| `NETWORK` | `stokenet` or `mainnet` |
-| `GATEWAY_URL` | Radix Gateway API endpoint |
-| `GOVERNANCE_COMPONENT` | Component address |
-| `DATABASE_URL` | PostgreSQL connection string |
+| `NETWORK_ID` | `2` for Stokenet or `1` for Mainnet |
+| `POLL_RUN_DURATION` | Maximum scheduled-poll duration |
+| `POLL_TIMEOUT_DURATION` | D1 lease duration |
+| `DB` | Environment-specific D1 binding |
 
 * * *
 
@@ -212,7 +206,7 @@ vote-collector rfp <rfp_id>
 | Promote TC | Admin can promote passed TC to RFP with defined options |
 | Vote on RFP | User can select option, vote recorded on-ledger |
 | RFP Results | Vote Collector calculates correct totals with LSU-weighted power |
-| View Results | dApp displays accurate tallies from PostgreSQL |
+| View Results | dApp displays accurate tallies from D1 through same-origin Worker routes |
 
 ### 6.2 Non-Functional Requirements
 

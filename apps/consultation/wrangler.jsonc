@@ -11,30 +11,62 @@
   // ],
   "workers_dev": true,
   "preview_urls": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "consultation-votes-production",
+      "database_id": "2cbaf581-17c9-4543-a5e9-c0825b5c9d8b",
+      "migrations_dir": "../../packages/database/d1"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
   "observability": {
     "enabled": true
   },
   "vars": {
     "DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
+    "DEX_POSITION_CONCURRENCY": "1",
+    "ENV": "production",
+    "NETWORK_ID": "1",
+    "POLL_RUN_DURATION": "25 seconds",
+    "POLL_TIMEOUT_DURATION": "60 seconds",
+    "VOTE_CALCULATION_CONCURRENCY": "1",
     "VITE_ENV": "prod",
     "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
-    "VITE_PUBLIC_NETWORK_ID": "1",
-    "VITE_VOTE_COLLECTOR_URL": "https://bs8hm5drak.execute-api.eu-west-1.amazonaws.com"
+    "VITE_PUBLIC_NETWORK_ID": "1"
   },
   "env": {
     // Build with CLOUDFLARE_ENV=preview. Keeping the same Worker name makes
     // preview versions and branch aliases without changing the active deployment.
     "preview": {
-      "name": "consultation",
+      "name": "consultation-preview",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "consultation-votes-preview",
+          "database_id": "ce7e92ad-d08f-440a-a22b-5e151bbc719a",
+          "migrations_dir": "../../packages/database/d1"
+        }
+      ],
+      "triggers": {
+        "crons": ["*/10 * * * *"]
+      },
       // Client values are injected by Vite from `.env.test.local` or the
       // Cloudflare preview build trigger. These runtime placeholders prevent
       // production vars from being inherited into preview versions.
       "vars": {
         "DAPP_DEFINITION_ADDRESS": "",
+        "DEX_POSITION_CONCURRENCY": "1",
+        "ENV": "preview",
+        "NETWORK_ID": "2",
+        "POLL_RUN_DURATION": "25 seconds",
+        "POLL_TIMEOUT_DURATION": "60 seconds",
+        "VOTE_CALCULATION_CONCURRENCY": "1",
         "VITE_ENV": "staging",
         "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "",
-        "VITE_PUBLIC_NETWORK_ID": "2",
-        "VITE_VOTE_COLLECTOR_URL": ""
+        "VITE_PUBLIC_NETWORK_ID": "2"
       }
     }
   }

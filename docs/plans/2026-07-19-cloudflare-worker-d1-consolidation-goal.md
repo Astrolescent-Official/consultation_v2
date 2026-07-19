@@ -1,6 +1,6 @@
 # Goal: Consolidate Consultation and Vote Collector on Cloudflare
 
-**Status:** Awaiting explicit implementation approval
+**Status:** In progress — production deployed; preview and retirement pending
 
 **Estimated effort:** 7–11 engineering days, followed by a 2–7 day production soak
 
@@ -11,8 +11,10 @@ Cloudflare Worker application per environment. The Worker will serve the
 consultation dApp, expose the vote-result APIs, run the scheduled ledger poll,
 and persist vote state in Cloudflare D1.
 
-Implementation must not begin until the user explicitly approves execution of
-this goal.
+Execution was explicitly approved on 2026-07-19. Production is now running on
+the consolidated Worker and D1 architecture. The remaining release work is the
+Stokenet preview deployment, the production soak/rollback check, and retirement
+of the retained external AWS/PostgreSQL resources.
 
 ## Confirmed Decisions
 
@@ -23,6 +25,28 @@ this goal.
 - Create a fresh D1 schema and fresh production/test databases.
 - Keep production and test isolated with separate Worker environments, D1
   databases, Radix networks, variables, and Cron Triggers.
+
+## Execution Record — 2026-07-19
+
+- Production Worker: `consultation` at
+  `https://consultation.radixdao.workers.dev`, version
+  `5a873299-17fd-4344-87d9-11c558813ea3`.
+- Production D1: `consultation-votes-production`
+  (`2cbaf581-17c9-4543-a5e9-c0825b5c9d8b`).
+- Preview D1: `consultation-votes-preview`
+  (`ce7e92ad-d08f-440a-a22b-5e151bbc719a`). It is intentionally not deployed
+  until a valid Stokenet dApp-definition address is supplied.
+- Final upload was 3.77 MiB total / 780.46 KiB gzip, with a 47 ms Worker
+  startup time.
+- The representative mainnet snapshot passed inside `workerd` in 2.896 seconds
+  and produced the exact expected total. The harness does not expose a separate
+  peak-memory counter; D1 statement and Gateway concurrency are bounded in
+  code instead of inferred from process-wide test metrics.
+- The first production cron completed successfully in 3.118 seconds wall time
+  and 76 ms CPU time, advanced the fresh D1 cursor to state version
+  `538489821`, released its lease, and reported no exceptions.
+- Production smoke checks passed for the app shell, Radix manifest,
+  `/vote-results`, and `/account-votes`.
 
 ## Important Distinction
 
@@ -70,16 +94,19 @@ same-origin URLs, removing API Gateway, CORS, and
 
 ## Execution Plan
 
-### Phase 1: Prove Worker Fit — 1–2 days
+### Phase 1: Prove Worker Fit — complete
 
-- [ ] Bundle the server-side vote collector with the existing consultation
+- [x] Bundle the server-side vote collector with the existing consultation
   Worker and record compressed bundle size and startup time.
-- [ ] Run the mainnet snapshot fixture in `workerd` and record CPU time, wall
-  time, memory use, query count, and outbound concurrency.
-- [ ] Prototype `@effect/sql-d1` with `@effect/sql-drizzle/Sqlite` and a real D1
-  binding.
-- [ ] Test an exact revote update using an atomic D1 batch.
-- [ ] Record the governance deployment/current state versions and choose
+- [x] Run the mainnet snapshot fixture in `workerd` and record the runtime
+  telemetry exposed by the harness and production cron. Peak memory and a raw
+  query counter are not exposed, so statement sizes and concurrency are
+  explicitly bounded and covered by integration tests.
+- [x] Prototype `@effect/sql-d1` with `@effect/sql-drizzle/Sqlite` and a real D1
+  binding. The prototype confirmed that the adapter does not support D1
+  transactions, so the implementation uses native atomic `D1Database.batch()`.
+- [x] Test an exact revote update using an atomic D1 batch.
+- [x] Record the governance deployment/current state versions and choose
   current-state bootstrap or ledger replay.
 
 #### Phase 1 exit criteria
@@ -92,55 +119,57 @@ same-origin URLs, removing API Gateway, CORS, and
 - Exact decimal values round-trip without JavaScript number conversion.
 - The single-Worker design is confirmed before full implementation continues.
 
-### Phase 2: Build the D1 Persistence Layer — 2–3 days
+### Phase 2: Build the D1 Persistence Layer — complete
 
-- [ ] Replace the Postgres Drizzle schema with a SQLite schema and generate the
+- [x] Replace the Postgres Drizzle schema with a SQLite schema and generate the
   initial D1 schema file.
-- [ ] Store canonical vote power as `TEXT` and add a fixed-width sortable key
+- [x] Store canonical vote power as `TEXT` and add a fixed-width sortable key
   for numeric ordering.
-- [ ] Replace `PgClient`, Postgres migrations, and `@effect/sql-drizzle/Pg`
+- [x] Replace `PgClient`, Postgres migrations, and `@effect/sql-drizzle/Pg`
   with D1 and SQLite Effect layers.
-- [ ] Move aggregate addition/subtraction to `BigNumber` and commit account
+- [x] Move aggregate addition/subtraction to `BigNumber` and commit account
   votes, totals, and `lastVoteCount` atomically.
-- [ ] Chunk address filters and multi-row writes to stay below D1's bound
+- [x] Chunk address filters and multi-row writes to stay below D1's bound
   parameter and batch limits.
 
-### Phase 3: Consolidate Fetch and Scheduled Handling — 1–2 days
+### Phase 3: Consolidate Fetch and Scheduled Handling — complete
 
-- [ ] Add vote-result routing to the consultation Worker's `fetch()` handler
+- [x] Add vote-result routing to the consultation Worker's `fetch()` handler
   before the TanStack Start fallback.
-- [ ] Add `scheduled()` and configure a five-minute UTC Cron Trigger.
-- [ ] Inject D1 and environment configuration into Effect layers without
+- [x] Add `scheduled()` and configure a five-minute UTC Cron Trigger.
+- [x] Inject D1 and environment configuration into Effect layers without
   request-scoped module-global state.
-- [ ] Change the browser vote client to same-origin API paths and remove the
+- [x] Change the browser vote client to same-origin API paths and remove the
   API Gateway URL configuration.
-- [ ] Remove AWS Lambda handler types, SST configuration, `pg`, Node server,
+- [x] Remove AWS Lambda handler types, SST configuration, `pg`, Node server,
   and runtime-only Node database dependencies after replacement tests pass.
 
-### Phase 4: Make Polling Safe and Bounded — 1–2 days
+### Phase 4: Make Polling Safe and Bounded — complete
 
-- [ ] Retain ledger-page cursor checkpoints and stop cleanly before the Worker
+- [x] Retain ledger-page cursor checkpoints and stop cleanly before the Worker
   execution budget is exhausted.
-- [ ] Replace the timestamp-only poll lock with an owner-token lease,
+- [x] Replace the timestamp-only poll lock with an owner-token lease,
   conditional release, and renewal between pages.
-- [ ] Serialize D1 commits while allowing bounded Radix Gateway fetching.
-- [ ] Add retry with jitter for transient Gateway, rate-limit, and D1 overload
+- [x] Serialize D1 commits while allowing bounded Radix Gateway fetching.
+- [x] Add retry with jitter for transient Gateway, rate-limit, and D1 overload
   failures.
-- [ ] Emit structured logs for poll ID, cursor range, entities processed,
+- [x] Emit structured logs for poll ID, cursor range, entities processed,
   duration, retry count, and failure cause.
 
-### Phase 5: Verify, Deploy, and Retire AWS — 2–3 days plus soak
+### Phase 5: Verify, Deploy, and Retire AWS — in progress
 
-- [ ] Add Cloudflare Vitest tests with isolated local D1 storage and applied
+- [x] Add Cloudflare Vitest tests with isolated local D1 storage and applied
   schema files.
-- [ ] Run type checks, vote calculation tests, Worker API tests, scheduled
+- [x] Run type checks, vote calculation tests, Worker API tests, scheduled
   handler tests, the mainnet snapshot fixture, and a Wrangler dry-run build.
-- [ ] Create isolated test and production D1 databases and Worker environment
-  bindings; branch previews must not receive Cron Triggers.
-- [ ] Deploy test first, then production with a fresh D1 database and the
-  approved ledger bootstrap position.
+- [x] Create isolated preview and production D1 databases and Worker bindings.
+  Preview versions do not receive a Cron Trigger until that environment is
+  explicitly deployed.
+- [ ] Deploy preview after receiving its Stokenet dApp-definition address.
+- [x] Deploy production with a fresh D1 database and current-state bootstrap.
 - [ ] Observe production for 2–7 days, test rollback once, and only then remove
-  AWS/SST and PostgreSQL deployment documentation and resources.
+  the retained external AWS/PostgreSQL resources. Obsolete AWS/SST/PostgreSQL
+  application code and documentation have already been removed from this repo.
 
 ## Fresh-Database Rollout
 
@@ -181,12 +210,12 @@ version and restoring D1 with Time Travel if storage state is involved.
 - No AWS, SST, API Gateway, PostgreSQL, or external vote-collector URL is
   required by the production application.
 
-## Approval Gate
+## Approval Gate — passed 2026-07-19
 
 Before approval, only read-only investigation and edits to this goal document
 are allowed. Do not install dependencies, create Cloudflare resources, change
 application code, migrate schemas, deploy, disable AWS, or delete anything.
 
-Execution begins only after an explicit instruction such as:
+Execution began after the explicit instruction:
 
 > Approve and execute the Cloudflare Worker/D1 consolidation goal.

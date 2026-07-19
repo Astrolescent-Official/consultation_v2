@@ -14,6 +14,7 @@
 | Layer | Technology |
 | --- | --- |
 | Framework | React 19, Vite |
+| Runtime | Cloudflare Worker with D1 and scheduled polling |
 | Routing | TanStack Router + [TanStack Start](https://tanstack.com/start) |
 | State | [Effect Atom](https://github.com/effect-ts/atom) (reactive atoms with Effect runtime) |
 | Styling | Tailwind CSS v4, Radix UI, shadcn/ui, CVA |
@@ -29,7 +30,6 @@ All variables use the `VITE_` prefix (Vite injects them at build time via `impor
 | `VITE_ENV` | Environment (`dev`, `staging`, `prod`, `local`) | `prod` |
 | `VITE_PUBLIC_DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
 | `VITE_PUBLIC_NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = stokenet) | — (required) |
-| `VITE_VOTE_COLLECTOR_URL` | Vote collector API base URL | — (required) |
 
 Create a `.env` file in `apps/consultation/`:
 
@@ -37,7 +37,6 @@ Create a `.env` file in `apps/consultation/`:
 VITE_ENV=dev
 VITE_PUBLIC_DAPP_DEFINITION_ADDRESS=account_rdx...
 VITE_PUBLIC_NETWORK_ID=2
-VITE_VOTE_COLLECTOR_URL=http://localhost:4000
 ```
 
 ## Scripts
@@ -46,26 +45,26 @@ VITE_VOTE_COLLECTOR_URL=http://localhost:4000
 | --- | --- | --- |
 | `dev` | `vite dev --port 3000` | Start dev server on port 3000 |
 | `build` | `vite build` | Production build |
+| `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
+| `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |
+| `deploy:preview` | `pnpm build:preview && wrangler deploy ...` | Deploy isolated preview Worker |
 | `preview` | `vite preview` | Preview production build |
 | `check-types` | `tsc --noEmit` | Type-check without emitting |
 | `format` | `biome format` | Format with Biome |
 | `lint` | `biome lint` | Lint with Biome |
 | `check` | `biome check` | Biome format + lint |
 
-## Test and branch previews
+## Preview environment
 
-The test frontend builds against Stokenet and uploads a Worker version without
-promoting it to production:
+The preview Worker builds against Stokenet and uses an isolated D1 database:
 
 ```sh
 cp .env.test.local.example .env.test.local
-pnpm upload:preview
+pnpm deploy:preview
 ```
 
-This updates the stable `test-consultation.radixdao.workers.dev` alias. Automatic
-Cloudflare Git previews use the same test backend but receive a separate URL per
-branch. See [`../../docs/environments.md`](../../docs/environments.md) for the
-full environment matrix and Cloudflare build settings.
+See [`../../docs/environments.md`](../../docs/environments.md) for the full
+environment matrix and release checks.
 
 ## Project structure
 

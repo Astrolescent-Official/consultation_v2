@@ -21,9 +21,9 @@ import {
   Option,
   Record as R
 } from 'effect'
-import { describe, expect, it } from 'vitest'
 import { MainnetGatewayApiClientLayer } from 'shared/gateway'
 import { GovernanceConfig } from 'shared/governance/index'
+import { describe, expect, it } from 'vitest'
 import { VotePowerSnapshot } from '../vote-calculation/votePowerSnapshot'
 import {
   findEpoch,
@@ -75,7 +75,9 @@ const runSnapshot = (
   )
 
 const getTotal = (
-  result: { votePower: R.ReadonlyRecord<AccountAddress, import('bignumber.js').default> },
+  result: {
+    votePower: R.ReadonlyRecord<AccountAddress, import('bignumber.js').default>
+  },
   accountAddress: AccountAddress
 ) =>
   R.get(result.votePower, accountAddress).pipe(
@@ -121,9 +123,9 @@ describe('Vote Power Snapshot', () => {
       // Step 1: Disable shape pools
       const noShapeConfig = resolve({
         sources: epoch0.sources,
-        precisionPoolsV1: epoch0.precisionPoolsV1,
-        precisionPoolsV2: epoch0.precisionPoolsV2,
-        poolUnitPools: epoch0.poolUnitPools
+        precisionPoolsV1: epoch0.precisionPoolsV1 ?? [],
+        precisionPoolsV2: epoch0.precisionPoolsV2 ?? [],
+        poolUnitPools: epoch0.poolUnitPools ?? []
       })
       const noShapeResult = await runSnapshot(
         noShapeConfig,
@@ -136,7 +138,7 @@ describe('Vote Power Snapshot', () => {
       // Step 2: Also disable precision pools
       const noPrecisionConfig = resolve({
         sources: epoch0.sources,
-        poolUnitPools: epoch0.poolUnitPools
+        poolUnitPools: epoch0.poolUnitPools ?? []
       })
       const noPrecisionResult = await runSnapshot(
         noPrecisionConfig,
@@ -157,9 +159,7 @@ describe('Vote Power Snapshot', () => {
         accountAddress,
         stateVersion
       )
-      const noPoolUnitTotal = Number(
-        getTotal(noPoolUnitResult, accountAddress)
-      )
+      const noPoolUnitTotal = Number(getTotal(noPoolUnitResult, accountAddress))
       expect(noPoolUnitTotal).toBeLessThan(noPrecisionTotal)
 
       // Step 4: Also disable LSULP
@@ -187,10 +187,9 @@ describe('Vote Power Snapshot', () => {
       expect(xrdOnlyTotal).toBeLessThan(noLsulpTotal)
 
       // XRD-only should have no pool breakdown
-      const xrdBreakdown = R.get(
-        xrdOnlyResult.breakdown,
-        accountAddress
-      ).pipe(Option.getOrElse(() => [] as const))
+      const xrdBreakdown = R.get(xrdOnlyResult.breakdown, accountAddress).pipe(
+        Option.getOrElse(() => [] as const)
+      )
       expect(xrdBreakdown).toEqual([])
     }
   )
@@ -226,12 +225,18 @@ describe('findEpoch', () => {
     const epochs = [epoch1, epoch0]
 
     // Before epoch 1 → should get epoch 0
-    expect(findEpoch(epochs, new Date('2025-01-01')).effectiveFrom).toStrictEqual(epoch0.effectiveFrom)
+    expect(
+      findEpoch(epochs, new Date('2025-01-01')).effectiveFrom
+    ).toStrictEqual(epoch0.effectiveFrom)
 
     // After epoch 1 → should get epoch 1
-    expect(findEpoch(epochs, new Date('2026-07-01')).effectiveFrom).toStrictEqual(epoch1.effectiveFrom)
+    expect(
+      findEpoch(epochs, new Date('2026-07-01')).effectiveFrom
+    ).toStrictEqual(epoch1.effectiveFrom)
 
     // Boundary: effectiveFrom is inclusive
-    expect(findEpoch(epochs, new Date('2026-06-01T00:00:00.000Z')).effectiveFrom).toStrictEqual(epoch1.effectiveFrom)
+    expect(
+      findEpoch(epochs, new Date('2026-06-01T00:00:00.000Z')).effectiveFrom
+    ).toStrictEqual(epoch1.effectiveFrom)
   })
 })

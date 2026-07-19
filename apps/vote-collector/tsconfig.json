@@ -16,6 +16,7 @@
 		"module": "ESNext",
 		"target": "ES2022",
 		"lib": ["ES2022"],
+		"types": ["@cloudflare/workers-types"],
 		"incremental": true,
 		"noEmit": true,
 		"plugins": [

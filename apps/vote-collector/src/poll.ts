@@ -1,9 +1,18 @@
 import { GatewayApiClient } from '@radix-effects/gateway'
 import { StateVersion } from '@radix-effects/shared'
-import { Array as A, Effect, Order, Option, pipe } from 'effect'
+import {
+  Array as A,
+  Config,
+  Duration,
+  Effect,
+  Option,
+  Order,
+  pipe,
+  Schedule
+} from 'effect'
 import { GovernanceConfig } from 'shared/governance/config'
-import { LedgerCursor } from './ledgerCursor'
 import { GovernanceEventProcessor } from './governanceEvents'
+import { LedgerCursor } from './ledgerCursor'
 import type { VoteCalculationPayload } from './vote-calculation/types'
 import { VoteCalculation } from './vote-calculation/voteCalculation'
 
@@ -26,9 +35,21 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
     const { processBatch } = yield* GovernanceEventProcessor
     const calculateVotes = yield* VoteCalculation
     const config = yield* GovernanceConfig
+    const voteCalculationConcurrency = yield* Config.number(
+      'VOTE_CALCULATION_CONCURRENCY'
+    ).pipe(
+      Config.withDefault(1),
+      Effect.map((value) => Math.max(1, Math.min(Math.floor(value), 2))),
+      Effect.orDie
+    )
+    const gatewayRetry = Schedule.exponential(Duration.millis(250)).pipe(
+      Schedule.jittered,
+      Schedule.intersect(Schedule.recurs(3))
+    )
 
-    const fetchPage = (stateVersion: StateVersion) =>
-      gateway.stream.innerClient
+    const fetchPage = (stateVersion: StateVersion) => {
+      let retryCount = 0
+      return gateway.stream.innerClient
         .streamTransactions({
           streamTransactionsRequest: {
             limit_per_page: PAGE_SIZE,
@@ -42,7 +63,18 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
             affected_global_entities_filter: [config.componentAddress]
           }
         })
-        .pipe(Effect.orDie)
+        .pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning('Gateway page fetch failed', {
+              fromStateVersion: stateVersion,
+              retryCount: ++retryCount,
+              cause: String(error)
+            })
+          ),
+          Effect.retry(gatewayRetry),
+          Effect.orDie
+        )
+    }
 
     const processPage = (stateVersion: StateVersion) =>
       Effect.gen(function* () {
@@ -93,7 +125,7 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
                   entityId: payload.entityId
                 })
               ),
-            { concurrency: 5 }
+            { concurrency: voteCalculationConcurrency }
           )
         }
 
@@ -108,16 +140,23 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
 
     return Effect.fn('@VoteCollector/PollService')(function* () {
       const sv = yield* cursor.getOrBootstrap()
+      const startedAt = Date.now()
 
       yield* Effect.log('Poll started', { fromStateVersion: sv })
 
-      yield* Effect.iterate(
+      const completed = yield* Effect.iterate(
         { stateVersion: sv, drained: false },
         {
           while: (s) => !s.drained,
           body: (s) => processPage(s.stateVersion)
         }
       )
+
+      yield* Effect.logInfo('Poll completed', {
+        fromStateVersion: sv,
+        nextStateVersion: completed.stateVersion,
+        durationMs: Date.now() - startedAt
+      })
     })
   })
 }) {}
