@@ -34,8 +34,9 @@ of the retained external AWS/PostgreSQL resources.
 - Production D1: `consultation-votes-production`
   (`2cbaf581-17c9-4543-a5e9-c0825b5c9d8b`).
 - Preview D1: `consultation-votes-preview`
-  (`ce7e92ad-d08f-440a-a22b-5e151bbc719a`). It is intentionally not deployed
-  until a valid Stokenet dApp-definition address is supplied.
+  (`ce7e92ad-d08f-440a-a22b-5e151bbc719a`). The initial schema migration is
+  applied and verified. The Worker is intentionally not deployed until a valid
+  Stokenet dApp-definition address is supplied.
 - Final upload was 3.77 MiB total / 780.46 KiB gzip, with a 47 ms Worker
   startup time.
 - The representative mainnet snapshot passed inside `workerd` in 2.896 seconds
@@ -162,9 +163,9 @@ same-origin URLs, removing API Gateway, CORS, and
   schema files.
 - [x] Run type checks, vote calculation tests, Worker API tests, scheduled
   handler tests, the mainnet snapshot fixture, and a Wrangler dry-run build.
-- [x] Create isolated preview and production D1 databases and Worker bindings.
-  Preview versions do not receive a Cron Trigger until that environment is
-  explicitly deployed.
+- [x] Create isolated preview and production D1 databases, apply their initial
+  schema, and configure Worker bindings. Preview versions do not receive a Cron
+  Trigger until that environment is explicitly deployed.
 - [ ] Deploy preview after receiving its Stokenet dApp-definition address.
 - [x] Deploy production with a fresh D1 database and current-state bootstrap.
 - [ ] Observe production for 2–7 days, test rollback once, and only then remove

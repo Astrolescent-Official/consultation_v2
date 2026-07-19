@@ -41,6 +41,7 @@
     // Build with CLOUDFLARE_ENV=preview. Keeping the same Worker name makes
     // preview versions and branch aliases without changing the active deployment.
     "preview": {
+      "account_id": "cdb0453c60d48cf58f44f34f9eb6bbe2",
       "name": "consultation-preview",
       "d1_databases": [
         {
