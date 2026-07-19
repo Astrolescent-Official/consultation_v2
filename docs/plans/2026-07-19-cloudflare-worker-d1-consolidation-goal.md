@@ -48,6 +48,9 @@ of the retained external AWS/PostgreSQL resources.
   `538489821`, released its lease, and reported no exceptions.
 - Production smoke checks passed for the app shell, Radix manifest,
   `/vote-results`, and `/account-votes`.
+- AWS CLI 2.36.2 is installed, but the current AWS token is invalid. A confirmed
+  `aws login` is required before deployed SST stages can be inventoried or
+  retired.
 
 ## Important Distinction
 
@@ -171,6 +174,40 @@ same-origin URLs, removing API Gateway, CORS, and
 - [ ] Observe production for 2–7 days, test rollback once, and only then remove
   the retained external AWS/PostgreSQL resources. Obsolete AWS/SST/PostgreSQL
   application code and documentation have already been removed from this repo.
+
+## Retained AWS/PostgreSQL Retirement Inventory
+
+The last SST definition is preserved at commit `5254c22`. It identifies app
+`vote-collector` in `eu-west-1` with possible `test`, `stokenet`, and
+`production` stages. The deployed stage list must be read from SST state after
+AWS authentication; script names alone are not proof that a stage exists.
+
+For every deployed stage, the SST resource graph contains:
+
+- one scheduled poll Lambda plus its EventBridge schedule, IAM role and
+  permissions, and CloudWatch log group;
+- two HTTP API Lambdas plus their IAM roles, invoke permissions, and CloudWatch
+  log groups;
+- one API Gateway v2 API with stage, routes, and Lambda integrations.
+
+PostgreSQL was supplied through `DATABASE_URL`; SST did not provision or own
+that database. Its provider and exact instance must therefore be identified and
+removed separately after the rollback window.
+
+Retirement procedure after the production soak:
+
+1. Run `aws login`, verify the account identity, then run `sst state list` and
+   export each discovered stage before changing resources.
+2. Use the SST definition from commit `5254c22`, remove production protection in
+   a retirement-only working tree, and review the removal preview for each
+   discovered stage.
+3. Run `sst remove --stage <stage>` for the verified stages and confirm the
+   Lambda, API Gateway, EventBridge, IAM, and log resources are gone.
+4. Do not delete account-level SST state/bootstrap S3, ECR, AppSync, or
+   `/sst/bootstrap` resources unless a separate account-wide audit proves that
+   no other SST app uses them.
+5. Remove the external PostgreSQL instance only after identifying its owner and
+   confirming the Cloudflare rollback check no longer depends on it.
 
 ## Fresh-Database Rollout
 
