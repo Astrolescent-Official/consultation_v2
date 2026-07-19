@@ -1,6 +1,6 @@
 # Vote Collector
 
-Vote collector for Radix governance, built with [Effect](https://effect.website/). Supports two deployment modes: **SST v3** (serverless Lambda + Cron) and a self-contained **HTTP server** (Hono + Node.js, deployed via Docker).
+Vote collector for Radix DAO Governance, built with [Effect](https://effect.website/). Supports two deployment modes: **SST v3** (serverless Lambda + Cron) and a self-contained **HTTP server** (Hono + Node.js, deployed via Docker).
 
 ## Architecture
 
@@ -25,6 +25,7 @@ cp .env.example .env
 | -------------- | ---------------------------------------------- | ------- |
 | `DATABASE_URL` | PostgreSQL connection string                   | —       |
 | `NETWORK_ID`   | Radix network (`1` = mainnet, `2` = stokenet)  | `2`     |
+| `POLL_SCHEDULE` | EventBridge schedule expression                | `rate(5 minutes)` |
 | `POLL_TIMEOUT_DURATION` | Poll Lambda timeout (Effect duration, e.g. `120 seconds`) | `120 seconds` |
 | `DEX_POSITION_CONCURRENCY` | Max concurrent DEX position computations | `3` |
 | `SERVER_PORT` | HTTP server listen port (HTTP mode only) | `4000` |
@@ -100,9 +101,11 @@ NETWORK_ID=1 COMPONENT_ADDRESS=component_rdx1czn9hrgd30x742k6jw2e6psj9jlkqvu2cj4
 | `dev` | `tsx --watch src/http-server.ts` | Hono HTTP server with hot reload |
 | `tally` | `tsx scripts/tally.ts` | Independently verify vote results from the blockchain |
 | `sst:dev` | `sst dev --stage local` | Local dev with live Lambda emulation |
+| `sst:deploy:test` | `sst deploy --stage test` | Deploy the isolated test stage |
 | `sst:deploy:stokenet` | `sst deploy --stage stokenet` | Deploy to stokenet stage |
 | `sst:deploy:mainnet` | `sst deploy --stage production` | Deploy to production stage |
 | `sst:remove:local` | `sst remove --stage local` | Tear down local stage |
+| `sst:remove:test` | `sst remove --stage test` | Tear down the isolated test stage |
 | `sst:remove:stokenet` | `sst remove --stage stokenet` | Tear down stokenet stage |
 | `sst:remove:mainnet` | `sst remove --stage mainnet` | Tear down mainnet stage |
 

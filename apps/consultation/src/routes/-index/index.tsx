@@ -21,7 +21,7 @@ export const Page: React.FC = () => {
     <>
       {/* Header */}
       <div className="mb-8">
-        <H1>Radix Governance</H1>
+        <H1>Radix DAO Governance</H1>
         <P className="mt-2 text-neutral-500 dark:text-neutral-400">
           Participate in community governance through temperature checks and
           proposals.{' '}

@@ -83,6 +83,7 @@ Set `VITE_VOTE_COLLECTOR_URL` to the API Gateway URL printed by SST above. You c
 
   | Environment | Env file | SST stage | `NETWORK_ID` | Deploy command |
   |---|---|---|---|---|
+  | Test | `.env.test` | `test` | `2` | `pnpm deploy:vote-collector:test` |
   | Stokenet | `.env.stokenet` | `stokenet` | `2` | `pnpm deploy:vote-collector:stokenet` |
   | Mainnet | `.env.mainnet` | `production` | `1` | `pnpm deploy:vote-collector:mainnet` |
 
@@ -98,15 +99,19 @@ Set `VITE_VOTE_COLLECTOR_URL` to the API Gateway URL printed by SST above. You c
 ### Deploy
 
 ```sh
+pnpm deploy:vote-collector:test       # isolated test DB + AWS stage
 pnpm deploy:vote-collector:stokenet   # sources .env.stokenet, migrates, deploys to development stage
 pnpm deploy:vote-collector:mainnet    # sources .env.mainnet, migrates, deploys to production stage
 ```
+
+See [`docs/environments.md`](docs/environments.md) for the PlanetScale branch,
+stable Cloudflare test preview, and automatic per-branch preview setup.
 
 ### What gets deployed
 
 | Resource | Type | Details |
 | --- | --- | --- |
-| `Poll` | `sst.aws.Cron` | Lambda on a 1-minute schedule, polls Radix Gateway |
+| `Poll` | `sst.aws.Cron` | Lambda on a 5-minute schedule by default, polls Radix Gateway |
 | `Api` | `sst.aws.ApiGatewayV2` | `GET /vote-results`, `GET /account-votes` |
 
 Region: `eu-west-1`. Runtime: Node.js 22.
@@ -118,6 +123,9 @@ The `production` stage has `protect: true` (prevents accidental deletion of reso
 ### Teardown
 
 ```sh
+# Remove the isolated test stage
+pnpm -F vote-collector sst:remove:test
+
 # Remove stokenet
 pnpm -F vote-collector sst:remove:stokenet
 

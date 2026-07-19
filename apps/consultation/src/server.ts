@@ -1,7 +1,10 @@
 import handler from '@tanstack/react-start/server-entry'
 
+const buildTimeDappDefinitionAddress =
+  import.meta.env.VITE_PUBLIC_DAPP_DEFINITION_ADDRESS ?? ''
+
 export default {
-  async fetch(request: Request, env: Record<string, unknown>, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env) {
     const url = new URL(request.url)
 
     // Serve the Radix dApp well-known file
@@ -9,12 +12,13 @@ export default {
       return Response.json({
         dApps: [
           {
-            dAppDefinitionAddress: env.DAPP_DEFINITION_ADDRESS ?? '',
-          },
-        ],
+            dAppDefinitionAddress:
+              env.DAPP_DEFINITION_ADDRESS || buildTimeDappDefinitionAddress
+          }
+        ]
       })
     }
 
-    return handler.fetch(request, env, ctx)
-  },
+    return handler.fetch(request)
+  }
 }

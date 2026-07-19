@@ -1,8 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "account_id": "e5e9a5099aba6726b5ec31344afb1b64",
-  "name": "radix-consultation",
-  "compatibility_date": "2026-02-26",
+  "account_id": "cdb0453c60d48cf58f44f34f9eb6bbe2",
+  "name": "consultation",
+  "compatibility_date": "2026-07-19",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
   // Custom domain requires astrolescent.com zone in this CF account
@@ -10,10 +10,32 @@
   //   { "pattern": "consultations.astrolescent.com", "custom_domain": true }
   // ],
   "workers_dev": true,
+  "preview_urls": true,
   "observability": {
     "enabled": true
   },
   "vars": {
-    "DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf"
+    "DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
+    "VITE_ENV": "prod",
+    "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
+    "VITE_PUBLIC_NETWORK_ID": "1",
+    "VITE_VOTE_COLLECTOR_URL": "https://bs8hm5drak.execute-api.eu-west-1.amazonaws.com"
+  },
+  "env": {
+    // Build with CLOUDFLARE_ENV=preview. Keeping the same Worker name makes
+    // preview versions and branch aliases without changing the active deployment.
+    "preview": {
+      "name": "consultation",
+      // Client values are injected by Vite from `.env.test.local` or the
+      // Cloudflare preview build trigger. These runtime placeholders prevent
+      // production vars from being inherited into preview versions.
+      "vars": {
+        "DAPP_DEFINITION_ADDRESS": "",
+        "VITE_ENV": "staging",
+        "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "",
+        "VITE_PUBLIC_NETWORK_ID": "2",
+        "VITE_VOTE_COLLECTOR_URL": ""
+      }
+    }
   }
 }

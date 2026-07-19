@@ -10,10 +10,12 @@
 		"test": "vitest",
 		"sst:dev": "sst dev --stage local",
 		"sst:remove:local": "sst remove --stage local",
+		"sst:deploy:test": "sst deploy --stage test",
+		"sst:remove:test": "sst remove --stage test",
 		"sst:deploy:stokenet": "sst deploy --stage stokenet",
 		"sst:remove:stokenet": "sst remove --stage stokenet",
 		"sst:deploy:mainnet": "sst deploy --stage production",
-		"sst:remove:mainnet": "sst remove --stage mainnet"
+		"sst:remove:mainnet": "sst remove --stage production"
 	},
 	"dependencies": {
 		"@effect/opentelemetry": "catalog:",

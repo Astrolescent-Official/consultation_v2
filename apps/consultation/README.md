@@ -52,6 +52,21 @@ VITE_VOTE_COLLECTOR_URL=http://localhost:4000
 | `lint` | `biome lint` | Lint with Biome |
 | `check` | `biome check` | Biome format + lint |
 
+## Test and branch previews
+
+The test frontend builds against Stokenet and uploads a Worker version without
+promoting it to production:
+
+```sh
+cp .env.test.local.example .env.test.local
+pnpm upload:preview
+```
+
+This updates the stable `test-consultation.radixdao.workers.dev` alias. Automatic
+Cloudflare Git previews use the same test backend but receive a separate URL per
+branch. See [`../../docs/environments.md`](../../docs/environments.md) for the
+full environment matrix and Cloudflare build settings.
+
 ## Project structure
 
 ```

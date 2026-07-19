@@ -16,9 +16,9 @@ export const Page = () => {
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <H1>About Radix Governance</H1>
+            <H1>About Radix DAO Governance</H1>
             <p className="mt-2 text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Radix Governance is a decentralized governance platform for the
+              Radix DAO Governance is a decentralized governance platform for the
               Radix ecosystem. It enables the community to signal sentiment
               through Temperature Checks (TC) and decide on execution paths
               through Governance Proposals (GP).

@@ -48,7 +48,7 @@ export default function Header() {
               R
             </div>
             <span className="hidden sm:inline text-base font-medium tracking-tight">
-              Consultation
+              Radix DAO
               <span className="ml-1 text-xs font-light text-muted-foreground">
                 v2
               </span>

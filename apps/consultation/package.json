@@ -5,6 +5,8 @@
 	"scripts": {
 		"dev": "vite dev --port 3000",
 		"build": "vite build",
+		"build:preview": "CLOUDFLARE_ENV=preview vite build --mode test",
+		"upload:preview": "pnpm build:preview && wrangler versions upload --preview-alias test",
 		"preview": "vite preview",
 		"check-types": "tsc --noEmit",
 		"format": "biome format",

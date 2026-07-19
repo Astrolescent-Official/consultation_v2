@@ -52,13 +52,9 @@ export const ThemeProvider = ({
     )
   })
 
-  const [actualTheme, setActualTheme] = React.useState<ActualTheme>(() => {
-    if (typeof window === 'undefined') return 'light'
-    // Read from DOM - the inline script already set the correct class
-    if (document.documentElement.classList.contains('dark')) return 'dark'
-    if (document.documentElement.classList.contains('light')) return 'light'
-    return getActualTheme(theme)
-  })
+  const [actualTheme, setActualTheme] = React.useState<ActualTheme>(
+    defaultTheme === 'light' ? 'light' : 'dark'
+  )
 
   // Listen for system theme changes
   React.useEffect(() => {

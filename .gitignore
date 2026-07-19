@@ -10,9 +10,12 @@ node_modules
 .env.local
 .env.development
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 .env.production
+!apps/consultation/.env.production
+!apps/consultation/.env.test
 .env.stokenet
 .env.mainnet
 
