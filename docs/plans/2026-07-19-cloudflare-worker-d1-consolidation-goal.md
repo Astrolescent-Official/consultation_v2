@@ -1,6 +1,6 @@
 # Goal: Consolidate Consultation and Vote Collector on Cloudflare
 
-**Status:** In progress — production deployed; preview and retirement pending
+**Status:** Blocked — production deployed; awaiting preview identity and retirement gates
 
 **Estimated effort:** 7–11 engineering days, followed by a 2–7 day production soak
 
@@ -51,6 +51,9 @@ of the retained external AWS/PostgreSQL resources.
 - AWS CLI 2.36.2 is installed, but the current AWS token is invalid. A confirmed
   `aws login` is required before deployed SST stages can be inventoried or
   retired.
+- Blocker audit on 2026-07-19 confirmed that no prior `consultation-preview`
+  Worker exists from which to recover a Stokenet identity, the production soak
+  window has not elapsed, and the production API remains healthy.
 
 ## Important Distinction
 
