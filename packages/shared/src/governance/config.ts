@@ -1,6 +1,7 @@
 import {
   ComponentAddress,
   FungibleResourceAddress,
+  NonFungibleResourceAddress,
   PackageAddress
 } from '@radix-effects/shared'
 import {
@@ -19,7 +20,7 @@ const StokenetConfig = {
   componentAddress: ComponentAddress.make(
     'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
   ),
-  adminBadgeAddress: FungibleResourceAddress.make(
+  adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'
   ),
   xrdResourceAddress: FungibleResourceAddress.make(
@@ -34,14 +35,13 @@ const MainnetConfig = {
   componentAddress: ComponentAddress.make(
     'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
   ),
-  adminBadgeAddress: FungibleResourceAddress.make(
+  adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
   ),
   xrdResourceAddress: FungibleResourceAddress.make(
     'resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd'
   )
 }
-
 export class UnsupportedNetworkIdError extends Data.TaggedError(
   '@GovernenceConfig/UnsupportedNetworkIdError'
 )<{
@@ -53,7 +53,9 @@ export class GovernanceConfig extends Context.Tag('@Governance/Config')<
   {
     readonly packageAddress: PackageAddress
     readonly componentAddress: ComponentAddress
-    readonly adminBadgeAddress: FungibleResourceAddress
+    readonly adminBadgeAddress:
+      | FungibleResourceAddress
+      | NonFungibleResourceAddress
     readonly xrdResourceAddress: FungibleResourceAddress
   }
 >() {
