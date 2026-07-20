@@ -31,11 +31,12 @@ All variables use the `VITE_` prefix (Vite injects them at build time via `impor
 | `VITE_PUBLIC_DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
 | `VITE_PUBLIC_NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = stokenet) | — (required) |
 
-Create a `.env` file in `apps/consultation/`:
+Preview/Stokenet defaults are committed in `.env.test`. To override them
+locally, create `.env.test.local`:
 
 ```sh
-VITE_ENV=dev
-VITE_PUBLIC_DAPP_DEFINITION_ADDRESS=account_rdx...
+VITE_ENV=staging
+VITE_PUBLIC_DAPP_DEFINITION_ADDRESS=account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang
 VITE_PUBLIC_NETWORK_ID=2
 ```
 
@@ -43,7 +44,7 @@ VITE_PUBLIC_NETWORK_ID=2
 
 | Script | Command | Description |
 | --- | --- | --- |
-| `dev` | `vite dev --port 3000` | Start dev server on port 3000 |
+| `dev` | `CLOUDFLARE_ENV=preview vite dev --mode test --port 3000` | Start the local Stokenet Worker on port 3000 |
 | `build` | `vite build` | Production build |
 | `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
 | `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |
@@ -59,7 +60,6 @@ VITE_PUBLIC_NETWORK_ID=2
 The preview Worker builds against Stokenet and uses an isolated D1 database:
 
 ```sh
-cp .env.test.local.example .env.test.local
 pnpm deploy:preview
 ```
 

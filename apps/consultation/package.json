@@ -3,7 +3,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev --port 3000",
+		"dev": "CLOUDFLARE_ENV=preview vite dev --mode test --port 3000",
 		"build": "vite build",
 		"build:preview": "CLOUDFLARE_ENV=preview vite build --mode test",
 		"deploy": "pnpm build && wrangler deploy --config dist/server/wrangler.json",

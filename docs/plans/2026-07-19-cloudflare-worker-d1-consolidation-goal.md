@@ -1,6 +1,6 @@
 # Goal: Consolidate Consultation and Vote Collector on Cloudflare
 
-**Status:** Blocked — production deployed; awaiting preview identity and retirement gates
+**Status:** In progress — production and preview deployed; soak/retirement pending
 
 **Estimated effort:** 7–11 engineering days, followed by a 2–7 day production soak
 
@@ -11,10 +11,10 @@ Cloudflare Worker application per environment. The Worker will serve the
 consultation dApp, expose the vote-result APIs, run the scheduled ledger poll,
 and persist vote state in Cloudflare D1.
 
-Execution was explicitly approved on 2026-07-19. Production is now running on
-the consolidated Worker and D1 architecture. The remaining release work is the
-Stokenet preview deployment, the production soak/rollback check, and retirement
-of the retained external AWS/PostgreSQL resources.
+Execution was explicitly approved on 2026-07-19. Production and Stokenet
+preview are now running on the consolidated Worker and D1 architecture. The
+remaining release work is the production soak/rollback check and final
+resolution of the externally supplied PostgreSQL resource.
 
 ## Confirmed Decisions
 
@@ -33,10 +33,16 @@ of the retained external AWS/PostgreSQL resources.
   `5a873299-17fd-4344-87d9-11c558813ea3`.
 - Production D1: `consultation-votes-production`
   (`2cbaf581-17c9-4543-a5e9-c0825b5c9d8b`).
+- Preview Worker: `consultation-preview` at
+  `https://consultation-preview.radixdao.workers.dev`, version
+  `25ccac66-b9ef-4bcc-9352-f30e7daf2969`.
 - Preview D1: `consultation-votes-preview`
   (`ce7e92ad-d08f-440a-a22b-5e151bbc719a`). The initial schema migration is
-  applied and verified. The Worker is intentionally not deployed until a valid
-  Stokenet dApp-definition address is supplied.
+  applied and verified. The Worker uses Stokenet network `2`, the supplied
+  dApp-definition address, and an isolated ten-minute Cron Trigger.
+- The first preview cron completed at the 2026-07-20 08:30 UTC trigger,
+  bootstrapped the D1 cursor to Stokenet state version `378197140`, and released
+  its lease (`owner = ''`, `expires_at = 0`).
 - Final upload was 3.77 MiB total / 780.46 KiB gzip, with a 47 ms Worker
   startup time.
 - The representative mainnet snapshot passed inside `workerd` in 2.896 seconds
@@ -46,11 +52,17 @@ of the retained external AWS/PostgreSQL resources.
 - The first production cron completed successfully in 3.118 seconds wall time
   and 76 ms CPU time, advanced the fresh D1 cursor to state version
   `538489821`, released its lease, and reported no exceptions.
+- A 2026-07-20 08:30 UTC production health checkpoint still showed cursor
+  `538489821` with the poll lease cleanly released.
 - Production smoke checks passed for the app shell, Radix manifest,
   `/vote-results`, and `/account-votes`.
-- AWS CLI 2.36.2 is installed, but the current AWS token is invalid. A confirmed
-  `aws login` is required before deployed SST stages can be inventoried or
-  retired.
+- AWS CLI 2.36.2 is installed. AWS login was approved on 2026-07-20 and verified
+  as account `773802563598`. Read-only inventory in the configured `eu-west-1`
+  region found no Lambda functions, API Gateway v2 APIs, EventBridge rules,
+  CloudWatch log groups, SST state S3 bucket, or matching vote-collector IAM
+  roles. There is therefore no deployed SST stage to remove in that account.
+- PostgreSQL was externally supplied and cannot be identified from this
+  workspace: no connection value is present in the current files or shell.
 - Blocker audit on 2026-07-19 confirmed that no prior `consultation-preview`
   Worker exists from which to recover a Stokenet identity, the production soak
   window has not elapsed, and the production API remains healthy.
@@ -172,18 +184,22 @@ same-origin URLs, removing API Gateway, CORS, and
 - [x] Create isolated preview and production D1 databases, apply their initial
   schema, and configure Worker bindings. Preview versions do not receive a Cron
   Trigger until that environment is explicitly deployed.
-- [ ] Deploy preview after receiving its Stokenet dApp-definition address.
+- [x] Deploy preview with its Stokenet dApp-definition address and verify its
+  app shell, Radix manifest, and both same-origin vote APIs.
 - [x] Deploy production with a fresh D1 database and current-state bootstrap.
-- [ ] Observe production for 2–7 days, test rollback once, and only then remove
-  the retained external AWS/PostgreSQL resources. Obsolete AWS/SST/PostgreSQL
-  application code and documentation have already been removed from this repo.
+- [ ] Observe production for 2–7 days, test rollback once, and then resolve the
+  externally supplied PostgreSQL resource. The approved AWS account has no SST
+  resources to remove. Obsolete AWS/SST/PostgreSQL application code and
+  documentation have already been removed from this repo.
 
 ## Retained AWS/PostgreSQL Retirement Inventory
 
 The last SST definition is preserved at commit `5254c22`. It identifies app
 `vote-collector` in `eu-west-1` with possible `test`, `stokenet`, and
-`production` stages. The deployed stage list must be read from SST state after
-AWS authentication; script names alone are not proof that a stage exists.
+`production` stages. Read-only AWS inventory on 2026-07-20 found no SST state
+bucket or generated runtime resources in approved account `773802563598`.
+Script names alone are not proof that a stage was ever deployed, so no AWS
+deletion is required based on the available account evidence.
 
 For every deployed stage, the SST resource graph contains:
 
@@ -199,13 +215,13 @@ removed separately after the rollback window.
 
 Retirement procedure after the production soak:
 
-1. Run `aws login`, verify the account identity, then run `sst state list` and
-   export each discovered stage before changing resources.
-2. Use the SST definition from commit `5254c22`, remove production protection in
-   a retirement-only working tree, and review the removal preview for each
-   discovered stage.
-3. Run `sst remove --stage <stage>` for the verified stages and confirm the
-   Lambda, API Gateway, EventBridge, IAM, and log resources are gone.
+1. Preserve the 2026-07-20 read-only inventory as evidence that the approved
+   AWS account has no deployed SST resources to remove.
+2. If a different AWS account is later identified, verify its identity, inspect
+   SST state, and export each discovered stage before changing resources.
+3. Only for a verified deployed stage, use the SST definition from commit
+   `5254c22` in a retirement-only working tree and review removal before running
+   `sst remove --stage <stage>`.
 4. Do not delete account-level SST state/bootstrap S3, ECR, AppSync, or
    `/sst/bootstrap` resources unless a separate account-wide audit proves that
    no other SST app uses them.

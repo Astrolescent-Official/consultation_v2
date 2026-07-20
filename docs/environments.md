@@ -16,19 +16,19 @@ The databases start empty by design. There is no PostgreSQL data migration becau
 ## Local development
 
 ```sh
-cp apps/consultation/.env.test.local.example apps/consultation/.env.test.local
 pnpm --filter consultation-dapp d1:migrate:local
 pnpm --filter consultation-dapp dev
 ```
 
 The local Worker uses local D1 state under `apps/consultation/.wrangler/`. The two API routes are same-origin, so no backend URL or CORS configuration is needed.
+The public Stokenet dApp-definition address is committed in `.env.test`; use
+`.env.test.local` only when testing a different Stokenet identity.
 
 ## Preview release
 
-1. Set the Stokenet dApp definition address in `.env.test.local` or the build environment.
-2. Run `pnpm deploy:preview`.
-3. Verify `/.well-known/radix.json`, `/vote-results`, and `/account-votes` on the preview Worker.
-4. Confirm the preview D1 cursor advances and the scheduled handler has no errors.
+1. Run `pnpm deploy:preview`.
+2. Verify `/.well-known/radix.json`, `/vote-results`, and `/account-votes` on the preview Worker.
+3. Confirm the preview D1 cursor advances and the scheduled handler has no errors.
 
 The stable preview Worker is the wallet-test origin. Branch preview URLs are suitable for read-only UI review unless each origin is also claimed in Radix metadata.
 

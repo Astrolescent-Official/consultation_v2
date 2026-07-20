@@ -54,11 +54,10 @@
       "triggers": {
         "crons": ["*/10 * * * *"]
       },
-      // Client values are injected by Vite from `.env.test.local` or the
-      // Cloudflare preview build trigger. These runtime placeholders prevent
-      // production vars from being inherited into preview versions.
+      // Keep runtime and Vite build-time values aligned with the Stokenet
+      // dApp definition committed in `.env.test`.
       "vars": {
-        "DAPP_DEFINITION_ADDRESS": "",
+        "DAPP_DEFINITION_ADDRESS": "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang",
         "DEX_POSITION_CONCURRENCY": "1",
         "ENV": "preview",
         "NETWORK_ID": "2",
@@ -66,7 +65,7 @@
         "POLL_TIMEOUT_DURATION": "60 seconds",
         "VOTE_CALCULATION_CONCURRENCY": "1",
         "VITE_ENV": "staging",
-        "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "",
+        "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang",
         "VITE_PUBLIC_NETWORK_ID": "2"
       }
     }
