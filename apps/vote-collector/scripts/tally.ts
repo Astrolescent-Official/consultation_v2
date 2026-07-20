@@ -8,17 +8,16 @@
  *   pnpm tally proposal <id>  # Tally a proposal
  *
  * Environment:
- *   NETWORK_ID         — 1 (mainnet) or 2 (stokenet)
- *   COMPONENT_ADDRESS  — (optional) override the governance component address
+ *   NETWORK_ID                    — 1 (mainnet) or 2 (stokenet)
+ *   GOVERNANCE_COMPONENT_ADDRESS  — optional governance component override
  */
 
+import { NodeRuntime } from '@effect/platform-node'
 import { GetLedgerStateService } from '@radix-effects/gateway'
 import type { AccountAddress } from '@radix-effects/shared'
-import { ComponentAddress, StateVersion } from '@radix-effects/shared'
+import { StateVersion } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
-import { NodeRuntime } from '@effect/platform-node'
 import {
-  Config,
   Effect,
   Layer,
   Logger,
@@ -27,13 +26,15 @@ import {
   Schedule,
   pipe
 } from 'effect'
-import { GovernanceComponent } from 'shared/governance/index'
-import {
-  GovernanceConfig,
-  UnsupportedNetworkIdError
-} from 'shared/governance/config'
-import type { ProposalId, TemperatureCheckId } from 'shared/governance/brandedTypes'
 import { GatewayApiClientLayer } from 'shared/gateway'
+import type {
+  ProposalId,
+  TemperatureCheckId
+} from 'shared/governance/brandedTypes'
+import {
+  GovernanceComponent,
+  GovernanceConfigLayer
+} from 'shared/governance/index'
 import {
   type DedupedVote,
   fetchDedupedProposalVotes,
@@ -42,49 +43,13 @@ import {
 import { VotePowerSnapshot } from '../src/vote-calculation/votePowerSnapshot'
 import { getVotePowerConfig } from '../src/vote-calculation/voteSourceConfig'
 
-/**
- * GovernanceConfigLayer that respects an optional COMPONENT_ADDRESS env var.
- * If set, overrides the component address from the network defaults.
- */
-const TallyGovernanceConfigLayer = Layer.unwrapEffect(
-  Effect.gen(function* () {
-    const networkId = yield* Config.number('NETWORK_ID').pipe(Effect.orDie)
-    const overrideAddress = yield* Config.option(
-      Config.string('COMPONENT_ADDRESS')
-    )
-
-    const baseConfig =
-      networkId === 1
-        ? GovernanceConfig.MainnetLive
-        : networkId === 2
-          ? GovernanceConfig.StokenetLive
-          : yield* Effect.fail(
-              new UnsupportedNetworkIdError({
-                message: `NETWORK_ID must be 1 (mainnet) or 2 (stokenet), got: ${networkId}`,
-              })
-            )
-
-    if (Option.isSome(overrideAddress)) {
-      return Layer.effect(
-        GovernanceConfig,
-        Effect.map(GovernanceConfig, (existing) => ({
-          ...existing,
-          componentAddress: ComponentAddress.make(overrideAddress.value)
-        }))
-      ).pipe(Layer.provide(baseConfig))
-    }
-
-    return baseConfig
-  })
-)
-
 const TallyLayer = Layer.mergeAll(
   VotePowerSnapshot.Default,
   GovernanceComponent.Default,
   GetLedgerStateService.Default
 ).pipe(
   Layer.provideMerge(GatewayApiClientLayer),
-  Layer.provideMerge(TallyGovernanceConfigLayer),
+  Layer.provideMerge(GovernanceConfigLayer),
   Layer.provideMerge(Logger.pretty)
 )
 
@@ -297,8 +262,12 @@ if (!type || !idStr) {
   console.error('Usage: pnpm tally <tc|proposal> <id>')
   console.error()
   console.error('Environment:')
-  console.error('  NETWORK_ID=1|2              Required — 1 (mainnet) or 2 (stokenet)')
-  console.error('  COMPONENT_ADDRESS=<addr>    Optional — override governance component address')
+  console.error(
+    '  NETWORK_ID=1|2                         Required — mainnet or stokenet'
+  )
+  console.error(
+    '  GOVERNANCE_COMPONENT_ADDRESS=<addr>    Optional component override'
+  )
   process.exit(1)
 }
 

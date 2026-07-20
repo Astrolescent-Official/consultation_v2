@@ -3,9 +3,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "CLOUDFLARE_ENV=preview vite dev --mode test --port 3000",
+		"dev": "CLOUDFLARE_ENV=preview vite dev --port 3000",
 		"build": "vite build",
-		"build:preview": "CLOUDFLARE_ENV=preview vite build --mode test",
+		"build:preview": "CLOUDFLARE_ENV=preview vite build",
 		"deploy": "pnpm build && wrangler deploy --config dist/server/wrangler.json",
 		"deploy:preview": "pnpm build:preview && wrangler deploy --config dist/server/wrangler.json",
 		"d1:migrate:local": "wrangler d1 migrations apply DB --local",

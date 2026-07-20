@@ -3,7 +3,44 @@ import {
   FungibleResourceAddress,
   PackageAddress
 } from '@radix-effects/shared'
-import { Context, Effect, Layer, Config as ConfigEffect, Data } from 'effect'
+import {
+  Config as ConfigEffect,
+  Context,
+  Data,
+  Effect,
+  Layer,
+  Option
+} from 'effect'
+
+const StokenetConfig = {
+  packageAddress: PackageAddress.make(
+    'package_tdx_2_1p5cv7gym87c8dnsdx8rlv587mqw34v6qmska5ctxh04st0t07wq32s'
+  ),
+  componentAddress: ComponentAddress.make(
+    'component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc'
+  ),
+  adminBadgeAddress: FungibleResourceAddress.make(
+    'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
+  ),
+  xrdResourceAddress: FungibleResourceAddress.make(
+    'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
+  )
+}
+
+const MainnetConfig = {
+  packageAddress: PackageAddress.make(
+    'package_rdx1p5w0ckjksr2q7ww5f5u76dzmvvekmyae2t7p6k2xm9v26ysddqvsvk'
+  ),
+  componentAddress: ComponentAddress.make(
+    'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
+  ),
+  adminBadgeAddress: FungibleResourceAddress.make(
+    'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
+  ),
+  xrdResourceAddress: FungibleResourceAddress.make(
+    'resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd'
+  )
+}
 
 export class UnsupportedNetworkIdError extends Data.TaggedError(
   '@GovernenceConfig/UnsupportedNetworkIdError'
@@ -20,35 +57,9 @@ export class GovernanceConfig extends Context.Tag('@Governance/Config')<
     readonly xrdResourceAddress: FungibleResourceAddress
   }
 >() {
-  static StokenetLive = Layer.succeed(this, {
-    packageAddress: PackageAddress.make(
-      'package_tdx_2_1p5cv7gym87c8dnsdx8rlv587mqw34v6qmska5ctxh04st0t07wq32s'
-    ),
-    componentAddress: ComponentAddress.make(
-      'component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc'
-    ),
-    adminBadgeAddress: FungibleResourceAddress.make(
-      'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
-    ),
-    xrdResourceAddress: FungibleResourceAddress.make(
-      'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
-    )
-  })
+  static StokenetLive = Layer.succeed(this, StokenetConfig)
 
-  static MainnetLive = Layer.succeed(this, {
-    packageAddress: PackageAddress.make(
-      'package_rdx1p5w0ckjksr2q7ww5f5u76dzmvvekmyae2t7p6k2xm9v26ysddqvsvk'
-    ),
-    componentAddress: ComponentAddress.make(
-      'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
-    ),
-    adminBadgeAddress: FungibleResourceAddress.make(
-      'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
-    ),
-    xrdResourceAddress: FungibleResourceAddress.make(
-      'resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd'
-    )
-  })
+  static MainnetLive = Layer.succeed(this, MainnetConfig)
 }
 
 export const GovernanceConfigLayer = Layer.unwrapEffect(
@@ -56,15 +67,29 @@ export const GovernanceConfigLayer = Layer.unwrapEffect(
     const networkId = yield* ConfigEffect.number('NETWORK_ID').pipe(
       Effect.orDie
     )
+    const componentAddress = yield* ConfigEffect.option(
+      ConfigEffect.string('GOVERNANCE_COMPONENT_ADDRESS')
+    )
 
-    if (networkId === 1) {
-      return GovernanceConfig.MainnetLive
-    } else if (networkId === 2) {
-      return GovernanceConfig.StokenetLive
-    } else {
+    const config =
+      networkId === 1
+        ? MainnetConfig
+        : networkId === 2
+          ? StokenetConfig
+          : undefined
+
+    if (config === undefined) {
       return yield* new UnsupportedNetworkIdError({
         message: `Unsupported network ID: ${networkId}`
       })
     }
+
+    return Layer.succeed(GovernanceConfig, {
+      ...config,
+      componentAddress: Option.match(componentAddress, {
+        onNone: () => config.componentAddress,
+        onSome: ComponentAddress.make
+      })
+    })
   })
 )

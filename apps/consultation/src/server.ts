@@ -3,9 +3,7 @@ import {
   handleVoteCollectorRequest,
   runScheduledPoll
 } from 'vote-collector/worker'
-
-const buildTimeDappDefinitionAddress =
-  import.meta.env.VITE_PUBLIC_DAPP_DEFINITION_ADDRESS ?? ''
+import { makeAppConfigScript } from './lib/appConfig'
 
 export default {
   async fetch(request: Request, env: Env) {
@@ -18,13 +16,22 @@ export default {
       return handleVoteCollectorRequest(request, env)
     }
 
+    if (request.method === 'GET' && url.pathname === '/app-config.js') {
+      return new Response(makeAppConfigScript(env), {
+        headers: {
+          'cache-control': 'no-store',
+          'content-type': 'application/javascript; charset=utf-8',
+          'x-content-type-options': 'nosniff'
+        }
+      })
+    }
+
     // Serve the Radix dApp well-known file
     if (url.pathname === '/.well-known/radix.json') {
       return Response.json({
         dApps: [
           {
-            dAppDefinitionAddress:
-              env.DAPP_DEFINITION_ADDRESS || buildTimeDappDefinitionAddress
+            dAppDefinitionAddress: env.DAPP_DEFINITION_ADDRESS
           }
         ]
       })

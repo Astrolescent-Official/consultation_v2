@@ -8,6 +8,7 @@
 | D1 | `consultation-votes-production` | `consultation-votes-preview` |
 | Radix network | Mainnet (`1`) | Stokenet (`2`) |
 | Governance config | `GovernanceConfig.MainnetLive` | `GovernanceConfig.StokenetLive` |
+| Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cq...ctpnmc` |
 | Poll schedule | Every 5 minutes | Every 10 minutes |
 | Initial cursor | Current ledger state | Current ledger state |
 
@@ -20,9 +21,10 @@ pnpm --filter consultation-dapp d1:migrate:local
 pnpm --filter consultation-dapp dev
 ```
 
-The local Worker uses local D1 state under `apps/consultation/.wrangler/`. The two API routes are same-origin, so no backend URL or CORS configuration is needed.
-The public Stokenet dApp-definition address is committed in `.env.test`; use
-`.env.test.local` only when testing a different Stokenet identity.
+The local Worker uses local D1 state under `apps/consultation/.wrangler/`. The
+two API routes are same-origin, so no backend URL or CORS configuration is
+needed. Public UI and poller configuration comes from the preview `vars` in
+`apps/consultation/wrangler.jsonc`; there are no duplicate Vite variables.
 
 ## Preview release
 

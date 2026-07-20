@@ -21,7 +21,10 @@ import {
 } from 'effect'
 import { MainnetGatewayApiClientLayer } from 'shared/gateway'
 import { EntityId } from 'shared/governance/brandedTypes'
-import { GovernanceConfig } from 'shared/governance/index'
+import {
+  GovernanceConfig,
+  GovernanceConfigLayer
+} from 'shared/governance/index'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { VoteDatabaseLive } from '../../vote-collector/src/db/d1'
 import {
@@ -72,6 +75,56 @@ const runWithRepository = <A>(
 beforeEach(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS)
   await seedLease()
+})
+
+describe('runtime app configuration', () => {
+  it('serves one canonical configuration to the browser and Worker routes', async () => {
+    const scriptResponse = await SELF.fetch(
+      'https://example.test/app-config.js'
+    )
+    expect(scriptResponse.status).toBe(200)
+    expect(scriptResponse.headers.get('cache-control')).toBe('no-store')
+    expect(scriptResponse.headers.get('content-type')).toBe(
+      'application/javascript; charset=utf-8'
+    )
+    expect(await scriptResponse.text()).toBe(
+      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","GOVERNANCE_COMPONENT_ADDRESS":"component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y","NETWORK_ID":"1"};'
+    )
+
+    const wellKnownResponse = await SELF.fetch(
+      'https://example.test/.well-known/radix.json'
+    )
+    expect(await wellKnownResponse.json()).toEqual({
+      dApps: [
+        {
+          dAppDefinitionAddress:
+            'account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf'
+        }
+      ]
+    })
+  })
+
+  it('overrides the network default with the configured governance component', async () => {
+    const componentAddress =
+      'component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc'
+    const layer = GovernanceConfigLayer.pipe(
+      Layer.provide(
+        Layer.setConfigProvider(
+          ConfigProvider.fromJson({
+            GOVERNANCE_COMPONENT_ADDRESS: componentAddress,
+            NETWORK_ID: 2
+          })
+        )
+      )
+    )
+    const config = await Effect.runPromise(
+      Effect.gen(function* () {
+        return yield* GovernanceConfig
+      }).pipe(Effect.provide(layer))
+    )
+
+    expect(config.componentAddress).toBe(componentAddress)
+  })
 })
 
 describe('D1 vote persistence', () => {

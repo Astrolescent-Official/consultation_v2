@@ -21,30 +21,24 @@
 | Radix | Radix dApp Toolkit (wallet connection, transaction signing), Gateway API client |
 | Forms | TanStack Form |
 
-## Environment variables
+## Public app configuration
 
-All variables use the `VITE_` prefix (Vite injects them at build time via `import.meta.env`).
+Public application and collector values are defined once in the selected
+`wrangler.jsonc` environment. The Worker validates them and serves the same
+values to the browser from `/app-config.js` before hydration.
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `VITE_ENV` | Environment (`dev`, `staging`, `prod`, `local`) | `prod` |
-| `VITE_PUBLIC_DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
-| `VITE_PUBLIC_NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = stokenet) | — (required) |
-
-Preview/Stokenet defaults are committed in `.env.test`. To override them
-locally, create `.env.test.local`:
-
-```sh
-VITE_ENV=staging
-VITE_PUBLIC_DAPP_DEFINITION_ADDRESS=account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang
-VITE_PUBLIC_NETWORK_ID=2
-```
+| `ENV` | Environment (`local`, `preview`, or `production`) | — (required) |
+| `DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
+| `GOVERNANCE_COMPONENT_ADDRESS` | Governance component used by the UI and poller | — (required) |
+| `NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = Stokenet) | — (required) |
 
 ## Scripts
 
 | Script | Command | Description |
 | --- | --- | --- |
-| `dev` | `CLOUDFLARE_ENV=preview vite dev --mode test --port 3000` | Start the local Stokenet Worker on port 3000 |
+| `dev` | `CLOUDFLARE_ENV=preview vite dev --port 3000` | Start the local Stokenet Worker on port 3000 |
 | `build` | `vite build` | Production build |
 | `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
 | `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |

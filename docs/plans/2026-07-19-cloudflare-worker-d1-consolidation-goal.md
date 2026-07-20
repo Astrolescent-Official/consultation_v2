@@ -35,7 +35,7 @@ resolution of the externally supplied PostgreSQL resource.
   (`2cbaf581-17c9-4543-a5e9-c0825b5c9d8b`).
 - Preview Worker: `consultation-preview` at
   `https://consultation-preview.radixdao.workers.dev`, version
-  `25ccac66-b9ef-4bcc-9352-f30e7daf2969`.
+  `1fed37f8-1f52-433c-9140-11431d6b20e9`.
 - Preview D1: `consultation-votes-preview`
   (`ce7e92ad-d08f-440a-a22b-5e151bbc719a`). The initial schema migration is
   applied and verified. The Worker uses Stokenet network `2`, the supplied
@@ -43,8 +43,15 @@ resolution of the externally supplied PostgreSQL resource.
 - The first preview cron completed at the 2026-07-20 08:30 UTC trigger,
   bootstrapped the D1 cursor to Stokenet state version `378197140`, and released
   its lease (`owner = ''`, `expires_at = 0`).
-- Final upload was 3.77 MiB total / 780.46 KiB gzip, with a 47 ms Worker
-  startup time.
+- The 2026-07-20 preview configuration release replaced duplicate Vite and
+  Worker variables with the canonical runtime bindings `ENV`, `NETWORK_ID`,
+  `DAPP_DEFINITION_ADDRESS`, and `GOVERNANCE_COMPONENT_ADDRESS`. The Worker
+  validates and exposes the public subset at `/app-config.js` before browser
+  hydration; the UI and scheduled poll therefore use the same addresses.
+- The preview configuration release uploaded 3.77 MiB total / 780.74 KiB gzip,
+  with a 45 ms Worker startup time. Remote smoke checks passed for the app
+  shell, runtime configuration, Radix manifest, `/vote-results`, and
+  `/account-votes`; its D1 cursor remained `378197140` with the lease released.
 - The representative mainnet snapshot passed inside `workerd` in 2.896 seconds
   and produced the exact expected total. The harness does not expose a separate
   peak-memory counter; D1 statement and Gateway concurrency are bounded in
@@ -100,7 +107,7 @@ Cloudflare Cron Trigger
 The public API remains response-compatible with the current
 `GET /vote-results` and `GET /account-votes` endpoints. The frontend will use
 same-origin URLs, removing API Gateway, CORS, and
-`VITE_VOTE_COLLECTOR_URL`.
+the legacy build-time vote-collector URL.
 
 ## Non-Goals
 

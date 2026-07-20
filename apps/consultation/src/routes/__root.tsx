@@ -51,6 +51,9 @@ export const Route = createRootRoute({
     ],
     scripts: [
       {
+        src: '/app-config.js'
+      },
+      {
         children: themeScript
       }
     ]

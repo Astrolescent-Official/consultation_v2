@@ -8,6 +8,7 @@ import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 
 export type VoteCollectorWorkerEnv = {
   readonly DB: D1Database
+  readonly GOVERNANCE_COMPONENT_ADDRESS?: string
   readonly NETWORK_ID: string
   readonly ENV?: string
   readonly DEX_POSITION_CONCURRENCY?: string

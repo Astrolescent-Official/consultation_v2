@@ -29,13 +29,11 @@
     "DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
     "DEX_POSITION_CONCURRENCY": "1",
     "ENV": "production",
+    "GOVERNANCE_COMPONENT_ADDRESS": "component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y",
     "NETWORK_ID": "1",
     "POLL_RUN_DURATION": "25 seconds",
     "POLL_TIMEOUT_DURATION": "60 seconds",
-    "VOTE_CALCULATION_CONCURRENCY": "1",
-    "VITE_ENV": "prod",
-    "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf",
-    "VITE_PUBLIC_NETWORK_ID": "1"
+    "VOTE_CALCULATION_CONCURRENCY": "1"
   },
   "env": {
     // Build with CLOUDFLARE_ENV=preview. Keeping the same Worker name makes
@@ -54,19 +52,16 @@
       "triggers": {
         "crons": ["*/10 * * * *"]
       },
-      // Keep runtime and Vite build-time values aligned with the Stokenet
-      // dApp definition committed in `.env.test`.
+      // Public app and collector configuration share these runtime bindings.
       "vars": {
         "DAPP_DEFINITION_ADDRESS": "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang",
         "DEX_POSITION_CONCURRENCY": "1",
         "ENV": "preview",
+        "GOVERNANCE_COMPONENT_ADDRESS": "component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc",
         "NETWORK_ID": "2",
         "POLL_RUN_DURATION": "25 seconds",
         "POLL_TIMEOUT_DURATION": "60 seconds",
-        "VOTE_CALCULATION_CONCURRENCY": "1",
-        "VITE_ENV": "staging",
-        "VITE_PUBLIC_DAPP_DEFINITION_ADDRESS": "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang",
-        "VITE_PUBLIC_NETWORK_ID": "2"
+        "VOTE_CALCULATION_CONCURRENCY": "1"
       }
     }
   }
