@@ -6,7 +6,7 @@ interface __BaseEnv_Env {
 	DAPP_DEFINITION_ADDRESS: "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang" | "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf";
 	DEX_POSITION_CONCURRENCY: "1";
 	ENV: "preview" | "production";
-	GOVERNANCE_COMPONENT_ADDRESS: "component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc" | "component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y";
+	GOVERNANCE_COMPONENT_ADDRESS: "component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4" | "component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y";
 	NETWORK_ID: "2" | "1";
 	POLL_RUN_DURATION: "25 seconds";
 	POLL_TIMEOUT_DURATION: "60 seconds";
@@ -21,7 +21,7 @@ declare namespace Cloudflare {
 		DAPP_DEFINITION_ADDRESS: "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang";
 		DEX_POSITION_CONCURRENCY: "1";
 		ENV: "preview";
-		GOVERNANCE_COMPONENT_ADDRESS: "component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc";
+		GOVERNANCE_COMPONENT_ADDRESS: "component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4";
 		NETWORK_ID: "2";
 		POLL_RUN_DURATION: "25 seconds";
 		POLL_TIMEOUT_DURATION: "60 seconds";

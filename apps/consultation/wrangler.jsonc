@@ -57,7 +57,7 @@
         "DAPP_DEFINITION_ADDRESS": "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang",
         "DEX_POSITION_CONCURRENCY": "1",
         "ENV": "preview",
-        "GOVERNANCE_COMPONENT_ADDRESS": "component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc",
+        "GOVERNANCE_COMPONENT_ADDRESS": "component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4",
         "NETWORK_ID": "2",
         "POLL_RUN_DURATION": "25 seconds",
         "POLL_TIMEOUT_DURATION": "60 seconds",

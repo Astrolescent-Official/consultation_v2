@@ -106,7 +106,7 @@ describe('runtime app configuration', () => {
 
   it('overrides the network default with the configured governance component', async () => {
     const componentAddress =
-      'component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc'
+      'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
     const layer = GovernanceConfigLayer.pipe(
       Layer.provide(
         Layer.setConfigProvider(

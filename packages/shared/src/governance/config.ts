@@ -14,13 +14,13 @@ import {
 
 const StokenetConfig = {
   packageAddress: PackageAddress.make(
-    'package_tdx_2_1p5cv7gym87c8dnsdx8rlv587mqw34v6qmska5ctxh04st0t07wq32s'
+    'package_tdx_2_1p52l57u32xpsfqv5wtvd0c727mh485qafef0dlhm0x7r67nm3t6pj8'
   ),
   componentAddress: ComponentAddress.make(
-    'component_tdx_2_1cqnp3rptnwqjc4r7kzwkctec09jkdqa8v2rue580kw66fvt4ctpnmc'
+    'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
   ),
   adminBadgeAddress: FungibleResourceAddress.make(
-    'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
+    'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'
   ),
   xrdResourceAddress: FungibleResourceAddress.make(
     'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
