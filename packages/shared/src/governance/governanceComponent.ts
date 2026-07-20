@@ -20,16 +20,17 @@ import {
   TemperatureCheckVoteKeyValueStoreKey,
   TemperatureCheckVoteKeyValueStoreValue
 } from '../schemas'
+import { AdminBadgeService, renderAdminBadgeProof } from './adminBadge'
 import type { ProposalId, TemperatureCheckId } from './brandedTypes'
 import { GovernanceConfig } from './config'
 import { makeVoteIndexKeys } from './makeVoteIndexKeys'
 import {
+  type MakeProposalVoteInput,
+  MakeProposalVoteInputSchema,
   type MakeTemperatureCheckInput,
   MakeTemperatureCheckInputSchema,
   type MakeTemperatureCheckVoteInput,
   MakeTemperatureCheckVoteInputSchema,
-  type MakeProposalVoteInput,
-  MakeProposalVoteInputSchema,
   type MakeUpdateGovernanceParametersInput,
   MakeUpdateGovernanceParametersInputSchema,
   ProposalSchema,
@@ -63,6 +64,12 @@ class ProposalNotFoundError extends Data.TaggedError('ProposalNotFoundError')<{
   message: string
 }> {}
 
+export class AdminBadgeNotFoundError extends Data.TaggedError(
+  'AdminBadgeNotFoundError'
+)<{
+  message: string
+}> {}
+
 export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
   'GovernanceComponent',
   {
@@ -70,14 +77,38 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
       GetKeyValueStoreService.Default,
       StateEntityDetails.Default,
       GetComponentStateService.Default,
-      KeyValueStoreDataService.Default
+      KeyValueStoreDataService.Default,
+      AdminBadgeService.Default
     ],
     effect: Effect.gen(function* () {
       const keyValueStore = yield* GetKeyValueStoreService
       const keyValueStoreDataService = yield* KeyValueStoreDataService
 
       const getComponentStateService = yield* GetComponentStateService
+      const adminBadgeService = yield* AdminBadgeService
       const config = yield* GovernanceConfig
+
+      const makeAdminBadgeProof = (accountAddress: AccountAddress) =>
+        adminBadgeService.getForAccount(accountAddress).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.fail(
+                  new AdminBadgeNotFoundError({
+                    message: `Account ${accountAddress} does not hold the admin badge`
+                  })
+                ),
+              onSome: (badge) =>
+                Effect.succeed(
+                  renderAdminBadgeProof(
+                    accountAddress,
+                    config.adminBadgeAddress,
+                    badge
+                  )
+                )
+            })
+          )
+        )
 
       const getComponentState = () =>
         getComponentStateService
@@ -688,22 +719,20 @@ CALL_METHOD
         accountAddress: AccountAddress
         temperatureCheckId: TemperatureCheckId
       }) =>
-        Effect.succeed(
-          TransactionManifestString.make(`
-CALL_METHOD
-  Address("${input.accountAddress}")
-  "create_proof_of_amount"
-  Address("${config.adminBadgeAddress}")
-  Decimal("1")
-;
+        Effect.gen(function* () {
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            input.accountAddress
+          )
 
+          return TransactionManifestString.make(`
+${adminBadgeProof}
 CALL_METHOD
   Address("${config.componentAddress}")
   "make_proposal"
   ${input.temperatureCheckId}u64
 ;
           `)
-        )
+        })
 
       const getProposalVotesByAccounts = (input: {
         keyValueStoreAddress: KeyValueStoreAddress
@@ -763,14 +792,12 @@ CALL_METHOD
           const parsedInput = yield* Schema.decodeUnknown(
             MakeUpdateGovernanceParametersInputSchema
           )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
 
           return TransactionManifestString.make(`
-CALL_METHOD
-  Address("${parsedInput.accountAddress}")
-  "create_proof_of_amount"
-  Address("${config.adminBadgeAddress}")
-  Decimal("1")
-;
+${adminBadgeProof}
 CALL_METHOD
   Address("${config.componentAddress}")
   "update_governance_parameters"
@@ -809,41 +836,39 @@ CALL_METHOD
         accountAddress: AccountAddress
         temperatureCheckId: TemperatureCheckId
       }) =>
-        Effect.succeed(
-          TransactionManifestString.make(`
-CALL_METHOD
-  Address("${input.accountAddress}")
-  "create_proof_of_amount"
-  Address("${config.adminBadgeAddress}")
-  Decimal("1")
-;
+        Effect.gen(function* () {
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            input.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
 CALL_METHOD
   Address("${config.componentAddress}")
   "toggle_temperature_check_hidden"
   ${input.temperatureCheckId}u64
 ;
           `)
-        )
+        })
 
       const makeToggleProposalHiddenManifest = (input: {
         accountAddress: AccountAddress
         proposalId: ProposalId
       }) =>
-        Effect.succeed(
-          TransactionManifestString.make(`
-CALL_METHOD
-  Address("${input.accountAddress}")
-  "create_proof_of_amount"
-  Address("${config.adminBadgeAddress}")
-  Decimal("1")
-;
+        Effect.gen(function* () {
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            input.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
 CALL_METHOD
   Address("${config.componentAddress}")
   "toggle_proposal_hidden"
   ${input.proposalId}u64
 ;
           `)
-        )
+        })
 
       return {
         getTemperatureChecks,

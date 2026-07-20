@@ -1,5 +1,4 @@
 import { Atom } from '@effect-atom/atom-react'
-import { GetFungibleBalance } from '@radix-effects/gateway'
 import { AccountAddress } from '@radix-effects/shared'
 import { ConfigProvider, Effect, Layer, Option } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
@@ -8,7 +7,7 @@ import type {
   TemperatureCheckId
 } from 'shared/governance/brandedTypes'
 import {
-  GovernanceConfig,
+  AdminBadgeService,
   GovernanceComponent,
   GovernanceConfigLayer
 } from 'shared/governance/index'
@@ -18,6 +17,7 @@ import {
   SendTransaction,
   WalletErrorResponse
 } from '@/lib/dappToolkit'
+import { envVars } from '@/lib/envVars'
 import { getCurrentAccount } from '@/lib/selectedAccount'
 import { getProposalByIdAtom } from './proposalsAtom'
 import {
@@ -25,12 +25,11 @@ import {
   NoAccountConnectedError
 } from './temperatureChecksAtom'
 import { withToast } from './withToast'
-import { envVars } from '@/lib/envVars'
 
 const runtime = makeAtomRuntime(
   Layer.mergeAll(
     GovernanceComponent.Default,
-    GetFungibleBalance.Default,
+    AdminBadgeService.Default,
     SendTransaction.Default
   ).pipe(
     Layer.provideMerge(RadixDappToolkit.Live),
@@ -46,16 +45,11 @@ export const isAdminAtom = Atom.family((accountAddress: string) =>
     Effect.gen(function* () {
       if (!accountAddress) return false
 
-      const config = yield* GovernanceConfig
-      const getFungibleBalance = yield* GetFungibleBalance
+      const adminBadgeService = yield* AdminBadgeService
 
-      const balances = yield* getFungibleBalance({
-        addresses: [accountAddress]
-      })
-
-      return balances.some((account) =>
-        account.items.some(
-          (item) => item.resource_address === config.adminBadgeAddress
+      return Option.isSome(
+        yield* adminBadgeService.getForAccount(
+          AccountAddress.make(accountAddress)
         )
       )
     })
