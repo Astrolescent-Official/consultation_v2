@@ -1,0 +1,22 @@
+CALL_METHOD
+    Address("account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang")
+    "create_proof_of_non_fungibles"
+    Address("resource_tdx_2_1nt3zlr5e54fkpap24v38673e9s4aq4rr5upfsj0m6kjrwh5hwlxunr")
+    Array<NonFungibleLocalId>(
+        NonFungibleLocalId("#1#")
+    )
+;
+
+MINT_NON_FUNGIBLE
+    Address("resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq")
+    Map<NonFungibleLocalId, Tuple>(
+        NonFungibleLocalId("#2#") => Tuple(Tuple())
+    )
+;
+
+CALL_METHOD
+    Address("account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf")
+    "try_deposit_batch_or_abort"
+    Expression("ENTIRE_WORKTOP")
+    Enum<0u8>()
+;
