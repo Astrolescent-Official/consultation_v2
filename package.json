@@ -11,6 +11,7 @@
 		"db:generate": "turbo run db:generate",
 		"db:studio": "turbo run db:studio",
 		"test": "turbo run test",
+		"prepare": "./scripts/prepare-effect.sh",
 		"deploy:vote-collector:stokenet": "./deploy.sh stokenet",
 		"deploy:vote-collector:mainnet": "./deploy.sh mainnet"
 	},
