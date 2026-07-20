@@ -1,0 +1,103 @@
+CREATE_NON_FUNGIBLE_RESOURCE_WITH_INITIAL_SUPPLY
+    Enum<OwnerRole::Fixed>(
+        Enum<2u8>(
+            Enum<0u8>(
+                Enum<0u8>(
+                    Enum<0u8>(
+                        NonFungibleGlobalId("<MASTER_BADGE>:#1#")
+                    )
+                )
+            )
+        )
+    )
+    Enum<1u8>()
+    true
+    Enum<0u8>(
+        Enum<0u8>(
+            Tuple(
+                Array<Enum>(),
+                Array<Tuple>(),
+                Array<Enum>()
+            )
+        ),
+        Enum<0u8>(
+            66u8
+        ),
+        Array<String>()
+    )
+    Map<NonFungibleLocalId, Tuple>(
+        NonFungibleLocalId("#1#") => Tuple(
+            Tuple()
+        )
+    )
+    Tuple(
+        Some(         # Mint Roles (if None: defaults to DenyAll, DenyAll)
+            Tuple(
+                None,  # Minter (if None: defaults to Owner)
+                None    # Minter Updater (if None: defaults to Owner)
+            )
+        ),         
+        Some(         # Burn Roles (if None: defaults to DenyAll, DenyAll)
+            Tuple(
+                None,  # Burner (if None: defaults to Owner)
+                None    # Burner Updater (if None: defaults to Owner)
+            )
+        ),       
+        None,        # Freeze Roles (if None: defaults to DenyAll, DenyAll)
+        Some(        # Recall Roles (if None: defaults to DenyAll, DenyAll)
+            Tuple(
+                None,  # Recaller (if None: defaults to Owner)
+                None    # Recaller Updater (if None: defaults to Owner)
+            )
+        ),        
+        None,        # Withdraw Roles (if None: defaults to AllowAll, DenyAll)
+        None,        # Deposit Roles (if None: defaults to AllowAll, DenyAll)
+        None         # Data Updater
+    )
+    Tuple(
+        Map<String, Tuple>(
+            "name" => Tuple(
+                Enum<1u8>(
+                    Enum<0u8>(
+                        "Consultations Owner Badge"
+                    )
+                ),
+                false
+            ),
+            "description" => Tuple(
+                Enum<1u8>(
+                    Enum<0u8>(
+                        "The owner badge for the Consultation component"
+                    )
+                ),
+                false
+            ),
+            "tags" => Tuple(
+                Enum<1u8>(
+                    Enum<128u8>(
+                        Array<String>(
+                            "badge"
+                        )
+                    )
+                ),
+                false
+            ),
+            "icon_url" => Tuple(
+                Enum<1u8>(
+                    Enum<13u8>(
+                        "https://assets.radixdlt.com/icons/icon-xrd.png"
+                    )
+                ),
+                false
+            )
+        ),
+        Map<String, Enum>()
+    )
+    Enum<0u8>()
+;
+CALL_METHOD
+    Address("account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf")
+    "try_deposit_batch_or_abort"
+    Expression("ENTIRE_WORKTOP")
+    Enum<0u8>()
+;
