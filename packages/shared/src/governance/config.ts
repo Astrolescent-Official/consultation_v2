@@ -1,9 +1,10 @@
 import {
   ComponentAddress,
   FungibleResourceAddress,
+  type NonFungibleResourceAddress,
   PackageAddress
 } from '@radix-effects/shared'
-import { Context, Effect, Layer, Config as ConfigEffect, Data } from 'effect'
+import { Config as ConfigEffect, Context, Data, Effect, Layer } from 'effect'
 
 export class UnsupportedNetworkIdError extends Data.TaggedError(
   '@GovernenceConfig/UnsupportedNetworkIdError'
@@ -16,7 +17,9 @@ export class GovernanceConfig extends Context.Tag('@Governance/Config')<
   {
     readonly packageAddress: PackageAddress
     readonly componentAddress: ComponentAddress
-    readonly adminBadgeAddress: FungibleResourceAddress
+    readonly adminBadgeAddress:
+      | FungibleResourceAddress
+      | NonFungibleResourceAddress
     readonly xrdResourceAddress: FungibleResourceAddress
   }
 >() {
