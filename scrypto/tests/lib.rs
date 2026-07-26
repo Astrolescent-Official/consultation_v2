@@ -1,6 +1,6 @@
+use consultation_blueprint::*;
 use scrypto::prelude::Url;
 use scrypto_test::prelude::*;
-use consultation_blueprint::*;
 
 // =============================================================================
 // Test Helpers
@@ -9,7 +9,7 @@ use consultation_blueprint::*;
 /// Creates an owner badge and deposits it to a new account
 /// Returns (badge_address, owner_account, owner_public_key)
 fn create_owner_badge_with_account(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
 ) -> (ResourceAddress, ComponentAddress, Secp256k1PublicKey) {
     let (public_key, _private_key, owner_account) = ledger.new_allocated_account();
 
@@ -36,14 +36,17 @@ fn create_owner_badge_with_account(
     (owner_badge, owner_account, public_key)
 }
 
-fn create_governance_parameters() -> GovernanceParameters {
-    GovernanceParameters {
-        temperature_check_days: 7,
-        temperature_check_quorum: dec!(1000),
-        temperature_check_approval_threshold: dec!("0.5"),
-        proposal_length_days: 14,
-        proposal_quorum: dec!(5000),
-        proposal_approval_threshold: dec!("0.5"),
+fn create_governance_parameters() -> GovernanceParameterSetInput {
+    GovernanceParameterSetInput {
+        label: "Default".to_string(),
+        parameters: GovernanceParameters {
+            temperature_check_days: 7,
+            temperature_check_quorum: dec!(1000),
+            temperature_check_approval_threshold: dec!("0.5"),
+            proposal_length_days: 14,
+            proposal_quorum: dec!(5000),
+            proposal_approval_threshold: dec!("0.5"),
+        },
     }
 }
 
@@ -51,7 +54,8 @@ fn create_temp_check_draft() -> TemperatureCheckDraft {
     TemperatureCheckDraft {
         title: "Test Proposal".to_string(),
         short_description: "A short summary of the test proposal".to_string(),
-        description: "# Test Proposal\n\nA full markdown description of the test proposal.".to_string(),
+        description: "# Test Proposal\n\nA full markdown description of the test proposal."
+            .to_string(),
         vote_options: vec![
             ProposalVoteOptionInput {
                 label: "For".to_string(),
@@ -69,7 +73,9 @@ fn create_multi_choice_temp_check_draft() -> TemperatureCheckDraft {
     TemperatureCheckDraft {
         title: "Multi-Choice Test Proposal".to_string(),
         short_description: "A short summary of the multi-choice proposal".to_string(),
-        description: "# Multi-Choice Proposal\n\nA full markdown description with multiple choice voting.".to_string(),
+        description:
+            "# Multi-Choice Proposal\n\nA full markdown description with multiple choice voting."
+                .to_string(),
         vote_options: vec![
             ProposalVoteOptionInput {
                 label: "Option A".to_string(),
@@ -142,7 +148,7 @@ fn test_make_temperature_check() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -201,7 +207,7 @@ fn test_vote_on_temperature_check() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -230,7 +236,7 @@ fn test_vote_on_temperature_check() {
 }
 
 #[test]
-fn test_cannot_vote_twice_on_temperature_check() {
+fn test_temperature_check_revote_replaces_the_current_vote() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let (owner_badge, _owner_account, _owner_pk) = create_owner_badge_with_account(&mut ledger);
     let params = create_governance_parameters();
@@ -263,7 +269,7 @@ fn test_cannot_vote_twice_on_temperature_check() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -291,7 +297,7 @@ fn test_cannot_vote_twice_on_temperature_check() {
         )
         .expect_commit_success();
 
-    // Second vote should fail
+    // A second vote succeeds as a revote and supersedes the current voter entry.
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .call_method(
@@ -301,11 +307,19 @@ fn test_cannot_vote_twice_on_temperature_check() {
         )
         .build();
 
-    let receipt = ledger.execute_manifest(
-        manifest,
-        vec![NonFungibleGlobalId::from_public_key(&public_key)],
-    );
-    receipt.expect_commit_failure();
+    ledger
+        .execute_manifest(
+            manifest,
+            vec![NonFungibleGlobalId::from_public_key(&public_key)],
+        )
+        .expect_commit_success();
+
+    let state: GovernanceState = ledger.component_state(governance_component);
+    let temperature_check: TemperatureCheck = ledger
+        .get_kv_store_entry(state.temperature_checks, &0u64)
+        .expect("temperature check should exist");
+    assert_eq!(temperature_check.vote_count, 2);
+    assert_eq!(temperature_check.revote_count, 1);
 }
 
 #[test]
@@ -341,7 +355,7 @@ fn test_make_proposal_from_temperature_check() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -356,11 +370,7 @@ fn test_make_proposal_from_temperature_check() {
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
-        .call_method(
-            governance_component,
-            "make_proposal",
-            manifest_args!(0u64),
-        )
+        .call_method(governance_component, "make_proposal", manifest_args!(0u64))
         .build();
 
     let receipt = ledger.execute_manifest(
@@ -372,16 +382,893 @@ fn test_make_proposal_from_temperature_check() {
     // Verify proposal was created
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
-        .call_method(
-            governance_component,
-            "get_proposal_count",
-            manifest_args!(),
-        )
+        .call_method(governance_component, "get_proposal_count", manifest_args!())
         .build();
 
     let receipt = ledger.execute_manifest(manifest, vec![]);
     let count: u64 = receipt.expect_commit_success().output(1);
     assert_eq!(count, 1);
+}
+
+#[derive(ScryptoSbor)]
+struct GovernanceState {
+    parameter_sets: Own,
+    temperature_checks: Own,
+    temperature_check_count: u64,
+    proposals: Own,
+    proposal_count: u64,
+}
+
+fn instantiate_governance(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    owner_badge: ResourceAddress,
+    default_parameter_set: GovernanceParameterSetInput,
+) -> ComponentAddress {
+    let package_address = ledger.compile_and_publish(this_package!());
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_function(
+            package_address,
+            "Governance",
+            "instantiate",
+            manifest_args!(owner_badge, default_parameter_set),
+        )
+        .build();
+
+    let receipt = ledger.execute_manifest(manifest, vec![]);
+    receipt.expect_commit(true).new_component_addresses()[0]
+}
+
+fn parameter_set_input(
+    label: &str,
+    temperature_check_days: u16,
+    proposal_length_days: u16,
+) -> GovernanceParameterSetInput {
+    GovernanceParameterSetInput {
+        label: label.to_string(),
+        parameters: GovernanceParameters {
+            temperature_check_days,
+            temperature_check_quorum: dec!(1000),
+            temperature_check_approval_threshold: dec!("0.6"),
+            proposal_length_days,
+            proposal_quorum: dec!(5000),
+            proposal_approval_threshold: dec!("0.7"),
+        },
+    }
+}
+
+fn add_parameter_set(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    component: ComponentAddress,
+    owner_account: ComponentAddress,
+    owner_badge: ResourceAddress,
+    owner_pk: Secp256k1PublicKey,
+    id: &str,
+    input: GovernanceParameterSetInput,
+    authorized: bool,
+    should_succeed: bool,
+) {
+    let builder = ManifestBuilder::new().lock_fee_from_faucet();
+    let builder = if authorized {
+        builder.create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+    } else {
+        builder
+    };
+    let manifest = builder
+        .call_method(
+            component,
+            "add_governance_parameter_set",
+            manifest_args!(id.to_string(), input),
+        )
+        .build();
+    let signers = if authorized {
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)]
+    } else {
+        vec![]
+    };
+    let receipt = ledger.execute_manifest(manifest, signers);
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+fn update_parameter_set(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    component: ComponentAddress,
+    owner_account: ComponentAddress,
+    owner_badge: ResourceAddress,
+    owner_pk: Secp256k1PublicKey,
+    id: &str,
+    input: GovernanceParameterSetInput,
+    should_succeed: bool,
+) {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "update_governance_parameter_set",
+            manifest_args!(id.to_string(), input),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+fn retire_parameter_set(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    component: ComponentAddress,
+    owner_account: ComponentAddress,
+    owner_badge: ResourceAddress,
+    owner_pk: Secp256k1PublicKey,
+    id: &str,
+    should_succeed: bool,
+) {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "retire_governance_parameter_set",
+            manifest_args!(id.to_string()),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+fn make_temperature_check_with_parameter_set(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    component: ComponentAddress,
+    author_account: ComponentAddress,
+    author_pk: Secp256k1PublicKey,
+    parameter_set_id: Option<String>,
+    should_succeed: bool,
+) {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "make_temperature_check",
+            manifest_args!(author_account, create_temp_check_draft(), parameter_set_id),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        vec![NonFungibleGlobalId::from_public_key(&author_pk)],
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+#[test]
+fn test_named_parameter_set_registry_lifecycle_and_authorization() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let (owner_badge, owner_account, owner_pk) = create_owner_badge_with_account(&mut ledger);
+    let component =
+        instantiate_governance(&mut ledger, owner_badge, create_governance_parameters());
+
+    let state: GovernanceState = ledger.component_state(component);
+    let default_record: GovernanceParameterSet = ledger
+        .get_kv_store_entry(state.parameter_sets, &"default".to_string())
+        .expect("default parameter set should be created");
+    assert_eq!(default_record.label, "Default");
+    assert_eq!(default_record.version, 1);
+    assert!(!default_record.retired);
+
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        parameter_set_input("Constitutional", 10, 20),
+        false,
+        false,
+    );
+
+    let (wrong_badge, wrong_account, wrong_pk) = create_owner_badge_with_account(&mut ledger);
+    let wrong_proof_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(wrong_account, wrong_badge, dec!(1))
+        .call_method(
+            component,
+            "add_governance_parameter_set",
+            manifest_args!(
+                "wrong-proof".to_string(),
+                parameter_set_input("Wrong proof", 10, 20)
+            ),
+        )
+        .build();
+    ledger
+        .execute_manifest(
+            wrong_proof_manifest,
+            vec![NonFungibleGlobalId::from_public_key(&wrong_pk)],
+        )
+        .expect_commit_failure();
+
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        parameter_set_input("Constitutional", 10, 20),
+        true,
+        true,
+    );
+
+    let update_without_proof = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "update_governance_parameter_set",
+            manifest_args!(
+                "constitutional".to_string(),
+                parameter_set_input("Unauthorized update", 10, 20)
+            ),
+        )
+        .build();
+    ledger
+        .execute_manifest(update_without_proof, vec![])
+        .expect_commit_failure();
+
+    let update_with_wrong_proof = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(wrong_account, wrong_badge, dec!(1))
+        .call_method(
+            component,
+            "update_governance_parameter_set",
+            manifest_args!(
+                "constitutional".to_string(),
+                parameter_set_input("Wrong proof update", 10, 20)
+            ),
+        )
+        .build();
+    ledger
+        .execute_manifest(
+            update_with_wrong_proof,
+            vec![NonFungibleGlobalId::from_public_key(&wrong_pk)],
+        )
+        .expect_commit_failure();
+
+    let retire_without_proof = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "retire_governance_parameter_set",
+            manifest_args!("constitutional".to_string()),
+        )
+        .build();
+    ledger
+        .execute_manifest(retire_without_proof, vec![])
+        .expect_commit_failure();
+
+    let retire_with_wrong_proof = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(wrong_account, wrong_badge, dec!(1))
+        .call_method(
+            component,
+            "retire_governance_parameter_set",
+            manifest_args!("constitutional".to_string()),
+        )
+        .build();
+    ledger
+        .execute_manifest(
+            retire_with_wrong_proof,
+            vec![NonFungibleGlobalId::from_public_key(&wrong_pk)],
+        )
+        .expect_commit_failure();
+
+    update_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        parameter_set_input("Constitutional v2", 11, 21),
+        true,
+    );
+
+    let state: GovernanceState = ledger.component_state(component);
+    let updated: GovernanceParameterSet = ledger
+        .get_kv_store_entry(state.parameter_sets, &"constitutional".to_string())
+        .expect("updated parameter set should exist");
+    assert_eq!(updated.version, 2);
+    assert_eq!(updated.label, "Constitutional v2");
+
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        true,
+    );
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        false,
+    );
+    update_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        parameter_set_input("Cannot edit retired", 12, 22),
+        false,
+    );
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "constitutional",
+        parameter_set_input("Cannot reuse", 12, 22),
+        true,
+        false,
+    );
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "default",
+        false,
+    );
+    update_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "missing",
+        parameter_set_input("Missing", 12, 22),
+        false,
+    );
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "missing",
+        false,
+    );
+
+    let state: GovernanceState = ledger.component_state(component);
+    let retired: GovernanceParameterSet = ledger
+        .get_kv_store_entry(state.parameter_sets, &"constitutional".to_string())
+        .expect("retired record should remain in the registry");
+    assert!(retired.retired);
+    assert_eq!(retired.version, 2);
+}
+
+#[test]
+fn test_named_parameter_set_validation_and_boundaries() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let (owner_badge, owner_account, owner_pk) = create_owner_badge_with_account(&mut ledger);
+    let component =
+        instantiate_governance(&mut ledger, owner_badge, create_governance_parameters());
+
+    for invalid_id in [
+        "",
+        "Uppercase",
+        "non-ascii-é",
+        "-leading",
+        "trailing-",
+        "consecutive--hyphen",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ] {
+        add_parameter_set(
+            &mut ledger,
+            component,
+            owner_account,
+            owner_badge,
+            owner_pk,
+            invalid_id,
+            parameter_set_input("Valid label", 1, 1),
+            true,
+            false,
+        );
+    }
+
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        parameter_set_input(&"x".repeat(128), 1, 1),
+        true,
+        true,
+    );
+
+    for (id, label) in [
+        ("empty-label", ""),
+        ("blank-label", "   "),
+        ("leading-space-label", " Leading"),
+        ("trailing-space-label", "Trailing "),
+    ] {
+        add_parameter_set(
+            &mut ledger,
+            component,
+            owner_account,
+            owner_badge,
+            owner_pk,
+            id,
+            parameter_set_input(label, 1, 1),
+            true,
+            false,
+        );
+    }
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "overlong-label",
+        parameter_set_input(&"x".repeat(129), 1, 1),
+        true,
+        false,
+    );
+
+    let invalid_parameters = [
+        GovernanceParameters {
+            temperature_check_days: 0,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+        GovernanceParameters {
+            temperature_check_quorum: Decimal::ZERO,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+        GovernanceParameters {
+            temperature_check_approval_threshold: Decimal::ZERO,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+        GovernanceParameters {
+            proposal_length_days: 0,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+        GovernanceParameters {
+            proposal_quorum: Decimal::ZERO,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+        GovernanceParameters {
+            proposal_approval_threshold: dec!("1.01"),
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+    ];
+    for (index, parameters) in invalid_parameters.into_iter().enumerate() {
+        add_parameter_set(
+            &mut ledger,
+            component,
+            owner_account,
+            owner_badge,
+            owner_pk,
+            &format!("invalid-parameters-{index}"),
+            GovernanceParameterSetInput {
+                label: "Invalid".to_string(),
+                parameters,
+            },
+            true,
+            false,
+        );
+    }
+
+    update_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "default",
+        GovernanceParameterSetInput {
+            label: "Default".to_string(),
+            parameters: GovernanceParameters {
+                proposal_approval_threshold: dec!("1.01"),
+                ..parameter_set_input("Invalid", 1, 1).parameters
+            },
+        },
+        false,
+    );
+
+    let invalid_default = GovernanceParameterSetInput {
+        label: "Default".to_string(),
+        parameters: GovernanceParameters {
+            temperature_check_days: 0,
+            ..parameter_set_input("Invalid", 1, 1).parameters
+        },
+    };
+    let package_address = ledger.compile_and_publish(this_package!());
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_function(
+            package_address,
+            "Governance",
+            "instantiate",
+            manifest_args!(owner_badge, invalid_default),
+        )
+        .build();
+    ledger
+        .execute_manifest(manifest, vec![])
+        .expect_commit_failure();
+}
+
+#[test]
+fn test_parameter_set_selection_and_default_resolution() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let (owner_badge, owner_account, owner_pk) = create_owner_badge_with_account(&mut ledger);
+    let component =
+        instantiate_governance(&mut ledger, owner_badge, create_governance_parameters());
+    let (author_pk, _author_sk, author_account) = ledger.new_allocated_account();
+
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        None,
+        true,
+    );
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        Some("default".to_string()),
+        true,
+    );
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        Some("unknown".to_string()),
+        false,
+    );
+
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "treasury-budget",
+        parameter_set_input("Treasury / Budget", 9, 18),
+        true,
+        true,
+    );
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "treasury-budget",
+        true,
+    );
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        Some("treasury-budget".to_string()),
+        false,
+    );
+
+    let state: GovernanceState = ledger.component_state(component);
+    let none_tc: TemperatureCheck = ledger
+        .get_kv_store_entry(state.temperature_checks, &0u64)
+        .expect("TC created with None should exist");
+    let explicit_default_tc: TemperatureCheck = ledger
+        .get_kv_store_entry(state.temperature_checks, &1u64)
+        .expect("TC created with Some(default) should exist");
+    assert_eq!(none_tc.parameter_set.id, "default");
+    assert_eq!(explicit_default_tc.parameter_set.id, "default");
+    assert_eq!(none_tc.parameter_set.version, 1);
+    assert_eq!(explicit_default_tc.parameter_set.version, 1);
+    assert_eq!(
+        none_tc.parameter_set.parameters.temperature_check_quorum,
+        explicit_default_tc
+            .parameter_set
+            .parameters
+            .temperature_check_quorum
+    );
+    assert_eq!(
+        none_tc.deadline.seconds_since_unix_epoch - none_tc.start.seconds_since_unix_epoch,
+        explicit_default_tc.deadline.seconds_since_unix_epoch
+            - explicit_default_tc.start.seconds_since_unix_epoch
+    );
+}
+
+#[test]
+fn test_parameter_set_snapshot_is_immutable_through_edit_retirement_and_elevation() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let (owner_badge, owner_account, owner_pk) = create_owner_badge_with_account(&mut ledger);
+    let component =
+        instantiate_governance(&mut ledger, owner_badge, create_governance_parameters());
+    let (author_pk, _author_sk, author_account) = ledger.new_allocated_account();
+
+    add_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "executable",
+        parameter_set_input("Executable", 3, 5),
+        true,
+        true,
+    );
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        Some("executable".to_string()),
+        true,
+    );
+    update_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "executable",
+        parameter_set_input("Executable revised", 7, 11),
+        true,
+    );
+    make_temperature_check_with_parameter_set(
+        &mut ledger,
+        component,
+        author_account,
+        author_pk,
+        Some("executable".to_string()),
+        true,
+    );
+    retire_parameter_set(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        owner_pk,
+        "executable",
+        true,
+    );
+
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(component, "make_proposal", manifest_args!(0u64))
+        .build();
+    ledger
+        .execute_manifest(
+            manifest,
+            vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+        )
+        .expect_commit_success();
+
+    let state: GovernanceState = ledger.component_state(component);
+    let version_one_tc: TemperatureCheck = ledger
+        .get_kv_store_entry(state.temperature_checks, &0u64)
+        .expect("version 1 TC should exist");
+    let version_two_tc: TemperatureCheck = ledger
+        .get_kv_store_entry(state.temperature_checks, &1u64)
+        .expect("version 2 TC should exist");
+    let proposal: Proposal = ledger
+        .get_kv_store_entry(state.proposals, &0u64)
+        .expect("proposal should exist");
+    let registry_record: GovernanceParameterSet = ledger
+        .get_kv_store_entry(state.parameter_sets, &"executable".to_string())
+        .expect("retired registry record should remain");
+
+    assert_eq!(version_one_tc.parameter_set.version, 1);
+    assert_eq!(version_one_tc.parameter_set.label, "Executable");
+    assert_eq!(
+        version_one_tc
+            .parameter_set
+            .parameters
+            .temperature_check_days,
+        3
+    );
+    assert_eq!(version_two_tc.parameter_set.version, 2);
+    assert_eq!(version_two_tc.parameter_set.label, "Executable revised");
+    assert_eq!(
+        version_two_tc
+            .parameter_set
+            .parameters
+            .temperature_check_days,
+        7
+    );
+    assert_eq!(proposal.parameter_set.id, version_one_tc.parameter_set.id);
+    assert_eq!(
+        proposal.parameter_set.version,
+        version_one_tc.parameter_set.version
+    );
+    assert_eq!(
+        proposal.parameter_set.parameters.proposal_length_days,
+        version_one_tc.parameter_set.parameters.proposal_length_days
+    );
+    assert_eq!(
+        proposal.deadline.seconds_since_unix_epoch - proposal.start.seconds_since_unix_epoch,
+        5 * 24 * 60 * 60
+    );
+    assert!(registry_record.retired);
+    assert_eq!(registry_record.version, 2);
+}
+
+#[test]
+fn test_parameter_set_and_consultation_events_include_identity_and_version() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let (owner_badge, owner_account, owner_pk) = create_owner_badge_with_account(&mut ledger);
+    let component =
+        instantiate_governance(&mut ledger, owner_badge, create_governance_parameters());
+    let (author_pk, _author_sk, author_account) = ledger.new_allocated_account();
+
+    let add_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "add_governance_parameter_set",
+            manifest_args!(
+                "governance-process".to_string(),
+                parameter_set_input("Governance process", 4, 8)
+            ),
+        )
+        .build();
+    let add_receipt = ledger.execute_manifest(
+        add_manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    let add_event_data = add_receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "GovernanceParameterSetAddedEvent")
+        .map(|(_, data)| data)
+        .expect("added event should be emitted");
+    let add_event: GovernanceParameterSetAddedEvent =
+        scrypto_decode(add_event_data).expect("added event should decode");
+    assert_eq!(add_event.parameter_set_id, "governance-process");
+    assert_eq!(add_event.parameter_set.version, 1);
+
+    let tc_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "make_temperature_check",
+            manifest_args!(
+                author_account,
+                create_temp_check_draft(),
+                Some("governance-process".to_string())
+            ),
+        )
+        .build();
+    let tc_receipt = ledger.execute_manifest(
+        tc_manifest,
+        vec![NonFungibleGlobalId::from_public_key(&author_pk)],
+    );
+    let tc_event_data = tc_receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "TemperatureCheckCreatedEvent")
+        .map(|(_, data)| data)
+        .expect("TC creation event should be emitted");
+    let tc_event: TemperatureCheckCreatedEvent =
+        scrypto_decode(tc_event_data).expect("TC creation event should decode");
+    assert_eq!(tc_event.parameter_set_id, "governance-process");
+    assert_eq!(tc_event.parameter_set_version, 1);
+
+    let proposal_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(component, "make_proposal", manifest_args!(0u64))
+        .build();
+    let proposal_receipt = ledger.execute_manifest(
+        proposal_manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    let proposal_event_data = proposal_receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "ProposalCreatedEvent")
+        .map(|(_, data)| data)
+        .expect("proposal creation event should be emitted");
+    let proposal_event: ProposalCreatedEvent =
+        scrypto_decode(proposal_event_data).expect("proposal creation event should decode");
+    assert_eq!(proposal_event.parameter_set_id, "governance-process");
+    assert_eq!(proposal_event.parameter_set_version, 1);
+
+    let update_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "update_governance_parameter_set",
+            manifest_args!(
+                "governance-process".to_string(),
+                parameter_set_input("Governance process v2", 5, 9)
+            ),
+        )
+        .build();
+    let update_receipt = ledger.execute_manifest(
+        update_manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    let update_event_data = update_receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "GovernanceParameterSetUpdatedEvent")
+        .map(|(_, data)| data)
+        .expect("updated event should be emitted");
+    let update_event: GovernanceParameterSetUpdatedEvent =
+        scrypto_decode(update_event_data).expect("updated event should decode");
+    assert_eq!(update_event.parameter_set_id, "governance-process");
+    assert_eq!(update_event.previous_version, 1);
+    assert_eq!(update_event.parameter_set.version, 2);
+
+    let retire_manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "retire_governance_parameter_set",
+            manifest_args!("governance-process".to_string()),
+        )
+        .build();
+    let retire_receipt = ledger.execute_manifest(
+        retire_manifest,
+        vec![NonFungibleGlobalId::from_public_key(&owner_pk)],
+    );
+    let retire_event_data = retire_receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "GovernanceParameterSetRetiredEvent")
+        .map(|(_, data)| data)
+        .expect("retired event should be emitted");
+    let retire_event: GovernanceParameterSetRetiredEvent =
+        scrypto_decode(retire_event_data).expect("retired event should decode");
+    assert_eq!(retire_event.parameter_set_id, "governance-process");
+    assert_eq!(retire_event.version, 2);
 }
 
 // =============================================================================
@@ -440,7 +1327,12 @@ fn test_make_delegation() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee_account, dec!("0.5"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee_account,
+                dec!("0.5"),
+                valid_until
+            ),
         )
         .build();
 
@@ -497,7 +1389,12 @@ fn test_remove_delegation() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee_account, dec!("0.5"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee_account,
+                dec!("0.5"),
+                valid_until
+            ),
         )
         .build();
 
@@ -572,7 +1469,12 @@ fn test_cannot_delegate_more_than_100_percent() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee1_account, dec!("0.6"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee1_account,
+                dec!("0.6"),
+                valid_until
+            ),
         )
         .build();
 
@@ -589,7 +1491,12 @@ fn test_cannot_delegate_more_than_100_percent() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee2_account, dec!("0.5"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee2_account,
+                dec!("0.5"),
+                valid_until
+            ),
         )
         .build();
 
@@ -631,7 +1538,12 @@ fn test_cannot_delegate_to_self() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegator_account, dec!("0.5"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegator_account,
+                dec!("0.5"),
+                valid_until
+            ),
         )
         .build();
 
@@ -680,7 +1592,7 @@ fn test_multi_choice_proposal_voting() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -695,11 +1607,7 @@ fn test_multi_choice_proposal_voting() {
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
-        .call_method(
-            governance_component,
-            "make_proposal",
-            manifest_args!(0u64),
-        )
+        .call_method(governance_component, "make_proposal", manifest_args!(0u64))
         .build();
 
     ledger
@@ -761,7 +1669,7 @@ fn test_multi_choice_exceeds_max_selections() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -776,11 +1684,7 @@ fn test_multi_choice_exceeds_max_selections() {
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
-        .call_method(
-            governance_component,
-            "make_proposal",
-            manifest_args!(0u64),
-        )
+        .call_method(governance_component, "make_proposal", manifest_args!(0u64))
         .build();
 
     ledger
@@ -846,7 +1750,7 @@ fn test_single_choice_requires_exactly_one_vote() {
         .call_method(
             governance_component,
             "make_temperature_check",
-            manifest_args!(author_account, draft),
+            manifest_args!(author_account, draft, Option::<String>::None),
         )
         .build();
 
@@ -861,11 +1765,7 @@ fn test_single_choice_requires_exactly_one_vote() {
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
-        .call_method(
-            governance_component,
-            "make_proposal",
-            manifest_args!(0u64),
-        )
+        .call_method(governance_component, "make_proposal", manifest_args!(0u64))
         .build();
 
     ledger
@@ -929,7 +1829,12 @@ fn test_delegation_minimum_fraction() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee_account, dec!("0.005"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee_account,
+                dec!("0.005"),
+                valid_until
+            ),
         )
         .build();
 
@@ -945,7 +1850,12 @@ fn test_delegation_minimum_fraction() {
         .call_method(
             delegation_component,
             "make_delegation",
-            manifest_args!(delegator_account, delegatee_account, dec!("0.01"), valid_until),
+            manifest_args!(
+                delegator_account,
+                delegatee_account,
+                dec!("0.01"),
+                valid_until
+            ),
         )
         .build();
 

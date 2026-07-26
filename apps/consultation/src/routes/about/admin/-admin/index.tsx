@@ -1,16 +1,24 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { Link } from '@tanstack/react-router'
 import { ArrowLeft, Loader2 } from 'lucide-react'
-import { useState } from 'react'
 import {
-  governanceParametersAtom,
-  updateGovernanceParametersAtom
-} from '@/atom/governanceParametersAtom'
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+  useState
+} from 'react'
+import type {
+  GovernanceParameterSet,
+  GovernanceParameterSetInput
+} from 'shared/governance/schemas'
 import { isAdminAtom } from '@/atom/adminAtom'
-import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+import {
+  addGovernanceParameterSetAtom,
+  governanceParameterSetsAtom,
+  retireGovernanceParameterSetAtom,
+  updateGovernanceParameterSetAtom
+} from '@/atom/governanceParametersAtom'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -19,267 +27,403 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { H1 } from '@/components/ui/typography'
+import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+
+type ParameterSetForm = {
+  label: string
+  temperatureCheckDays: string
+  temperatureCheckQuorum: string
+  temperatureCheckApprovalThreshold: string
+  proposalLengthDays: string
+  proposalQuorum: string
+  proposalApprovalThreshold: string
+}
+
+const emptyParameterSetForm: ParameterSetForm = {
+  label: '',
+  temperatureCheckDays: '7',
+  temperatureCheckQuorum: '1000000',
+  temperatureCheckApprovalThreshold: '0.5',
+  proposalLengthDays: '7',
+  proposalQuorum: '1000000',
+  proposalApprovalThreshold: '0.5'
+}
+
+const toFormValues = (
+  parameterSet: GovernanceParameterSet
+): ParameterSetForm => ({
+  label: parameterSet.label,
+  temperatureCheckDays: parameterSet.parameters.temperatureCheckDays.toString(),
+  temperatureCheckQuorum: parameterSet.parameters.temperatureCheckQuorum,
+  temperatureCheckApprovalThreshold:
+    parameterSet.parameters.temperatureCheckApprovalThreshold,
+  proposalLengthDays: parameterSet.parameters.proposalLengthDays.toString(),
+  proposalQuorum: parameterSet.parameters.proposalQuorum,
+  proposalApprovalThreshold: parameterSet.parameters.proposalApprovalThreshold
+})
+
+const toParameterSetInput = (
+  form: ParameterSetForm
+): GovernanceParameterSetInput => ({
+  label: form.label,
+  temperatureCheckDays: Number(form.temperatureCheckDays),
+  temperatureCheckQuorum: form.temperatureCheckQuorum,
+  temperatureCheckApprovalThreshold: form.temperatureCheckApprovalThreshold,
+  proposalLengthDays: Number(form.proposalLengthDays),
+  proposalQuorum: form.proposalQuorum,
+  proposalApprovalThreshold: form.proposalApprovalThreshold
+})
 
 export const Page = () => {
   const currentAccount = useCurrentAccount()
 
   if (!currentAccount) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <H1>Admin Panel</H1>
-        <p className="text-neutral-500">
-          Please connect your wallet to access the admin panel.
-        </p>
-        <Button variant="outline" asChild>
-          <Link to="/about">Back to About</Link>
-        </Button>
-      </div>
+      <AccessMessage message="Please connect your wallet to access the admin panel." />
     )
   }
 
   return <AdminGuard accountAddress={currentAccount.address} />
 }
 
+const AccessMessage = ({ message }: { message: string }) => (
+  <div className="max-w-4xl mx-auto space-y-6">
+    <H1>Admin Panel</H1>
+    <p className="text-neutral-500">{message}</p>
+    <Button variant="outline" asChild>
+      <Link to="/about">Back to About</Link>
+    </Button>
+  </div>
+)
+
 const AdminGuard = ({ accountAddress }: { accountAddress: string }) => {
   const isAdminResult = useAtomValue(isAdminAtom(accountAddress))
 
   return Result.builder(isAdminResult)
-    .onInitial(() => (
-      <div className="max-w-3xl mx-auto flex items-center gap-2 text-sm text-neutral-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Checking admin status...
-      </div>
-    ))
+    .onInitial(() => <LoadingMessage message="Checking admin status..." />)
+    .onFailure(() => <AccessMessage message="Failed to verify admin status." />)
+    .onSuccess((isAdmin) =>
+      isAdmin ? (
+        <AdminPanel />
+      ) : (
+        <AccessMessage message="You do not have admin access. Only accounts holding the admin badge can manage governance parameter sets." />
+      )
+    )
+    .render()
+}
+
+const LoadingMessage = ({ message }: { message: string }) => (
+  <div className="max-w-4xl mx-auto flex items-center gap-2 text-sm text-neutral-500">
+    <Loader2 className="h-4 w-4 animate-spin" />
+    {message}
+  </div>
+)
+
+const AdminPanel = () => {
+  const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
+
+  return Result.builder(parameterSetsResult)
+    .onInitial(() => <LoadingMessage message="Loading parameter sets..." />)
     .onFailure(() => (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <H1>Admin Panel</H1>
-        <p className="text-neutral-500">Failed to verify admin status.</p>
-        <Button variant="outline" asChild>
-          <Link to="/about">Back to About</Link>
-        </Button>
-      </div>
+      <AccessMessage message="Failed to load governance parameter sets." />
     ))
-    .onSuccess((isAdmin) => {
-      if (!isAdmin) {
-        return (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <H1>Admin Panel</H1>
-            <p className="text-neutral-500">
-              You do not have admin access. Only accounts holding the admin badge
-              can update governance parameters.
+    .onSuccess(({ active, retired }) => (
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/about" aria-label="Back to About">
+              <ArrowLeft className="size-4" />
+            </Link>
+          </Button>
+          <div>
+            <H1>Governance Parameter Sets</H1>
+            <p className="text-sm text-neutral-500">
+              Updates create a new version. Existing votes keep their snapshot.
             </p>
-            <Button variant="outline" asChild>
-              <Link to="/about">Back to About</Link>
-            </Button>
           </div>
-        )
-      }
+        </div>
 
-      return <AdminForm />
-    })
-    .render()
-}
+        <AddParameterSetForm />
 
-const AdminForm = () => {
-  const parametersResult = useAtomValue(governanceParametersAtom)
+        <section className="space-y-4">
+          <h2 className="text-xl font-semibold">Active sets</h2>
+          {active.map((parameterSet) => (
+            <ParameterSetEditor
+              key={`${parameterSet.id}:${parameterSet.version}`}
+              parameterSet={parameterSet}
+            />
+          ))}
+        </section>
 
-  return Result.builder(parametersResult)
-    .onInitial(() => (
-      <div className="max-w-3xl mx-auto flex items-center gap-2 text-sm text-neutral-500">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading current parameters...
+        {retired.length > 0 ? (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold">Retired sets</h2>
+            {retired.map((parameterSet) => (
+              <RetiredParameterSet
+                key={parameterSet.id}
+                parameterSet={parameterSet}
+              />
+            ))}
+          </section>
+        ) : null}
       </div>
-    ))
-    .onFailure(() => (
-      <div className="max-w-3xl mx-auto space-y-6">
-        <H1>Admin Panel</H1>
-        <p className="text-neutral-500">
-          Failed to load current governance parameters.
-        </p>
-        <Button variant="outline" asChild>
-          <Link to="/about">Back to About</Link>
-        </Button>
-      </div>
-    ))
-    .onSuccess((parameters) => (
-      <AdminFormWithValues
-        tcDays={parameters.temperature_check_days}
-        tcQuorum={parameters.temperature_check_quorum}
-        tcApproval={parameters.temperature_check_approval_threshold}
-        gpDays={parameters.proposal_length_days}
-        gpQuorum={parameters.proposal_quorum}
-        gpApproval={parameters.proposal_approval_threshold}
-      />
     ))
     .render()
 }
 
-const AdminFormWithValues = ({
-  tcDays,
-  tcQuorum,
-  tcApproval,
-  gpDays,
-  gpQuorum,
-  gpApproval
-}: {
-  tcDays: number
-  tcQuorum: string
-  tcApproval: string
-  gpDays: number
-  gpQuorum: string
-  gpApproval: string
-}) => {
-  const [updateResult, updateParameters] = useAtom(
-    updateGovernanceParametersAtom
-  )
-  const isSubmitting = updateResult.waiting
+const AddParameterSetForm = () => {
+  const [result, addParameterSet] = useAtom(addGovernanceParameterSetAtom)
+  const [parameterSetId, setParameterSetId] = useState('')
+  const [form, setForm] = useState(emptyParameterSetForm)
 
-  const [form, setForm] = useState({
-    temperatureCheckDays: tcDays.toString(),
-    temperatureCheckQuorum: tcQuorum,
-    temperatureCheckApprovalThreshold: tcApproval,
-    proposalLengthDays: gpDays.toString(),
-    proposalQuorum: gpQuorum,
-    proposalApprovalThreshold: gpApproval
-  })
-
-  const handleChange = (field: keyof typeof form, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    updateParameters({
-      temperatureCheckDays: Number(form.temperatureCheckDays),
-      temperatureCheckQuorum: form.temperatureCheckQuorum,
-      temperatureCheckApprovalThreshold: form.temperatureCheckApprovalThreshold,
-      proposalLengthDays: Number(form.proposalLengthDays),
-      proposalQuorum: form.proposalQuorum,
-      proposalApprovalThreshold: form.proposalApprovalThreshold
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    addParameterSet({
+      parameterSetId,
+      ...toParameterSetInput(form)
     })
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/about" aria-label="Back to About">
-            <ArrowLeft className="size-4" />
-          </Link>
-        </Button>
-        <H1>Edit Governance Parameters</H1>
-      </div>
-
-      <form onSubmit={handleSubmit}>
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Temperature Check</CardTitle>
-              <CardDescription>
-                Settings for community temperature checks
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="tc-days">Voting Period (days)</Label>
-                <Input
-                  id="tc-days"
-                  type="number"
-                  min="1"
-                  value={form.temperatureCheckDays}
-                  onChange={(e) =>
-                    handleChange('temperatureCheckDays', e.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tc-quorum">Quorum (XRD)</Label>
-                <Input
-                  id="tc-quorum"
-                  type="text"
-                  value={form.temperatureCheckQuorum}
-                  onChange={(e) =>
-                    handleChange('temperatureCheckQuorum', e.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tc-threshold">
-                  Approval Threshold (0-1)
-                </Label>
-                <Input
-                  id="tc-threshold"
-                  type="text"
-                  value={form.temperatureCheckApprovalThreshold}
-                  onChange={(e) =>
-                    handleChange(
-                      'temperatureCheckApprovalThreshold',
-                      e.target.value
-                    )
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Governance Proposal</CardTitle>
-              <CardDescription>
-                Settings for governance proposals
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="gp-days">Voting Period (days)</Label>
-                <Input
-                  id="gp-days"
-                  type="number"
-                  min="1"
-                  value={form.proposalLengthDays}
-                  onChange={(e) =>
-                    handleChange('proposalLengthDays', e.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gp-quorum">Quorum (XRD)</Label>
-                <Input
-                  id="gp-quorum"
-                  type="text"
-                  value={form.proposalQuorum}
-                  onChange={(e) =>
-                    handleChange('proposalQuorum', e.target.value)
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gp-threshold">
-                  Approval Threshold (0-1)
-                </Label>
-                <Input
-                  id="gp-threshold"
-                  type="text"
-                  value={form.proposalApprovalThreshold}
-                  onChange={(e) =>
-                    handleChange('proposalApprovalThreshold', e.target.value)
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <CardFooter className="mt-6 px-0">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && (
+    <form onSubmit={handleSubmit}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Add parameter set</CardTitle>
+          <CardDescription>
+            The ID is permanent and must use lowercase kebab-case.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="new-parameter-set-id">Parameter set ID</Label>
+            <Input
+              id="new-parameter-set-id"
+              required
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              maxLength={64}
+              value={parameterSetId}
+              onChange={(event) => setParameterSetId(event.target.value)}
+              placeholder="large-grants"
+            />
+          </div>
+          <ParameterSetFields idPrefix="new" form={form} setForm={setForm} />
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" disabled={result.waiting}>
+            {result.waiting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
-            Update Parameters
+            ) : null}
+            Add set
           </Button>
         </CardFooter>
-      </form>
+      </Card>
+    </form>
+  )
+}
+
+const ParameterSetEditor = ({
+  parameterSet
+}: {
+  parameterSet: GovernanceParameterSet
+}) => {
+  const [updateResult, updateParameterSet] = useAtom(
+    updateGovernanceParameterSetAtom
+  )
+  const [retireResult, retireParameterSet] = useAtom(
+    retireGovernanceParameterSetAtom
+  )
+  const [form, setForm] = useState(() => toFormValues(parameterSet))
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    updateParameterSet({
+      parameterSetId: parameterSet.id,
+      ...toParameterSetInput(form)
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Card>
+        <CardHeader>
+          <CardTitle>{parameterSet.label}</CardTitle>
+          <CardDescription>
+            {parameterSet.id} · version {parameterSet.version}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ParameterSetFields
+            idPrefix={`edit-${parameterSet.id}`}
+            form={form}
+            setForm={setForm}
+          />
+        </CardContent>
+        <CardFooter className="gap-3">
+          <Button type="submit" disabled={updateResult.waiting}>
+            {updateResult.waiting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : null}
+            Save as version {parameterSet.version + 1}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={parameterSet.id === 'default' || retireResult.waiting}
+            title={
+              parameterSet.id === 'default'
+                ? 'The default parameter set cannot be retired'
+                : undefined
+            }
+            onClick={() => retireParameterSet(parameterSet.id)}
+          >
+            Retire
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
+  )
+}
+
+const ParameterSetFields = ({
+  idPrefix,
+  form,
+  setForm
+}: {
+  idPrefix: string
+  form: ParameterSetForm
+  setForm: Dispatch<SetStateAction<ParameterSetForm>>
+}) => {
+  const handleChange = (field: keyof ParameterSetForm, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-label`}>Label</Label>
+        <Input
+          id={`${idPrefix}-label`}
+          required
+          maxLength={128}
+          value={form.label}
+          onChange={(event) => handleChange('label', event.target.value)}
+        />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <ParameterGroup
+          idPrefix={`${idPrefix}-tc`}
+          title="Temperature Check"
+          days={form.temperatureCheckDays}
+          quorum={form.temperatureCheckQuorum}
+          threshold={form.temperatureCheckApprovalThreshold}
+          onDaysChange={(value) => handleChange('temperatureCheckDays', value)}
+          onQuorumChange={(value) =>
+            handleChange('temperatureCheckQuorum', value)
+          }
+          onThresholdChange={(value) =>
+            handleChange('temperatureCheckApprovalThreshold', value)
+          }
+        />
+        <ParameterGroup
+          idPrefix={`${idPrefix}-gp`}
+          title="Governance Proposal"
+          days={form.proposalLengthDays}
+          quorum={form.proposalQuorum}
+          threshold={form.proposalApprovalThreshold}
+          onDaysChange={(value) => handleChange('proposalLengthDays', value)}
+          onQuorumChange={(value) => handleChange('proposalQuorum', value)}
+          onThresholdChange={(value) =>
+            handleChange('proposalApprovalThreshold', value)
+          }
+        />
+      </div>
     </div>
   )
 }
+
+const ParameterGroup = ({
+  idPrefix,
+  title,
+  days,
+  quorum,
+  threshold,
+  onDaysChange,
+  onQuorumChange,
+  onThresholdChange
+}: {
+  idPrefix: string
+  title: string
+  days: string
+  quorum: string
+  threshold: string
+  onDaysChange: (value: string) => void
+  onQuorumChange: (value: string) => void
+  onThresholdChange: (value: string) => void
+}) => (
+  <fieldset className="space-y-4">
+    <legend className="font-medium">{title}</legend>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}-days`}>Voting period (days)</Label>
+      <Input
+        id={`${idPrefix}-days`}
+        type="number"
+        min="1"
+        max="65535"
+        required
+        value={days}
+        onChange={(event) => onDaysChange(event.target.value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}-quorum`}>Quorum (XRD)</Label>
+      <Input
+        id={`${idPrefix}-quorum`}
+        inputMode="decimal"
+        required
+        value={quorum}
+        onChange={(event) => onQuorumChange(event.target.value)}
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor={`${idPrefix}-threshold`}>Approval threshold (0–1)</Label>
+      <Input
+        id={`${idPrefix}-threshold`}
+        inputMode="decimal"
+        required
+        value={threshold}
+        onChange={(event) => onThresholdChange(event.target.value)}
+      />
+    </div>
+  </fieldset>
+)
+
+const RetiredParameterSet = ({
+  parameterSet
+}: {
+  parameterSet: GovernanceParameterSet
+}) => (
+  <Card className="opacity-70">
+    <CardHeader>
+      <CardTitle>{parameterSet.label}</CardTitle>
+      <CardDescription>
+        {parameterSet.id} · version {parameterSet.version} · retired
+      </CardDescription>
+    </CardHeader>
+    <CardContent className="grid gap-4 text-sm md:grid-cols-2">
+      <p className="text-muted-foreground">
+        TC: {parameterSet.parameters.temperatureCheckDays} days ·{' '}
+        {parameterSet.parameters.temperatureCheckQuorum} XRD quorum ·{' '}
+        {parameterSet.parameters.temperatureCheckApprovalThreshold} approval
+      </p>
+      <p className="text-muted-foreground">
+        GP: {parameterSet.parameters.proposalLengthDays} days ·{' '}
+        {parameterSet.parameters.proposalQuorum} XRD quorum ·{' '}
+        {parameterSet.parameters.proposalApprovalThreshold} approval
+      </p>
+    </CardContent>
+  </Card>
+)

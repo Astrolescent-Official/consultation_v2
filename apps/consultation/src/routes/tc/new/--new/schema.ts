@@ -1,4 +1,5 @@
 import { ParseResult, Schema } from 'effect'
+import { GovernanceParameterSetIdSchema } from 'shared/governance/schemas'
 
 export function effectSchemaValidator<T, I>(schema: Schema.Schema<T, I>) {
   return ({ value }: { value: unknown }) => {
@@ -58,6 +59,7 @@ const VoteOptionSchema = Schema.Struct({
 })
 
 export const TemperatureCheckFormSchema = Schema.Struct({
+  parameterSetId: GovernanceParameterSetIdSchema,
   title: TitleSchema,
   shortDescription: ShortDescriptionSchema,
   description: DescriptionSchema,

@@ -105,7 +105,7 @@ pub struct TemperatureCheckDraft {
 }
 
 /// Governance parameters that control voting behavior
-#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
 pub struct GovernanceParameters {
     pub temperature_check_days: u16,
     pub temperature_check_quorum: Decimal,
@@ -114,6 +114,35 @@ pub struct GovernanceParameters {
     pub proposal_quorum: Decimal,
     pub proposal_approval_threshold: Decimal,
 }
+
+/// Owner-supplied data for a governance parameter set.
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+pub struct GovernanceParameterSetInput {
+    pub label: String,
+    pub parameters: GovernanceParameters,
+}
+
+/// A live or retired record in the governance parameter registry.
+#[derive(ScryptoSbor, Clone, Debug, PartialEq)]
+pub struct GovernanceParameterSet {
+    pub label: String,
+    pub version: u32,
+    pub retired: bool,
+    pub parameters: GovernanceParameters,
+}
+
+/// Immutable parameter-set data captured by a consultation at creation time.
+#[derive(ScryptoSbor, Clone, Debug, PartialEq)]
+pub struct GovernanceParameterSetSnapshot {
+    pub id: String,
+    pub label: String,
+    pub version: u32,
+    pub parameters: GovernanceParameters,
+}
+
+pub const DEFAULT_PARAMETER_SET_ID: &str = "default";
+pub const MAX_PARAMETER_SET_ID_BYTES: usize = 64;
+pub const MAX_PARAMETER_SET_LABEL_BYTES: usize = 128;
 
 /// Struct used to hold submitted temperature check data
 #[derive(ScryptoSbor)]
@@ -126,7 +155,7 @@ pub struct TemperatureCheck {
     pub vote_options: Vec<ProposalVoteOption>,
     /// External links related to the proposal
     pub links: Vec<Url>,
-    pub quorum: Decimal,
+    pub parameter_set: GovernanceParameterSetSnapshot,
     /// Maximum number of options a voter can select in the proposal.
     /// If None, only one option can be selected (single choice).
     /// If Some(n), up to n options can be selected (multiple choice).
@@ -139,7 +168,6 @@ pub struct TemperatureCheck {
     pub vote_count: u64,
     /// Counter for revotes, so unique voters = vote_count - revote_count
     pub revote_count: u64,
-    pub approval_threshold: Decimal,
     pub start: Instant,
     pub deadline: Instant,
     pub elevated_proposal_id: Option<u64>,
@@ -160,7 +188,7 @@ pub struct Proposal {
     pub vote_options: Vec<ProposalVoteOption>,
     /// External links related to the proposal
     pub links: Vec<Url>,
-    pub quorum: Decimal,
+    pub parameter_set: GovernanceParameterSetSnapshot,
     /// Maximum number of options a voter can select.
     /// If None, only one option can be selected (single choice).
     /// If Some(n), up to n options can be selected (multiple choice).
@@ -173,7 +201,6 @@ pub struct Proposal {
     pub vote_count: u64,
     /// Counter for revotes, so unique voters = vote_count - revote_count
     pub revote_count: u64,
-    pub approval_threshold: Decimal,
     pub start: Instant,
     pub deadline: Instant,
     pub temperature_check_id: u64,
@@ -206,6 +233,8 @@ pub struct TemperatureCheckCreatedEvent {
     pub title: String,
     pub start: Instant,
     pub deadline: Instant,
+    pub parameter_set_id: String,
+    pub parameter_set_version: u32,
 }
 
 /// Emitted when a vote is cast on a temperature check
@@ -227,6 +256,8 @@ pub struct ProposalCreatedEvent {
     pub title: String,
     pub start: Instant,
     pub deadline: Instant,
+    pub parameter_set_id: String,
+    pub parameter_set_version: u32,
 }
 
 /// Emitted when a vote is cast on a proposal
@@ -240,10 +271,26 @@ pub struct ProposalVotedEvent {
     pub replacing_vote_id: Option<u64>,
 }
 
-/// Emitted when governance parameters are updated
+/// Emitted when a governance parameter set is added.
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
-pub struct GovernanceParametersUpdatedEvent {
-    pub new_params: GovernanceParameters,
+pub struct GovernanceParameterSetAddedEvent {
+    pub parameter_set_id: String,
+    pub parameter_set: GovernanceParameterSet,
+}
+
+/// Emitted when a governance parameter set is updated.
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct GovernanceParameterSetUpdatedEvent {
+    pub parameter_set_id: String,
+    pub previous_version: u32,
+    pub parameter_set: GovernanceParameterSet,
+}
+
+/// Emitted when a governance parameter set is permanently retired.
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct GovernanceParameterSetRetiredEvent {
+    pub parameter_set_id: String,
+    pub version: u32,
 }
 
 /// Emitted when a delegation is created or updated

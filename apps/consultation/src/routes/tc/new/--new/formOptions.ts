@@ -14,6 +14,7 @@ export const DEFAULT_VOTE_OPTIONS: VoteOption[] = [
 
 export const temperatureCheckFormOpts = formOptions({
   defaultValues: {
+    parameterSetId: 'default',
     title: '',
     shortDescription: '',
     description: '',

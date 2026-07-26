@@ -1,15 +1,16 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { governanceParametersAtom } from '@/atom/governanceParametersAtom'
+import type { GovernanceParameterSet } from 'shared/governance/schemas'
 import { isAdminAtom } from '@/atom/adminAtom'
-import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
 import { Button } from '@/components/ui/button'
 import { H1 } from '@/components/ui/typography'
+import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { formatXrd } from '@/lib/utils'
 
 export const Page = () => {
-  const parametersResult = useAtomValue(governanceParametersAtom)
+  const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
 
   return (
     <div className="max-w-3xl mx-auto space-y-12">
@@ -28,7 +29,7 @@ export const Page = () => {
         </div>
       </div>
 
-      {Result.builder(parametersResult)
+      {Result.builder(parameterSetsResult)
         .onInitial(() => (
           <div className="flex items-center gap-2 text-sm text-neutral-500">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -42,35 +43,16 @@ export const Page = () => {
             </p>
           </div>
         ))
-        .onSuccess((parameters) => (
-          <GovernanceContent
-            tcDays={parameters.temperature_check_days}
-            tcQuorum={parameters.temperature_check_quorum}
-            tcApproval={parameters.temperature_check_approval_threshold}
-            gpDays={parameters.proposal_length_days}
-            gpQuorum={parameters.proposal_quorum}
-            gpApproval={parameters.proposal_approval_threshold}
-          />
-        ))
+        .onSuccess(({ active }) => <GovernanceContent parameterSets={active} />)
         .render()}
     </div>
   )
 }
 
 const GovernanceContent = ({
-  tcDays,
-  tcQuorum,
-  tcApproval,
-  gpDays,
-  gpQuorum,
-  gpApproval
+  parameterSets
 }: {
-  tcDays: number
-  tcQuorum: string
-  tcApproval: string
-  gpDays: number
-  gpQuorum: string
-  gpApproval: string
+  parameterSets: ReadonlyArray<GovernanceParameterSet>
 }) => (
   <>
     <div className="space-y-8">
@@ -78,40 +60,19 @@ const GovernanceContent = ({
         How it Works
       </h2>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-neutral-900 dark:text-white">
-            1. Temperature Check (TC)
-          </h3>
-          <p className="text-neutral-600 dark:text-neutral-400">
-            Any community member with a Radix wallet can propose a Temperature
-            Check. This is a binary &ldquo;For&rdquo; or &ldquo;Against&rdquo;
-            vote to gauge community sentiment on a specific idea or direction.
-          </p>
-          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
-            <li>Voting period: {tcDays} days</li>
-            <li>Requires {formatXrd(Number(tcQuorum))} XRD quorum</li>
-            <li>Must pass with &gt;{(Number(tcApproval) * 100).toFixed(0)}% approval</li>
-            <li>Successful TCs may be promoted to GPs by the Council</li>
-          </ul>
-        </div>
+      <p className="text-neutral-600 dark:text-neutral-400">
+        Each Temperature Check chooses one of the active parameter sets below.
+        The selected rules are snapshotted, so later registry updates never
+        change an existing vote.
+      </p>
 
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-neutral-900 dark:text-white">
-            2. Governance Proposal (GP)
-          </h3>
-          <p className="text-neutral-600 dark:text-neutral-400">
-            GPs are created by the Council (Admins) based on successful
-            Temperature Checks. They present specific implementation options for
-            the community to choose from.
-          </p>
-          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
-            <li>Voting period: {gpDays} days</li>
-            <li>Requires {formatXrd(Number(gpQuorum))} XRD quorum</li>
-            <li>Must pass with &gt;{(Number(gpApproval) * 100).toFixed(0)}% approval</li>
-            <li>Multiple options available</li>
-          </ul>
-        </div>
+      <div className="grid gap-6">
+        {parameterSets.map((parameterSet) => (
+          <ParameterSetDetails
+            key={parameterSet.id}
+            parameterSet={parameterSet}
+          />
+        ))}
       </div>
     </div>
 
@@ -126,6 +87,67 @@ const GovernanceContent = ({
     </div>
   </>
 )
+
+const ParameterSetDetails = ({
+  parameterSet
+}: {
+  parameterSet: GovernanceParameterSet
+}) => {
+  const parameters = parameterSet.parameters
+
+  return (
+    <div className="border border-neutral-200 dark:border-neutral-800 p-6 space-y-5">
+      <div>
+        <h3 className="text-xl font-semibold text-neutral-900 dark:text-white">
+          {parameterSet.label}
+        </h3>
+        <p className="text-sm text-neutral-500">
+          {parameterSet.id} · version {parameterSet.version}
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="space-y-3">
+          <h4 className="font-semibold text-neutral-900 dark:text-white">
+            Temperature Check
+          </h4>
+          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
+            <li>Voting period: {parameters.temperatureCheckDays} days</li>
+            <li>
+              Requires {formatXrd(Number(parameters.temperatureCheckQuorum))}{' '}
+              XRD quorum
+            </li>
+            <li>
+              Approval threshold: {parameters.temperatureCheckApprovalThreshold}{' '}
+              (
+              {(
+                Number(parameters.temperatureCheckApprovalThreshold) * 100
+              ).toFixed(2)}
+              %)
+            </li>
+          </ul>
+        </div>
+
+        <div className="space-y-3">
+          <h4 className="font-semibold text-neutral-900 dark:text-white">
+            Governance Proposal
+          </h4>
+          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
+            <li>Voting period: {parameters.proposalLengthDays} days</li>
+            <li>
+              Requires {formatXrd(Number(parameters.proposalQuorum))} XRD quorum
+            </li>
+            <li>
+              Approval threshold: {parameters.proposalApprovalThreshold} (
+              {(Number(parameters.proposalApprovalThreshold) * 100).toFixed(2)}
+              %)
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const AdminEditButton = () => {
   const currentAccount = useCurrentAccount()

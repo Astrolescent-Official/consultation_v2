@@ -1,13 +1,9 @@
-import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
+import { useState } from 'react'
 import type { SortOrder } from '@/atom/proposalsAtom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { H1, P } from '@/components/ui/typography'
-import {
-  ProposalsList,
-  SortToggle,
-  TemperatureChecksList
-} from './components'
+import { ProposalsList, SortToggle, TemperatureChecksList } from './components'
 
 export const Page: React.FC = () => {
   const [activeTab, setActiveTab] = useState('proposals')
@@ -35,11 +31,7 @@ export const Page: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="w-full"
-      >
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="mb-1 sm:mb-6 flex flex-wrap items-center justify-between gap-3">
           <TabsList>
             <TabsTrigger value="proposals" className="text-xs sm:text-sm">
@@ -60,11 +52,11 @@ export const Page: React.FC = () => {
         </div>
 
         <TabsContent value="proposals">
-          <ProposalsList sortOrder={proposalSort} />
+          <ProposalsList key={proposalSort} sortOrder={proposalSort} />
         </TabsContent>
 
         <TabsContent value="temperature-checks">
-          <TemperatureChecksList sortOrder={tcSort} />
+          <TemperatureChecksList key={tcSort} sortOrder={tcSort} />
         </TabsContent>
       </Tabs>
     </>

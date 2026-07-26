@@ -1,6 +1,6 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Cause } from 'effect'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { Proposal } from 'shared/governance/schemas'
 import { paginatedProposalsAtom, type SortOrder } from '@/atom/proposalsAtom'
 import { InlineCode } from '@/components/ui/typography'
@@ -18,11 +18,6 @@ export function ProposalsList({ sortOrder }: ProposalsListProps) {
   const [page, setPage] = useState(1)
   const result = useAtomValue(paginatedProposalsAtom(page)(sortOrder))
   const isAdmin = useIsAdmin()
-
-  // Reset to page 1 when sort order changes
-  useEffect(() => {
-    setPage(1)
-  }, [sortOrder])
 
   return Result.builder(result)
     .onInitial(() => <CardSkeletonList />)
@@ -45,7 +40,7 @@ export function ProposalsList({ sortOrder }: ProposalsListProps) {
                 author={proposal.author}
                 start={proposal.start}
                 deadline={proposal.deadline}
-                quorum={Number(proposal.quorum)}
+                quorum={Number(proposal.parameterSet.parameters.proposalQuorum)}
                 linkPrefix="/proposal"
                 hidden={proposal.hidden}
               />

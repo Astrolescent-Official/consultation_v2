@@ -1,10 +1,182 @@
 import { AccountAddress } from '@radix-effects/shared'
 import type { ProgrammaticScryptoSborValue } from '@radixdlt/babylon-gateway-api-sdk'
+import BigNumber from 'bignumber.js'
 import { Effect, Option, ParseResult, Schema } from 'effect'
 import s from 'sbor-ez-mode'
 import { parseSbor } from '../helpers/parseSbor'
 import { KeyValueStoreAddress } from '../schemas'
 import { ProposalId, TemperatureCheckId } from './brandedTypes'
+
+const PositiveDecimalString = Schema.String.pipe(
+  Schema.filter(
+    (value) => {
+      const decimal = new BigNumber(value)
+      return decimal.isFinite() && decimal.isGreaterThan(0)
+    },
+    { message: () => 'Must be a positive decimal' }
+  )
+)
+
+const ApprovalThresholdString = PositiveDecimalString.pipe(
+  Schema.filter((value) => new BigNumber(value).isLessThanOrEqualTo(1), {
+    message: () => 'Must be greater than zero and at most one'
+  })
+)
+
+const DurationDays = Schema.Number.pipe(Schema.int(), Schema.between(1, 65535))
+
+const ScryptoOptionalNumberSchema = Schema.Union(
+  Schema.Struct({
+    variant: Schema.Literal('None'),
+    value: Schema.Struct({})
+  }),
+  Schema.Struct({
+    variant: Schema.Literal('Some'),
+    value: Schema.Tuple(Schema.Number)
+  })
+)
+
+type ScryptoOptionalNumber = typeof ScryptoOptionalNumberSchema.Type
+
+const encodeScryptoOptionalNumber = (
+  value: number | undefined
+): ScryptoOptionalNumber =>
+  value === undefined
+    ? { variant: 'None', value: {} }
+    : { variant: 'Some', value: [value] }
+
+const numberTuple = (value: number): readonly [number] => [value]
+
+export const GovernanceParameterSetIdSchema = Schema.String.pipe(
+  Schema.minLength(1),
+  Schema.maxLength(64),
+  Schema.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+)
+
+export type GovernanceParameterSetId =
+  typeof GovernanceParameterSetIdSchema.Type
+
+export const GovernanceParameterSetLabelSchema = Schema.String.pipe(
+  Schema.filter(
+    (value) =>
+      value.trim() === value &&
+      value.trim().length > 0 &&
+      new TextEncoder().encode(value).length <= 128,
+    {
+      message: () =>
+        'Label must be non-blank, have no surrounding whitespace, and be at most 128 UTF-8 bytes'
+    }
+  )
+)
+
+export const GovernanceParametersSchema = Schema.transform(
+  Schema.Struct({
+    temperature_check_days: DurationDays,
+    temperature_check_quorum: PositiveDecimalString,
+    temperature_check_approval_threshold: ApprovalThresholdString,
+    proposal_length_days: DurationDays,
+    proposal_quorum: PositiveDecimalString,
+    proposal_approval_threshold: ApprovalThresholdString
+  }),
+  Schema.Struct({
+    temperatureCheckDays: DurationDays,
+    temperatureCheckQuorum: PositiveDecimalString,
+    temperatureCheckApprovalThreshold: ApprovalThresholdString,
+    proposalLengthDays: DurationDays,
+    proposalQuorum: PositiveDecimalString,
+    proposalApprovalThreshold: ApprovalThresholdString
+  }),
+  {
+    strict: true,
+    decode: (value) => ({
+      temperatureCheckDays: value.temperature_check_days,
+      temperatureCheckQuorum: value.temperature_check_quorum,
+      temperatureCheckApprovalThreshold:
+        value.temperature_check_approval_threshold,
+      proposalLengthDays: value.proposal_length_days,
+      proposalQuorum: value.proposal_quorum,
+      proposalApprovalThreshold: value.proposal_approval_threshold
+    }),
+    encode: (value) => ({
+      temperature_check_days: value.temperatureCheckDays,
+      temperature_check_quorum: value.temperatureCheckQuorum,
+      temperature_check_approval_threshold:
+        value.temperatureCheckApprovalThreshold,
+      proposal_length_days: value.proposalLengthDays,
+      proposal_quorum: value.proposalQuorum,
+      proposal_approval_threshold: value.proposalApprovalThreshold
+    })
+  }
+)
+
+export type GovernanceParameters = typeof GovernanceParametersSchema.Type
+
+export const GovernanceParameterSetSchema = Schema.Struct({
+  id: GovernanceParameterSetIdSchema,
+  label: GovernanceParameterSetLabelSchema,
+  version: Schema.Number.pipe(Schema.int(), Schema.between(1, 4_294_967_295)),
+  retired: Schema.Boolean,
+  parameters: GovernanceParametersSchema
+})
+
+export type GovernanceParameterSet = typeof GovernanceParameterSetSchema.Type
+
+export const GovernanceParameterSetSnapshotSchema = Schema.Struct({
+  id: GovernanceParameterSetIdSchema,
+  label: GovernanceParameterSetLabelSchema,
+  version: Schema.Number.pipe(Schema.int(), Schema.between(1, 4_294_967_295)),
+  parameters: GovernanceParametersSchema
+})
+
+export type GovernanceParameterSetSnapshot =
+  typeof GovernanceParameterSetSnapshotSchema.Type
+
+export const GovernanceParameterSetInputSchema = Schema.Struct({
+  label: GovernanceParameterSetLabelSchema,
+  temperatureCheckDays: DurationDays,
+  temperatureCheckQuorum: PositiveDecimalString,
+  temperatureCheckApprovalThreshold: ApprovalThresholdString,
+  proposalLengthDays: DurationDays,
+  proposalQuorum: PositiveDecimalString,
+  proposalApprovalThreshold: ApprovalThresholdString
+})
+
+export type GovernanceParameterSetInput =
+  typeof GovernanceParameterSetInputSchema.Type
+
+export const MakeAddGovernanceParameterSetInputSchema =
+  GovernanceParameterSetInputSchema.pipe(
+    Schema.extend(
+      Schema.Struct({
+        accountAddress: AccountAddress,
+        parameterSetId: GovernanceParameterSetIdSchema
+      })
+    )
+  )
+
+export type MakeAddGovernanceParameterSetInput =
+  typeof MakeAddGovernanceParameterSetInputSchema.Encoded
+
+export const MakeUpdateGovernanceParameterSetInputSchema =
+  MakeAddGovernanceParameterSetInputSchema
+
+export type MakeUpdateGovernanceParameterSetInput =
+  typeof MakeUpdateGovernanceParameterSetInputSchema.Encoded
+
+export const MakeRetireGovernanceParameterSetInputSchema = Schema.Struct({
+  accountAddress: AccountAddress,
+  parameterSetId: GovernanceParameterSetIdSchema
+})
+
+export type MakeRetireGovernanceParameterSetInput =
+  typeof MakeRetireGovernanceParameterSetInputSchema.Encoded
+
+export const partitionGovernanceParameterSets = (
+  parameterSets: ReadonlyArray<GovernanceParameterSet>
+) => ({
+  active: parameterSets.filter((parameterSet) => !parameterSet.retired),
+  retired: parameterSets.filter((parameterSet) => parameterSet.retired)
+})
 
 export const MakeTemperatureCheckInputSchema = Schema.Struct({
   title: Schema.String,
@@ -16,7 +188,8 @@ export const MakeTemperatureCheckInputSchema = Schema.Struct({
     Schema.Literal(1),
     Schema.Number.pipe(Schema.greaterThan(1))
   ),
-  authorAccount: AccountAddress
+  authorAccount: AccountAddress,
+  parameterSetId: GovernanceParameterSetIdSchema
 })
 
 export type MakeTemperatureCheckInput =
@@ -40,13 +213,11 @@ export const TemperatureCheckSchema = Schema.asSchema(
         })
       ),
       links: Schema.Array(Schema.String),
-      quorum: Schema.String,
+      parameter_set: GovernanceParameterSetSnapshotSchema,
+      max_selections: ScryptoOptionalNumberSchema,
       start: Schema.Number,
       deadline: Schema.Number,
-      elevated_proposal_id: Schema.Struct({
-        variant: Schema.String,
-        value: Schema.Unknown
-      }),
+      elevated_proposal_id: ScryptoOptionalNumberSchema,
       author: Schema.String,
       hidden: Schema.Boolean
     }),
@@ -66,7 +237,8 @@ export const TemperatureCheckSchema = Schema.asSchema(
         })
       ),
       links: Schema.Array(Schema.String),
-      quorum: Schema.String,
+      parameterSet: Schema.typeSchema(GovernanceParameterSetSnapshotSchema),
+      maxSelections: Schema.Number,
       start: Schema.DateFromSelf,
       deadline: Schema.DateFromSelf,
       elevatedProposalId: Schema.OptionFromSelf(ProposalId),
@@ -88,14 +260,16 @@ export const TemperatureCheckSchema = Schema.asSchema(
           label: option.label
         })),
         links: fromA.links,
-        quorum: fromA.quorum,
+        parameterSet: fromA.parameter_set,
+        maxSelections:
+          fromA.max_selections.variant === 'Some'
+            ? fromA.max_selections.value[0]
+            : 1,
         start: new Date(fromA.start * 1000),
         deadline: new Date(fromA.deadline * 1000),
         elevatedProposalId:
           fromA.elevated_proposal_id.variant === 'Some'
-            ? Option.some(
-                (fromA.elevated_proposal_id.value as [number])[0] as ProposalId
-              )
+            ? Option.some(ProposalId.make(fromA.elevated_proposal_id.value[0]))
             : Option.none(),
         author: AccountAddress.make(fromA.author),
         hidden: fromA.hidden
@@ -110,16 +284,19 @@ export const TemperatureCheckSchema = Schema.asSchema(
         vote_count: values.voteCount,
         revote_count: values.revoteCount,
         vote_options: values.voteOptions.map((option) => ({
-          id: [option.id] as const,
+          id: numberTuple(option.id),
           label: option.label
         })),
         links: values.links.map((url) => url.toString()),
-        quorum: values.quorum,
+        parameter_set: values.parameterSet,
+        max_selections: encodeScryptoOptionalNumber(
+          values.maxSelections === 1 ? undefined : values.maxSelections
+        ),
         start: Math.floor(values.start.getTime() / 1000),
         deadline: Math.floor(values.deadline.getTime() / 1000),
         elevated_proposal_id: Option.match(values.elevatedProposalId, {
-          onNone: () => ({ variant: 'None' as const, value: {} }),
-          onSome: (id) => ({ variant: 'Some' as const, value: [id] })
+          onNone: () => encodeScryptoOptionalNumber(undefined),
+          onSome: encodeScryptoOptionalNumber
         }),
         author: values.author,
         hidden: values.hidden
@@ -149,17 +326,8 @@ export const ProposalSchema = Schema.asSchema(
         })
       ),
       links: Schema.Array(Schema.String),
-      quorum: Schema.String,
-      max_selections: Schema.Union(
-        Schema.Struct({
-          variant: Schema.Literal('None'),
-          value: Schema.Struct({})
-        }),
-        Schema.Struct({
-          variant: Schema.Literal('Some'),
-          value: Schema.Tuple(Schema.Number)
-        })
-      ),
+      parameter_set: GovernanceParameterSetSnapshotSchema,
+      max_selections: ScryptoOptionalNumberSchema,
       start: Schema.Number,
       deadline: Schema.Number,
       temperature_check_id: Schema.Number,
@@ -182,7 +350,7 @@ export const ProposalSchema = Schema.asSchema(
         })
       ),
       links: Schema.Array(Schema.String),
-      quorum: Schema.String,
+      parameterSet: Schema.typeSchema(GovernanceParameterSetSnapshotSchema),
       maxSelections: Schema.Number,
       start: Schema.DateFromSelf,
       deadline: Schema.DateFromSelf,
@@ -205,14 +373,14 @@ export const ProposalSchema = Schema.asSchema(
           label: option.label
         })),
         links: fromA.links,
-        quorum: fromA.quorum,
+        parameterSet: fromA.parameter_set,
         maxSelections:
           fromA.max_selections.variant === 'Some'
             ? fromA.max_selections.value[0]
             : 1,
         start: new Date(fromA.start * 1000),
         deadline: new Date(fromA.deadline * 1000),
-        temperatureCheckId: fromA.temperature_check_id as TemperatureCheckId,
+        temperatureCheckId: TemperatureCheckId.make(fromA.temperature_check_id),
         author: AccountAddress.make(fromA.author),
         hidden: fromA.hidden
       }),
@@ -226,18 +394,14 @@ export const ProposalSchema = Schema.asSchema(
         vote_count: values.voteCount,
         revote_count: values.revoteCount,
         vote_options: values.voteOptions.map((option) => ({
-          id: [option.id] as const,
+          id: numberTuple(option.id),
           label: option.label
         })),
         links: values.links,
-        quorum: values.quorum,
-        max_selections:
-          values.maxSelections === 1
-            ? { variant: 'None' as const, value: {} }
-            : {
-                variant: 'Some' as const,
-                value: [values.maxSelections] as const
-              },
+        parameter_set: values.parameterSet,
+        max_selections: encodeScryptoOptionalNumber(
+          values.maxSelections === 1 ? undefined : values.maxSelections
+        ),
         start: Math.floor(values.start.getTime() / 1000),
         deadline: Math.floor(values.deadline.getTime() / 1000),
         temperature_check_id: values.temperatureCheckId,
@@ -296,29 +460,6 @@ export const MakeProposalVoteInputSchema = Schema.Struct({
 })
 
 export type MakeProposalVoteInput = typeof MakeProposalVoteInputSchema.Encoded
-
-export const MakeUpdateGovernanceParametersInputSchema = Schema.Struct({
-  accountAddress: AccountAddress,
-  temperatureCheckDays: Schema.Number.pipe(
-    Schema.int(),
-    Schema.between(1, 65535)
-  ),
-  temperatureCheckQuorum: Schema.NumberFromString,
-  temperatureCheckApprovalThreshold: Schema.NumberFromString.pipe(
-    Schema.between(0, 1)
-  ),
-  proposalLengthDays: Schema.Number.pipe(
-    Schema.int(),
-    Schema.between(1, 65535)
-  ),
-  proposalQuorum: Schema.NumberFromString,
-  proposalApprovalThreshold: Schema.NumberFromString.pipe(
-    Schema.between(0, 1)
-  )
-})
-
-export type MakeUpdateGovernanceParametersInput =
-  typeof MakeUpdateGovernanceParametersInputSchema.Encoded
 
 const ProgrammaticScryptoSborValueSchema = Schema.declare(
   (input): input is ProgrammaticScryptoSborValue =>

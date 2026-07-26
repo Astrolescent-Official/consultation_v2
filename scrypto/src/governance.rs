@@ -1,9 +1,12 @@
 use crate::{
-    GovernanceParameters, GovernanceParametersUpdatedEvent, Proposal, ProposalCreatedEvent,
+    GovernanceParameterSet, GovernanceParameterSetAddedEvent, GovernanceParameterSetInput,
+    GovernanceParameterSetRetiredEvent, GovernanceParameterSetSnapshot,
+    GovernanceParameterSetUpdatedEvent, GovernanceParameters, Proposal, ProposalCreatedEvent,
     ProposalVoteOption, ProposalVoteOptionId, ProposalVoteRecord, ProposalVotedEvent,
     ProposalVoterEntry, TemperatureCheck, TemperatureCheckCreatedEvent, TemperatureCheckDraft,
     TemperatureCheckVote, TemperatureCheckVoteRecord, TemperatureCheckVotedEvent,
-    TemperatureCheckVoterEntry, MAX_LINKS, MAX_SELECTIONS, MAX_VOTE_OPTIONS,
+    TemperatureCheckVoterEntry, DEFAULT_PARAMETER_SET_ID, MAX_LINKS, MAX_PARAMETER_SET_ID_BYTES,
+    MAX_PARAMETER_SET_LABEL_BYTES, MAX_SELECTIONS, MAX_VOTE_OPTIONS,
 };
 use scrypto::prelude::*;
 
@@ -13,7 +16,9 @@ use scrypto::prelude::*;
     TemperatureCheckVotedEvent,
     ProposalCreatedEvent,
     ProposalVotedEvent,
-    GovernanceParametersUpdatedEvent
+    GovernanceParameterSetAddedEvent,
+    GovernanceParameterSetUpdatedEvent,
+    GovernanceParameterSetRetiredEvent
 )]
 mod governance {
     use super::*;
@@ -27,19 +32,20 @@ mod governance {
             make_temperature_check => PUBLIC;
             vote_on_temperature_check => PUBLIC;
             vote_on_proposal => PUBLIC;
-            get_governance_parameters => PUBLIC;
             get_temperature_check_count => PUBLIC;
             get_proposal_count => PUBLIC;
             // Owner-only methods
             make_proposal => restrict_to: [owner];
-            update_governance_parameters => restrict_to: [owner];
+            add_governance_parameter_set => restrict_to: [owner];
+            update_governance_parameter_set => restrict_to: [owner];
+            retire_governance_parameter_set => restrict_to: [owner];
             toggle_temperature_check_hidden => restrict_to: [owner];
             toggle_proposal_hidden => restrict_to: [owner];
         }
     }
 
     struct Governance {
-        pub governance_parameters: GovernanceParameters,
+        pub parameter_sets: KeyValueStore<String, GovernanceParameterSet>,
         pub temperature_checks: KeyValueStore<u64, TemperatureCheck>,
         pub temperature_check_count: u64,
         pub proposals: KeyValueStore<u64, Proposal>,
@@ -50,10 +56,23 @@ mod governance {
         /// Instantiates the governance component with the given owner badge
         pub fn instantiate(
             owner_badge: ResourceAddress,
-            governance_parameters: GovernanceParameters,
+            default_parameter_set: GovernanceParameterSetInput,
         ) -> Global<Governance> {
+            Self::validate_parameter_set_input(&default_parameter_set);
+
+            let parameter_sets = KeyValueStore::new();
+            parameter_sets.insert(
+                DEFAULT_PARAMETER_SET_ID.to_string(),
+                GovernanceParameterSet {
+                    label: default_parameter_set.label,
+                    version: 1,
+                    retired: false,
+                    parameters: default_parameter_set.parameters,
+                },
+            );
+
             Self {
-                governance_parameters,
+                parameter_sets,
                 temperature_checks: KeyValueStore::new(),
                 temperature_check_count: 0,
                 proposals: KeyValueStore::new(),
@@ -70,15 +89,108 @@ mod governance {
                     make_proposal => Free, updatable;
                     vote_on_temperature_check => Free, updatable;
                     vote_on_proposal => Free, updatable;
-                    get_governance_parameters => Free, updatable;
                     get_temperature_check_count => Free, updatable;
                     get_proposal_count => Free, updatable;
-                    update_governance_parameters => Free, updatable;
+                    add_governance_parameter_set => Free, updatable;
+                    update_governance_parameter_set => Free, updatable;
+                    retire_governance_parameter_set => Free, updatable;
                     toggle_temperature_check_hidden => Free, updatable;
                     toggle_proposal_hidden => Free, updatable;
                 }
             })
             .globalize()
+        }
+
+        fn validate_parameter_set_id(parameter_set_id: &str) {
+            let bytes = parameter_set_id.as_bytes();
+            assert!(
+                !bytes.is_empty() && bytes.len() <= MAX_PARAMETER_SET_ID_BYTES,
+                "Parameter set identifier must be 1-{} ASCII bytes",
+                MAX_PARAMETER_SET_ID_BYTES
+            );
+            assert!(
+                bytes[0] != b'-' && bytes[bytes.len() - 1] != b'-',
+                "Parameter set identifier cannot start or end with a hyphen"
+            );
+
+            let mut previous_was_hyphen = false;
+            for byte in bytes {
+                let is_hyphen = *byte == b'-';
+                assert!(
+                    byte.is_ascii_lowercase() || byte.is_ascii_digit() || is_hyphen,
+                    "Parameter set identifier can contain only lowercase ASCII letters, digits, and hyphens"
+                );
+                assert!(
+                    !(is_hyphen && previous_was_hyphen),
+                    "Parameter set identifier cannot contain consecutive hyphens"
+                );
+                previous_was_hyphen = is_hyphen;
+            }
+        }
+
+        fn validate_parameter_set_input(input: &GovernanceParameterSetInput) {
+            assert!(
+                !input.label.is_empty() && input.label.len() <= MAX_PARAMETER_SET_LABEL_BYTES,
+                "Parameter set label must be 1-{} UTF-8 bytes",
+                MAX_PARAMETER_SET_LABEL_BYTES
+            );
+            assert!(
+                !input.label.trim().is_empty(),
+                "Parameter set label cannot be blank"
+            );
+            assert!(
+                input.label.trim() == input.label,
+                "Parameter set label cannot have leading or trailing whitespace"
+            );
+            Self::validate_governance_parameters(&input.parameters);
+        }
+
+        fn validate_governance_parameters(parameters: &GovernanceParameters) {
+            assert!(
+                parameters.temperature_check_days > 0,
+                "Temperature check duration must be greater than zero"
+            );
+            assert!(
+                parameters.proposal_length_days > 0,
+                "Proposal duration must be greater than zero"
+            );
+            assert!(
+                parameters.temperature_check_quorum > Decimal::ZERO,
+                "Temperature check quorum must be greater than zero"
+            );
+            assert!(
+                parameters.proposal_quorum > Decimal::ZERO,
+                "Proposal quorum must be greater than zero"
+            );
+            assert!(
+                parameters.temperature_check_approval_threshold > Decimal::ZERO
+                    && parameters.temperature_check_approval_threshold <= Decimal::ONE,
+                "Temperature check approval threshold must be greater than zero and at most one"
+            );
+            assert!(
+                parameters.proposal_approval_threshold > Decimal::ZERO
+                    && parameters.proposal_approval_threshold <= Decimal::ONE,
+                "Proposal approval threshold must be greater than zero and at most one"
+            );
+        }
+
+        fn resolve_parameter_set(
+            &self,
+            parameter_set_id: Option<String>,
+        ) -> GovernanceParameterSetSnapshot {
+            let id = parameter_set_id.unwrap_or_else(|| DEFAULT_PARAMETER_SET_ID.to_string());
+            let record = self
+                .parameter_sets
+                .get(&id)
+                .expect("Governance parameter set not found");
+            assert!(!record.retired, "Governance parameter set has been retired");
+
+            GovernanceParameterSetSnapshot {
+                id,
+                label: record.label.clone(),
+                version: record.version,
+                parameters: record.parameters.clone(),
+            }
         }
 
         /// Creates a temperature check from the draft
@@ -91,6 +203,7 @@ mod governance {
             &mut self,
             author: Global<Account>,
             draft: TemperatureCheckDraft,
+            parameter_set_id: Option<String>,
         ) -> u64 {
             // Verify the author account is present in the transaction
             Runtime::assert_access_rule(author.get_owner_role().rule);
@@ -137,6 +250,8 @@ mod governance {
                 );
             }
 
+            let parameter_set = self.resolve_parameter_set(parameter_set_id);
+
             // Auto-generate IDs for vote options (0, 1, 2, ...)
             let vote_options: Vec<ProposalVoteOption> = draft
                 .vote_options
@@ -153,7 +268,7 @@ mod governance {
 
             let now = Clock::current_time_rounded_to_seconds();
             let deadline = now
-                .add_days(self.governance_parameters.temperature_check_days as i64)
+                .add_days(parameter_set.parameters.temperature_check_days as i64)
                 .unwrap();
 
             let temperature_check = TemperatureCheck {
@@ -162,15 +277,12 @@ mod governance {
                 description: draft.description,
                 vote_options,
                 links: draft.links,
-                quorum: self.governance_parameters.temperature_check_quorum,
+                parameter_set,
                 max_selections: draft.max_selections,
                 voters: KeyValueStore::new(),
                 votes: KeyValueStore::new(),
                 vote_count: 0,
                 revote_count: 0,
-                approval_threshold: self
-                    .governance_parameters
-                    .temperature_check_approval_threshold,
                 start: now,
                 deadline,
                 elevated_proposal_id: None,
@@ -181,6 +293,8 @@ mod governance {
             let title = temperature_check.title.clone();
             let start = temperature_check.start;
             let deadline = temperature_check.deadline;
+            let parameter_set_id = temperature_check.parameter_set.id.clone();
+            let parameter_set_version = temperature_check.parameter_set.version;
 
             self.temperature_checks.insert(id, temperature_check);
 
@@ -189,6 +303,8 @@ mod governance {
                 title,
                 start,
                 deadline,
+                parameter_set_id,
+                parameter_set_version,
             });
 
             id
@@ -218,7 +334,7 @@ mod governance {
 
             let now = Clock::current_time_rounded_to_seconds();
             let deadline = now
-                .add_days(self.governance_parameters.proposal_length_days as i64)
+                .add_days(tc.parameter_set.parameters.proposal_length_days as i64)
                 .unwrap();
 
             let proposal = Proposal {
@@ -227,13 +343,12 @@ mod governance {
                 description: tc.description.clone(),
                 vote_options: tc.vote_options.clone(),
                 links: tc.links.clone(),
-                quorum: self.governance_parameters.proposal_quorum,
+                parameter_set: tc.parameter_set.clone(),
                 max_selections: tc.max_selections,
                 voters: KeyValueStore::new(),
                 votes: KeyValueStore::new(),
                 vote_count: 0,
                 revote_count: 0,
-                approval_threshold: self.governance_parameters.proposal_approval_threshold,
                 start: now,
                 deadline,
                 temperature_check_id,
@@ -247,6 +362,8 @@ mod governance {
             let title = proposal.title.clone();
             let start = proposal.start;
             let deadline = proposal.deadline;
+            let parameter_set_id = proposal.parameter_set.id.clone();
+            let parameter_set_version = proposal.parameter_set.version;
 
             self.proposals.insert(proposal_id, proposal);
 
@@ -256,6 +373,8 @@ mod governance {
                 title,
                 start,
                 deadline,
+                parameter_set_id,
+                parameter_set_version,
             });
 
             proposal_id
@@ -433,11 +552,6 @@ mod governance {
             });
         }
 
-        /// Returns the current governance parameters
-        pub fn get_governance_parameters(&self) -> GovernanceParameters {
-            self.governance_parameters.clone()
-        }
-
         /// Returns the current temperature check count
         pub fn get_temperature_check_count(&self) -> u64 {
             self.temperature_check_count
@@ -448,11 +562,92 @@ mod governance {
             self.proposal_count
         }
 
-        /// Updates the governance parameters (owner only)
-        pub fn update_governance_parameters(&mut self, new_params: GovernanceParameters) {
-            self.governance_parameters = new_params.clone();
+        /// Adds a new active governance parameter set (owner only).
+        pub fn add_governance_parameter_set(
+            &mut self,
+            parameter_set_id: String,
+            input: GovernanceParameterSetInput,
+        ) {
+            Self::validate_parameter_set_id(&parameter_set_id);
+            Self::validate_parameter_set_input(&input);
+            assert!(
+                self.parameter_sets.get(&parameter_set_id).is_none(),
+                "Governance parameter set identifier already exists"
+            );
 
-            Runtime::emit_event(GovernanceParametersUpdatedEvent { new_params });
+            let parameter_set = GovernanceParameterSet {
+                label: input.label,
+                version: 1,
+                retired: false,
+                parameters: input.parameters,
+            };
+            self.parameter_sets
+                .insert(parameter_set_id.clone(), parameter_set.clone());
+
+            Runtime::emit_event(GovernanceParameterSetAddedEvent {
+                parameter_set_id,
+                parameter_set,
+            });
+        }
+
+        /// Updates an active governance parameter set and increments its version (owner only).
+        pub fn update_governance_parameter_set(
+            &mut self,
+            parameter_set_id: String,
+            input: GovernanceParameterSetInput,
+        ) {
+            Self::validate_parameter_set_id(&parameter_set_id);
+            Self::validate_parameter_set_input(&input);
+
+            let mut parameter_set = self
+                .parameter_sets
+                .get_mut(&parameter_set_id)
+                .expect("Governance parameter set not found");
+            assert!(
+                !parameter_set.retired,
+                "Retired governance parameter sets cannot be updated"
+            );
+
+            let previous_version = parameter_set.version;
+            parameter_set.version = previous_version
+                .checked_add(1)
+                .expect("Governance parameter set version exhausted");
+            parameter_set.label = input.label;
+            parameter_set.parameters = input.parameters;
+            let updated_parameter_set = parameter_set.clone();
+            drop(parameter_set);
+
+            Runtime::emit_event(GovernanceParameterSetUpdatedEvent {
+                parameter_set_id,
+                previous_version,
+                parameter_set: updated_parameter_set,
+            });
+        }
+
+        /// Permanently retires a non-default governance parameter set (owner only).
+        pub fn retire_governance_parameter_set(&mut self, parameter_set_id: String) {
+            Self::validate_parameter_set_id(&parameter_set_id);
+            assert!(
+                parameter_set_id != DEFAULT_PARAMETER_SET_ID,
+                "The default governance parameter set cannot be retired"
+            );
+
+            let mut parameter_set = self
+                .parameter_sets
+                .get_mut(&parameter_set_id)
+                .expect("Governance parameter set not found");
+            assert!(
+                !parameter_set.retired,
+                "Governance parameter set is already retired"
+            );
+            parameter_set.retired = true;
+            let version = parameter_set.version;
+            drop(parameter_set);
+
+            Runtime::emit_event(GovernanceParameterSetRetiredEvent {
+                parameter_set_id,
+                version,
+            });
         }
 
         /// Toggles the hidden flag on a temperature check (owner only)

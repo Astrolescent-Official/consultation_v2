@@ -11,6 +11,7 @@ import { DetailPageDetails } from '@/components/detail/DetailPageDetails'
 import { DetailPageHeader } from '@/components/detail/DetailPageHeader'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { HideToggle } from '@/components/detail/HideToggle'
+import { ParameterSetSnapshotDetails } from '@/components/detail/ParameterSetSnapshotDetails'
 import { QuorumBadge } from '@/components/detail/QuorumBadge'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { InlineCode } from '@/components/ui/typography'
@@ -87,7 +88,7 @@ function PageContentInner({
         <QuorumBadge
           entityType="temperature_check"
           entityId={id}
-          quorum={Number(tc.quorum)}
+          quorum={Number(tc.parameterSet.parameters.temperatureCheckQuorum)}
         />
       }
       originBadge={
@@ -109,6 +110,7 @@ function PageContentInner({
           This temperature check is hidden from public view.
         </div>
       )}
+      <ParameterSetSnapshotDetails parameterSet={tc.parameterSet} />
       <DetailPageDetails
         shortDescription={tc.shortDescription}
         description={tc.description}

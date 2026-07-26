@@ -1,6 +1,7 @@
 import {
   GetComponentStateService,
   GetKeyValueStoreService,
+  GetLedgerStateService,
   KeyValueStoreDataService,
   StateEntityDetails
 } from '@radix-effects/gateway'
@@ -13,6 +14,8 @@ import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import { parseSbor } from '../helpers/parseSbor'
 import {
   Governance,
+  GovernanceParameterSetKeyValueStoreKey,
+  GovernanceParameterSetKeyValueStoreValue,
   KeyValueStoreAddress,
   ProposalKeyValueStoreValue,
   TemperatureCheckKeyValueStoreKey,
@@ -23,19 +26,31 @@ import {
 import { AdminBadgeService, renderAdminBadgeProof } from './adminBadge'
 import type { ProposalId, TemperatureCheckId } from './brandedTypes'
 import { GovernanceConfig } from './config'
+import {
+  encodeManifestString,
+  renderGovernanceParameterSetInput,
+  renderParameterSetIdOption,
+  renderTemperatureCheckDraft
+} from './governanceManifests'
 import { makeVoteIndexKeys } from './makeVoteIndexKeys'
 import {
+  GovernanceParameterSetSchema,
+  type MakeAddGovernanceParameterSetInput,
+  MakeAddGovernanceParameterSetInputSchema,
   type MakeProposalVoteInput,
   MakeProposalVoteInputSchema,
+  type MakeRetireGovernanceParameterSetInput,
+  MakeRetireGovernanceParameterSetInputSchema,
   type MakeTemperatureCheckInput,
   MakeTemperatureCheckInputSchema,
   type MakeTemperatureCheckVoteInput,
   MakeTemperatureCheckVoteInputSchema,
-  type MakeUpdateGovernanceParametersInput,
-  MakeUpdateGovernanceParametersInputSchema,
+  type MakeUpdateGovernanceParameterSetInput,
+  MakeUpdateGovernanceParameterSetInputSchema,
   ProposalSchema,
   ProposalVoteRecord,
   ProposalVoteValueSchema,
+  partitionGovernanceParameterSets,
   TemperatureCheckSchema,
   TemperatureCheckVoteRecord,
   TemperatureCheckVoteSchema,
@@ -75,6 +90,7 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
   {
     dependencies: [
       GetKeyValueStoreService.Default,
+      GetLedgerStateService.Default,
       StateEntityDetails.Default,
       GetComponentStateService.Default,
       KeyValueStoreDataService.Default,
@@ -83,6 +99,7 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
     effect: Effect.gen(function* () {
       const keyValueStore = yield* GetKeyValueStoreService
       const keyValueStoreDataService = yield* KeyValueStoreDataService
+      const getLedgerState = yield* GetLedgerStateService
 
       const getComponentStateService = yield* GetComponentStateService
       const adminBadgeService = yield* AdminBadgeService
@@ -110,12 +127,20 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
           )
         )
 
-      const getComponentState = () =>
+      const getComponentState = (atLedgerState?: { state_version: number }) =>
         getComponentStateService
-          .run({
-            addresses: [config.componentAddress],
-            schema: Governance
-          })
+          .run(
+            atLedgerState === undefined
+              ? {
+                  addresses: [config.componentAddress],
+                  schema: Governance
+                }
+              : {
+                  addresses: [config.componentAddress],
+                  at_ledger_state: atLedgerState,
+                  schema: Governance
+                }
+          )
           .pipe(
             Effect.map((result) =>
               pipe(
@@ -131,6 +156,44 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
               )
             )
           )
+
+      const getGovernanceParameterSets = () =>
+        Effect.gen(function* () {
+          const ledgerState = yield* getLedgerState({})
+          const atLedgerState = { state_version: ledgerState.state_version }
+          const componentState = yield* getComponentState(atLedgerState)
+          const registry = yield* keyValueStore({
+            address: componentState.parameter_sets,
+            at_ledger_state: atLedgerState
+          })
+
+          const parameterSets = yield* Effect.forEach(
+            registry.entries,
+            Effect.fn(function* (entry) {
+              const [id, value] = yield* Effect.all(
+                [
+                  parseSbor(
+                    entry.key.programmatic_json,
+                    GovernanceParameterSetKeyValueStoreKey
+                  ),
+                  parseSbor(
+                    entry.value.programmatic_json,
+                    GovernanceParameterSetKeyValueStoreValue
+                  )
+                ],
+                { concurrency: 2 }
+              )
+
+              return yield* Schema.decodeUnknown(GovernanceParameterSetSchema)({
+                id,
+                ...value
+              })
+            }),
+            { concurrency: 10 }
+          )
+
+          return partitionGovernanceParameterSets(parameterSets)
+        })
 
       const getTemperatureChecks = () =>
         getComponentState().pipe(
@@ -257,34 +320,23 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
           const parsedInput = yield* Schema.decodeUnknown(
             MakeTemperatureCheckInputSchema
           )(input)
-
-          const voteOptions = parsedInput.voteOptions
-            .map((option) => `Tuple("${option}")`)
-            .join(', ')
-
-          const links = parsedInput.links.map((url) => `"${url}"`).join(', ')
-
-          const maxSelectionsManifest =
-            parsedInput.maxSelections === 1
-              ? 'Enum<0u8>()'
-              : `Enum<1u8>(${parsedInput.maxSelections}u32)`
+          const draft = renderTemperatureCheckDraft(parsedInput)
+          const parameterSetId = renderParameterSetIdOption(
+            parsedInput.parameterSetId === 'default'
+              ? undefined
+              : parsedInput.parameterSetId
+          )
 
           return TransactionManifestString.make(`
 CALL_METHOD
-  Address("${config.componentAddress}")
+  Address(${encodeManifestString(config.componentAddress)})
   "make_temperature_check"
-  Address("${parsedInput.authorAccount}")
-  Tuple(
-    "${parsedInput.title}",
-    "${parsedInput.shortDescription}",
-    ${JSON.stringify(parsedInput.description)},
-    Array<Tuple>(${voteOptions}),
-    Array<String>(${links}),
-    ${maxSelectionsManifest}
-  )
+  Address(${encodeManifestString(parsedInput.authorAccount)})
+  ${draft}
+  ${parameterSetId}
 ;
 CALL_METHOD
-  Address("${parsedInput.authorAccount}")
+  Address(${encodeManifestString(parsedInput.authorAccount)})
   "deposit_batch"
   Expression("ENTIRE_WORKTOP")
 ;
@@ -454,6 +506,9 @@ CALL_METHOD
         Effect.gen(function* () {
           const componentState = yield* getComponentState()
           return {
+            parameterSetsKvs: KeyValueStoreAddress.make(
+              componentState.parameter_sets
+            ),
             temperatureCheckCount: componentState.temperature_check_count,
             proposalCount: componentState.proposal_count,
             temperatureChecksKvs: KeyValueStoreAddress.make(
@@ -780,17 +835,76 @@ CALL_METHOD
           )
         })
 
-      const getGovernanceParameters = () =>
-        getComponentState().pipe(
-          Effect.map((state) => state.governance_parameters)
-        )
-
-      const makeUpdateGovernanceParametersManifest = (
-        input: MakeUpdateGovernanceParametersInput
+      const makeAddGovernanceParameterSetManifest = (
+        input: MakeAddGovernanceParameterSetInput
       ) =>
         Effect.gen(function* () {
           const parsedInput = yield* Schema.decodeUnknown(
-            MakeUpdateGovernanceParametersInputSchema
+            MakeAddGovernanceParameterSetInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+          const parameterSetInput = renderGovernanceParameterSetInput({
+            label: parsedInput.label,
+            temperatureCheckDays: parsedInput.temperatureCheckDays,
+            temperatureCheckQuorum: parsedInput.temperatureCheckQuorum,
+            temperatureCheckApprovalThreshold:
+              parsedInput.temperatureCheckApprovalThreshold,
+            proposalLengthDays: parsedInput.proposalLengthDays,
+            proposalQuorum: parsedInput.proposalQuorum,
+            proposalApprovalThreshold: parsedInput.proposalApprovalThreshold
+          })
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "add_governance_parameter_set"
+  ${encodeManifestString(parsedInput.parameterSetId)}
+  ${parameterSetInput}
+;
+          `)
+        })
+
+      const makeUpdateGovernanceParameterSetManifest = (
+        input: MakeUpdateGovernanceParameterSetInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            MakeUpdateGovernanceParameterSetInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+          const parameterSetInput = renderGovernanceParameterSetInput({
+            label: parsedInput.label,
+            temperatureCheckDays: parsedInput.temperatureCheckDays,
+            temperatureCheckQuorum: parsedInput.temperatureCheckQuorum,
+            temperatureCheckApprovalThreshold:
+              parsedInput.temperatureCheckApprovalThreshold,
+            proposalLengthDays: parsedInput.proposalLengthDays,
+            proposalQuorum: parsedInput.proposalQuorum,
+            proposalApprovalThreshold: parsedInput.proposalApprovalThreshold
+          })
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "update_governance_parameter_set"
+  ${encodeManifestString(parsedInput.parameterSetId)}
+  ${parameterSetInput}
+;
+          `)
+        })
+
+      const makeRetireGovernanceParameterSetManifest = (
+        input: MakeRetireGovernanceParameterSetInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            MakeRetireGovernanceParameterSetInputSchema
           )(input)
           const adminBadgeProof = yield* makeAdminBadgeProof(
             parsedInput.accountAddress
@@ -799,9 +913,9 @@ CALL_METHOD
           return TransactionManifestString.make(`
 ${adminBadgeProof}
 CALL_METHOD
-  Address("${config.componentAddress}")
-  "update_governance_parameters"
-  Tuple(${parsedInput.temperatureCheckDays}u16, Decimal("${parsedInput.temperatureCheckQuorum}"), Decimal("${parsedInput.temperatureCheckApprovalThreshold}"), ${parsedInput.proposalLengthDays}u16, Decimal("${parsedInput.proposalQuorum}"), Decimal("${parsedInput.proposalApprovalThreshold}"))
+  Address(${encodeManifestString(config.componentAddress)})
+  "retire_governance_parameter_set"
+  ${encodeManifestString(parsedInput.parameterSetId)}
 ;
           `)
         })
@@ -878,8 +992,10 @@ CALL_METHOD
         makeTemperatureCheckVoteManifest,
         getTemperatureCheckVotesByAccounts,
         getGovernanceState,
-        getGovernanceParameters,
-        makeUpdateGovernanceParametersManifest,
+        getGovernanceParameterSets,
+        makeAddGovernanceParameterSetManifest,
+        makeUpdateGovernanceParameterSetManifest,
+        makeRetireGovernanceParameterSetManifest,
         getProposalById,
         getPaginatedTemperatureChecks,
         getPaginatedProposals,

@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-form'
 import { LoaderIcon } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import { accountsAtom } from '@/atom/dappToolkitAtom'
+import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
 import { makeTemperatureCheckAtom } from '@/atom/temperatureChecksAtom'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +22,13 @@ import {
   FieldLabel
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppForm } from '../formHook'
 import { temperatureCheckFormOpts } from '../formOptions'
@@ -47,6 +55,7 @@ export function TemperatureCheckForm({
 }: TemperatureCheckFormProps) {
   const [makeResult, makeTemperatureCheck] = useAtom(makeTemperatureCheckAtom)
   const accountsResult = useAtomValue(accountsAtom)
+  const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
   const formId = useId()
   const titleId = `${formId}-title`
   const shortDescriptionId = `${formId}-shortDescription`
@@ -65,6 +74,7 @@ export function TemperatureCheckForm({
       // Transform vote options from {id, label} to just labels
       const voteOptionLabels = value.voteOptions.map((option) => option.label)
       makeTemperatureCheck({
+        parameterSetId: value.parameterSetId,
         title: value.title,
         shortDescription: value.shortDescription,
         description: value.description,
@@ -95,9 +105,10 @@ export function TemperatureCheckForm({
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
 
-  const makeError = Result.builder(makeResult)
-    .onFailure(() => true)
-    .orNull() ?? false
+  const makeError =
+    Result.builder(makeResult)
+      .onFailure(() => true)
+      .orNull() ?? false
 
   // Call onSuccess when the atom completes successfully
   useEffect(() => {
@@ -118,6 +129,11 @@ export function TemperatureCheckForm({
       .onSuccess((accounts) => accounts.length > 0)
       .orNull() ?? false
 
+  const activeParameterSets =
+    Result.builder(parameterSetsResult)
+      .onSuccess(({ active }) => active)
+      .orNull() ?? []
+
   return (
     <form
       onSubmit={(e) => {
@@ -136,6 +152,42 @@ export function TemperatureCheckForm({
 
         <CardContent>
           <FieldGroup>
+            <form.Field name="parameterSetId">
+              {(field) => (
+                <Field>
+                  <FieldLabel htmlFor={`${formId}-parameter-set`}>
+                    Governance rules
+                  </FieldLabel>
+                  <FieldDescription>
+                    The selected rules are snapshotted when the Temperature
+                    Check is created.
+                  </FieldDescription>
+                  <Select
+                    value={field.state.value}
+                    onValueChange={field.handleChange}
+                    disabled={activeParameterSets.length === 0}
+                  >
+                    <SelectTrigger
+                      id={`${formId}-parameter-set`}
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a parameter set" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeParameterSets.map((parameterSet) => (
+                        <SelectItem
+                          key={parameterSet.id}
+                          value={parameterSet.id}
+                        >
+                          {parameterSet.label} (v{parameterSet.version})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+            </form.Field>
+
             {/* Title */}
             <form.Field
               name="title"
@@ -279,7 +331,12 @@ export function TemperatureCheckForm({
       <CardFooter className="p-0">
         <Button
           type="submit"
-          disabled={!canSubmit || makeResult.waiting || !hasAccounts}
+          disabled={
+            !canSubmit ||
+            makeResult.waiting ||
+            !hasAccounts ||
+            activeParameterSets.length === 0
+          }
           className="w-full py-6 text-base"
         >
           {makeResult.waiting ? (

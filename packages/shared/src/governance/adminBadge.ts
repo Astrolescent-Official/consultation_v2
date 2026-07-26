@@ -15,6 +15,8 @@ export type AdminBadge =
       readonly localId: string
     }
 
+const encodeManifestString = (value: string) => JSON.stringify(value)
+
 export const renderAdminBadgeProof = (
   accountAddress: AccountAddress,
   adminBadgeAddress: string,
@@ -22,17 +24,17 @@ export const renderAdminBadgeProof = (
 ): string =>
   badge._tag === 'NonFungibleAdminBadge'
     ? `CALL_METHOD
-  Address("${accountAddress}")
+  Address(${encodeManifestString(accountAddress)})
   "create_proof_of_non_fungibles"
-  Address("${adminBadgeAddress}")
+  Address(${encodeManifestString(adminBadgeAddress)})
   Array<NonFungibleLocalId>(
-    NonFungibleLocalId("${badge.localId}")
+    NonFungibleLocalId(${encodeManifestString(badge.localId)})
   )
 ;`
     : `CALL_METHOD
-  Address("${accountAddress}")
+  Address(${encodeManifestString(accountAddress)})
   "create_proof_of_amount"
-  Address("${adminBadgeAddress}")
+  Address(${encodeManifestString(adminBadgeAddress)})
   Decimal("1")
 ;`
 
