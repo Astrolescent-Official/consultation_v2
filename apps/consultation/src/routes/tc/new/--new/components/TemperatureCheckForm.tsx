@@ -105,34 +105,25 @@ export function TemperatureCheckForm({
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
 
-  const makeError =
-    Result.builder(makeResult)
-      .onFailure(() => true)
-      .orNull() ?? false
+  const makeError = Result.isFailure(makeResult)
 
   // Call onSuccess when the atom completes successfully
   useEffect(() => {
-    if (hasCalledSuccess.current || !onSuccess) return
+    if (hasCalledSuccess.current || !onSuccess || !Result.isSuccess(makeResult))
+      return
 
-    Result.builder(makeResult)
-      .onSuccess((value) => {
-        hasCalledSuccess.current = true
-        onSuccess(value)
-      })
-      .orNull()
+    hasCalledSuccess.current = true
+    onSuccess(makeResult.value)
   }, [makeResult, onSuccess])
 
   const hasAccounts =
-    Result.builder(accountsResult)
-      .onInitial(() => false)
-      .onFailure(() => false)
-      .onSuccess((accounts) => accounts.length > 0)
-      .orNull() ?? false
+    Result.isSuccess(accountsResult) && accountsResult.value.length > 0
 
-  const activeParameterSets =
-    Result.builder(parameterSetsResult)
-      .onSuccess(({ active }) => active)
-      .orNull() ?? []
+  const activeParameterSets = Result.isSuccess(parameterSetsResult)
+    ? parameterSetsResult.value.active
+    : []
+  const parameterSetsLoading = Result.isInitial(parameterSetsResult)
+  const parameterSetsFailed = Result.isFailure(parameterSetsResult)
 
   return (
     <form
@@ -154,13 +145,14 @@ export function TemperatureCheckForm({
           <FieldGroup>
             <form.Field name="parameterSetId">
               {(field) => (
-                <Field>
+                <Field data-invalid={parameterSetsFailed}>
                   <FieldLabel htmlFor={`${formId}-parameter-set`}>
                     Governance rules
                   </FieldLabel>
                   <FieldDescription>
-                    The selected rules are snapshotted when the Temperature
-                    Check is created.
+                    {parameterSetsLoading
+                      ? 'Loading the available governance rules…'
+                      : 'The selected rules are snapshotted when the Temperature Check is created.'}
                   </FieldDescription>
                   <Select
                     value={field.state.value}
@@ -171,7 +163,13 @@ export function TemperatureCheckForm({
                       id={`${formId}-parameter-set`}
                       className="w-full"
                     >
-                      <SelectValue placeholder="Select a parameter set" />
+                      <SelectValue
+                        placeholder={
+                          parameterSetsLoading
+                            ? 'Loading…'
+                            : 'Select a parameter set'
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {activeParameterSets.map((parameterSet) => (
@@ -184,6 +182,16 @@ export function TemperatureCheckForm({
                       ))}
                     </SelectContent>
                   </Select>
+                  {parameterSetsFailed ? (
+                    <FieldError
+                      errors={[
+                        {
+                          message:
+                            'Could not load the governance parameter sets, so a Temperature Check cannot be created right now. Reload the page to try again.'
+                        }
+                      ]}
+                    />
+                  ) : null}
                 </Field>
               )}
             </form.Field>

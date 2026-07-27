@@ -1,4 +1,5 @@
 import { formOptions } from '@tanstack/react-form'
+import { DEFAULT_PARAMETER_SET_ID } from 'shared/governance/schemas'
 
 export type VoteOption = { id: string; label: string }
 
@@ -14,7 +15,7 @@ export const DEFAULT_VOTE_OPTIONS: VoteOption[] = [
 
 export const temperatureCheckFormOpts = formOptions({
   defaultValues: {
-    parameterSetId: 'default',
+    parameterSetId: DEFAULT_PARAMETER_SET_ID,
     title: '',
     shortDescription: '',
     description: '',

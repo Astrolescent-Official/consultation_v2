@@ -47,6 +47,14 @@ const encodeScryptoOptionalNumber = (
 
 const numberTuple = (value: number): readonly [number] => [value]
 
+/**
+ * The reserved parameter set the component seeds at instantiation. It is always
+ * active, cannot be retired, and is what the blueprint resolves when a
+ * temperature check is created without an explicit selection.
+ * Mirrors `DEFAULT_PARAMETER_SET_ID` in `scrypto/src/lib.rs`.
+ */
+export const DEFAULT_PARAMETER_SET_ID = 'default'
+
 export const GovernanceParameterSetIdSchema = Schema.String.pipe(
   Schema.minLength(1),
   Schema.maxLength(64),
@@ -171,11 +179,28 @@ export const MakeRetireGovernanceParameterSetInputSchema = Schema.Struct({
 export type MakeRetireGovernanceParameterSetInput =
   typeof MakeRetireGovernanceParameterSetInputSchema.Encoded
 
+// The Gateway enumerates key-value store keys in an unspecified order, so
+// callers would otherwise see the registry reshuffle between reads. Sort the
+// reserved default first (it is the pre-selected option in the UI), then by id.
+const byDisplayOrder = (
+  a: GovernanceParameterSet,
+  b: GovernanceParameterSet
+) => {
+  if (a.id === b.id) return 0
+  if (a.id === DEFAULT_PARAMETER_SET_ID) return -1
+  if (b.id === DEFAULT_PARAMETER_SET_ID) return 1
+  return a.id < b.id ? -1 : 1
+}
+
 export const partitionGovernanceParameterSets = (
   parameterSets: ReadonlyArray<GovernanceParameterSet>
 ) => ({
-  active: parameterSets.filter((parameterSet) => !parameterSet.retired),
-  retired: parameterSets.filter((parameterSet) => parameterSet.retired)
+  active: parameterSets
+    .filter((parameterSet) => !parameterSet.retired)
+    .sort(byDisplayOrder),
+  retired: parameterSets
+    .filter((parameterSet) => parameterSet.retired)
+    .sort(byDisplayOrder)
 })
 
 export const MakeTemperatureCheckInputSchema = Schema.Struct({

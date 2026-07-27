@@ -34,6 +34,7 @@ import {
 } from './governanceManifests'
 import { makeVoteIndexKeys } from './makeVoteIndexKeys'
 import {
+  DEFAULT_PARAMETER_SET_ID,
   GovernanceParameterSetSchema,
   type MakeAddGovernanceParameterSetInput,
   MakeAddGovernanceParameterSetInputSchema,
@@ -322,7 +323,7 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
           )(input)
           const draft = renderTemperatureCheckDraft(parsedInput)
           const parameterSetId = renderParameterSetIdOption(
-            parsedInput.parameterSetId === 'default'
+            parsedInput.parameterSetId === DEFAULT_PARAMETER_SET_ID
               ? undefined
               : parsedInput.parameterSetId
           )

@@ -1,47 +1,21 @@
 import { Atom } from '@effect-atom/atom-react'
 import { AccountAddress } from '@radix-effects/shared'
-import { ConfigProvider, Effect, Layer, Option } from 'effect'
-import { GatewayApiClientLayer } from 'shared/gateway'
+import { Effect, Option } from 'effect'
 import type {
   ProposalId,
   TemperatureCheckId
 } from 'shared/governance/brandedTypes'
-import {
-  AdminBadgeService,
-  GovernanceComponent,
-  GovernanceConfigLayer
-} from 'shared/governance/index'
-import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
-import {
-  RadixDappToolkit,
-  SendTransaction,
-  WalletErrorResponse
-} from '@/lib/dappToolkit'
-import { envVars } from '@/lib/envVars'
-import { getCurrentAccount } from '@/lib/selectedAccount'
+import { AdminBadgeService, GovernanceComponent } from 'shared/governance/index'
+import { governanceRuntime } from '@/atom/governanceRuntime'
+import { SendTransaction } from '@/lib/dappToolkit'
+import { getConnectedAccountAddress } from '@/lib/selectedAccount'
 import { getProposalByIdAtom } from './proposalsAtom'
-import {
-  getTemperatureCheckByIdAtom,
-  NoAccountConnectedError
-} from './temperatureChecksAtom'
-import { withToast } from './withToast'
-
-const runtime = makeAtomRuntime(
-  Layer.mergeAll(
-    GovernanceComponent.Default,
-    AdminBadgeService.Default,
-    SendTransaction.Default
-  ).pipe(
-    Layer.provideMerge(RadixDappToolkit.Live),
-    Layer.provideMerge(GatewayApiClientLayer),
-    Layer.provideMerge(GovernanceConfigLayer),
-    Layer.provide(Layer.setConfigProvider(ConfigProvider.fromJson(envVars)))
-  )
-)
+import { getTemperatureCheckByIdAtom } from './temperatureChecksAtom'
+import { transactionFailureMessage, withToast } from './withToast'
 
 /** Checks whether a specific account holds the admin badge */
 export const isAdminAtom = Atom.family((accountAddress: string) =>
-  runtime.atom(
+  governanceRuntime.atom(
     Effect.gen(function* () {
       if (!accountAddress) return false
 
@@ -57,22 +31,12 @@ export const isAdminAtom = Atom.family((accountAddress: string) =>
 )
 
 /** Promotes a temperature check to a proposal */
-export const promoteToProposalAtom = runtime.fn(
+export const promoteToProposalAtom = governanceRuntime.fn(
   Effect.fn(
     function* (temperatureCheckId: TemperatureCheckId, get) {
       const governanceComponent = yield* GovernanceComponent
       const sendTransaction = yield* SendTransaction
-
-      const currentAccountOption = yield* getCurrentAccount
-
-      if (Option.isNone(currentAccountOption)) {
-        return yield* new NoAccountConnectedError({
-          message: 'Please connect your wallet first'
-        })
-      }
-
-      const currentAccount = currentAccountOption.value
-      const accountAddress = AccountAddress.make(currentAccount.address)
+      const accountAddress = yield* getConnectedAccountAddress()
 
       const manifest = yield* governanceComponent.makeProposalManifest({
         accountAddress,
@@ -93,38 +57,18 @@ export const promoteToProposalAtom = runtime.fn(
     withToast({
       whenLoading: 'Promoting to proposal...',
       whenSuccess: 'Temperature check promoted to proposal',
-      whenFailure: ({ cause }) => {
-        if (cause._tag === 'Fail') {
-          if (cause.error instanceof WalletErrorResponse) {
-            return Option.some(cause.error.message ?? 'Wallet error')
-          }
-          if (cause.error instanceof NoAccountConnectedError) {
-            return Option.some(cause.error.message)
-          }
-        }
-        return Option.some('Failed to promote to proposal')
-      }
+      whenFailure: transactionFailureMessage('Failed to promote to proposal')
     })
   )
 )
 
 /** Toggles the hidden state of a temperature check */
-export const toggleTemperatureCheckHiddenAtom = runtime.fn(
+export const toggleTemperatureCheckHiddenAtom = governanceRuntime.fn(
   Effect.fn(
     function* (temperatureCheckId: TemperatureCheckId, get) {
       const governanceComponent = yield* GovernanceComponent
       const sendTransaction = yield* SendTransaction
-
-      const currentAccountOption = yield* getCurrentAccount
-
-      if (Option.isNone(currentAccountOption)) {
-        return yield* new NoAccountConnectedError({
-          message: 'Please connect your wallet first'
-        })
-      }
-
-      const currentAccount = currentAccountOption.value
-      const accountAddress = AccountAddress.make(currentAccount.address)
+      const accountAddress = yield* getConnectedAccountAddress()
 
       const manifest =
         yield* governanceComponent.makeToggleTemperatureCheckHiddenManifest({
@@ -144,38 +88,18 @@ export const toggleTemperatureCheckHiddenAtom = runtime.fn(
     withToast({
       whenLoading: 'Toggling visibility...',
       whenSuccess: 'Visibility updated',
-      whenFailure: ({ cause }) => {
-        if (cause._tag === 'Fail') {
-          if (cause.error instanceof WalletErrorResponse) {
-            return Option.some(cause.error.message ?? 'Wallet error')
-          }
-          if (cause.error instanceof NoAccountConnectedError) {
-            return Option.some(cause.error.message)
-          }
-        }
-        return Option.some('Failed to toggle visibility')
-      }
+      whenFailure: transactionFailureMessage('Failed to toggle visibility')
     })
   )
 )
 
 /** Toggles the hidden state of a proposal */
-export const toggleProposalHiddenAtom = runtime.fn(
+export const toggleProposalHiddenAtom = governanceRuntime.fn(
   Effect.fn(
     function* (proposalId: ProposalId, get) {
       const governanceComponent = yield* GovernanceComponent
       const sendTransaction = yield* SendTransaction
-
-      const currentAccountOption = yield* getCurrentAccount
-
-      if (Option.isNone(currentAccountOption)) {
-        return yield* new NoAccountConnectedError({
-          message: 'Please connect your wallet first'
-        })
-      }
-
-      const currentAccount = currentAccountOption.value
-      const accountAddress = AccountAddress.make(currentAccount.address)
+      const accountAddress = yield* getConnectedAccountAddress()
 
       const manifest =
         yield* governanceComponent.makeToggleProposalHiddenManifest({
@@ -195,17 +119,7 @@ export const toggleProposalHiddenAtom = runtime.fn(
     withToast({
       whenLoading: 'Toggling visibility...',
       whenSuccess: 'Visibility updated',
-      whenFailure: ({ cause }) => {
-        if (cause._tag === 'Fail') {
-          if (cause.error instanceof WalletErrorResponse) {
-            return Option.some(cause.error.message ?? 'Wallet error')
-          }
-          if (cause.error instanceof NoAccountConnectedError) {
-            return Option.some(cause.error.message)
-          }
-        }
-        return Option.some('Failed to toggle visibility')
-      }
+      whenFailure: transactionFailureMessage('Failed to toggle visibility')
     })
   )
 )

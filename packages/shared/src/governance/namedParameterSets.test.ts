@@ -10,6 +10,7 @@ import {
   TemperatureCheckCreatedEvent
 } from '../schemas'
 import {
+  DEFAULT_PARAMETER_SET_ID,
   GovernanceParameterSetSchema,
   ProposalSchema,
   partitionGovernanceParameterSets,
@@ -134,6 +135,29 @@ describe('named governance parameter set schemas', () => {
     assert.deepStrictEqual(
       result.retired.map((item) => item.id),
       ['retired-set']
+    )
+  })
+
+  it('orders sets deterministically with the default set first', () => {
+    const base = Schema.decodeUnknownSync(GovernanceParameterSetSchema)(
+      parameterSet
+    )
+    // The Gateway returns key-value store entries in an unspecified order.
+    const result = partitionGovernanceParameterSets([
+      { ...base, id: 'treasury-budget' },
+      { ...base, id: 'archived-b', retired: true },
+      { ...base, id: DEFAULT_PARAMETER_SET_ID },
+      { ...base, id: 'archived-a', retired: true },
+      { ...base, id: 'constitutional' }
+    ])
+
+    assert.deepStrictEqual(
+      result.active.map((item) => item.id),
+      [DEFAULT_PARAMETER_SET_ID, 'constitutional', 'treasury-budget']
+    )
+    assert.deepStrictEqual(
+      result.retired.map((item) => item.id),
+      ['archived-a', 'archived-b']
     )
   })
 })

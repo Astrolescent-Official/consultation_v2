@@ -7,7 +7,7 @@ import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
 import { Button } from '@/components/ui/button'
 import { H1 } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
-import { formatXrd } from '@/lib/utils'
+import { formatApprovalThreshold, formatQuorum } from '@/lib/utils'
 
 export const Page = () => {
   const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
@@ -107,47 +107,43 @@ const ParameterSetDetails = ({
       </div>
 
       <div className="grid md:grid-cols-2 gap-8">
-        <div className="space-y-3">
-          <h4 className="font-semibold text-neutral-900 dark:text-white">
-            Temperature Check
-          </h4>
-          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
-            <li>Voting period: {parameters.temperatureCheckDays} days</li>
-            <li>
-              Requires {formatXrd(Number(parameters.temperatureCheckQuorum))}{' '}
-              XRD quorum
-            </li>
-            <li>
-              Approval threshold: {parameters.temperatureCheckApprovalThreshold}{' '}
-              (
-              {(
-                Number(parameters.temperatureCheckApprovalThreshold) * 100
-              ).toFixed(2)}
-              %)
-            </li>
-          </ul>
-        </div>
-
-        <div className="space-y-3">
-          <h4 className="font-semibold text-neutral-900 dark:text-white">
-            Governance Proposal
-          </h4>
-          <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
-            <li>Voting period: {parameters.proposalLengthDays} days</li>
-            <li>
-              Requires {formatXrd(Number(parameters.proposalQuorum))} XRD quorum
-            </li>
-            <li>
-              Approval threshold: {parameters.proposalApprovalThreshold} (
-              {(Number(parameters.proposalApprovalThreshold) * 100).toFixed(2)}
-              %)
-            </li>
-          </ul>
-        </div>
+        <ParameterRules
+          title="Temperature Check"
+          days={parameters.temperatureCheckDays}
+          quorum={parameters.temperatureCheckQuorum}
+          threshold={parameters.temperatureCheckApprovalThreshold}
+        />
+        <ParameterRules
+          title="Governance Proposal"
+          days={parameters.proposalLengthDays}
+          quorum={parameters.proposalQuorum}
+          threshold={parameters.proposalApprovalThreshold}
+        />
       </div>
     </div>
   )
 }
+
+const ParameterRules = ({
+  title,
+  days,
+  quorum,
+  threshold
+}: {
+  title: string
+  days: number
+  quorum: string
+  threshold: string
+}) => (
+  <div className="space-y-3">
+    <h4 className="font-semibold text-neutral-900 dark:text-white">{title}</h4>
+    <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
+      <li>Voting period: {days} days</li>
+      <li>Requires {formatQuorum(quorum)} quorum</li>
+      <li>Approval threshold: {formatApprovalThreshold(threshold)}</li>
+    </ul>
+  </div>
+)
 
 const AdminEditButton = () => {
   const currentAccount = useCurrentAccount()
