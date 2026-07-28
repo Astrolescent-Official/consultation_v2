@@ -50,7 +50,7 @@ scrypto/target/
 
 .claude
 
-.repos
+.repos/effect
 .notes
 
 # Let's Encrypt certificates & challenge files

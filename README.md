@@ -8,6 +8,13 @@ Before running the web app, you need a deployed Governance component on the Radi
 
 After deployment, update the governance addresses in `packages/shared/src/governance/config.ts` — the `TODO_*` placeholders for `packageAddress`, `componentAddress`, and `adminBadgeAddress` must be replaced with the addresses from your deployment (see [step 5 in the Scrypto README](scrypto/README.md#5-configure-the-web-app)).
 
+The current component schema uses named governance parameter sets and is not
+compatible with the earlier singleton-parameter development component. For a
+launch or Stokenet rollout, publish a fresh package, instantiate a fresh
+Governance component, seed its approved parameter sets, then update the shared
+configuration before deploying the collector and consultation app together.
+There is no legacy component-data migration path.
+
 ## Prerequisites
 
 - **Node 22+** (see `engines` in root `package.json`)

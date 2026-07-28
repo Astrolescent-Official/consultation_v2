@@ -1,34 +1,18 @@
 import { Atom } from '@effect-atom/atom-react'
 import { AccountAddress } from '@radix-effects/shared'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import { ConfigProvider, Data, Effect, Layer, Option } from 'effect'
-import { truncateAddress } from '@/lib/utils'
-import { GatewayApiClientLayer } from 'shared/gateway'
+import { Data, Effect, Option } from 'effect'
 import type { ProposalId } from 'shared/governance/brandedTypes'
 import {
   GovernanceComponent,
-  type MakeProposalVoteInput,
-  GovernanceConfigLayer
+  type MakeProposalVoteInput
 } from 'shared/governance/index'
 import type { KeyValueStoreAddress } from 'shared/schemas'
-import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
-import {
-  RadixDappToolkit,
-  SendTransaction,
-  WalletErrorResponse
-} from '@/lib/dappToolkit'
+import { governanceRuntime as runtime } from '@/atom/governanceRuntime'
+import { SendTransaction, WalletErrorResponse } from '@/lib/dappToolkit'
+import { truncateAddress } from '@/lib/utils'
 import { accountsAtom } from './dappToolkitAtom'
 import { withToast } from './withToast'
-import { envVars } from '@/lib/envVars'
-
-const runtime = makeAtomRuntime(
-  Layer.mergeAll(GovernanceComponent.Default, SendTransaction.Default).pipe(
-    Layer.provideMerge(RadixDappToolkit.Live),
-    Layer.provideMerge(GatewayApiClientLayer),
-    Layer.provide(GovernanceConfigLayer),
-    Layer.provide(Layer.setConfigProvider(ConfigProvider.fromJson(envVars)))
-  )
-)
 
 const PAGE_SIZE = 5
 

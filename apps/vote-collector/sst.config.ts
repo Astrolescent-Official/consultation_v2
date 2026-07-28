@@ -73,6 +73,12 @@ export default $config({
       ...commonFnProps
     })
 
+    api.route('GET /majority-judgment-election', {
+      handler: 'src/handlers.getMajorityJudgmentElection',
+      timeout: '30 seconds',
+      ...commonFnProps
+    })
+
     return { api: api.url }
   }
 })

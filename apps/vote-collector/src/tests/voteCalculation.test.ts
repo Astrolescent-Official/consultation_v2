@@ -1,57 +1,56 @@
+import { expect, live } from '@effect/vitest'
 import {
-  HexString,
-  TransactionManifestString,
-  Account,
+  GetFungibleBalance,
+  GetLedgerStateService
+} from '@radix-effects/gateway'
+import {
+  type Account,
+  type AccountAddress,
   Amount,
   ComponentAddress,
   FungibleResourceAddress,
+  HexString,
   PackageAddress,
-  AccountAddress,
-  StateVersion
+  StateVersion,
+  TransactionManifestString
 } from '@radix-effects/shared'
 import {
   createAccount,
   Signer,
   TransactionHelper
 } from '@radix-effects/tx-tool'
+import BigNumber from 'bignumber.js'
 import {
+  config as configTable,
+  voteCalculationAccountVotes as voteCalculationAccountVotesTable,
+  voteCalculationResults as voteCalculationResultsTable,
+  voteCalculationState as voteCalculationStateTable
+} from 'db/src/schema'
+import {
+  Array as A,
+  Config,
   ConfigProvider,
+  Context,
   Effect,
+  Encoding,
   Layer,
   Logger,
-  Redacted,
-  Array as A,
-  pipe,
   Option,
-  Context,
-  Config,
-  Encoding,
-  Duration
+  pipe,
+  Redacted
 } from 'effect'
-import { expect, live } from '@effect/vitest'
 import { GatewayApiClientLayer } from 'shared/gateway'
+import { ProposalId, TemperatureCheckId } from 'shared/governance/brandedTypes'
 import {
   GovernanceConfig,
   GovernanceConfigLayer
 } from 'shared/governance/config'
 import { GovernanceComponent } from 'shared/governance/governanceComponent'
-import { ProposalId, TemperatureCheckId } from 'shared/governance/brandedTypes'
-import {
-  GetFungibleBalance,
-  GetLedgerStateService
-} from '@radix-effects/gateway'
-import { PollService } from '../poll'
+import { DatabaseMigrations } from '../db/migrate'
 import { ORM } from '../db/orm'
 import { PgContainer } from '../db/pgContainer'
-import { DatabaseMigrations } from '../db/migrate'
-import {
-  config as configTable,
-  voteCalculationResults as voteCalculationResultsTable,
-  voteCalculationState as voteCalculationStateTable,
-  voteCalculationAccountVotes as voteCalculationAccountVotesTable
-} from 'db/src/schema'
+import { PollService } from '../poll'
 import { VoteCalculationRepo } from '../vote-calculation/voteCalculationRepo'
-import BigNumber from 'bignumber.js'
 
 class TestConfig extends Context.Tag('@TestConfig')<
   TestConfig,
@@ -128,11 +127,9 @@ const TestLayer = Layer.mergeAll(
         return Layer.merge(
           Layer.succeed(TestConfig, {
             account,
-            componentAddress: Option.some(
-              ComponentAddress.make(
-                'component_tdx_2_1cqz0v72y7a5kt76lqalakadsc7ksrsjqactdarqylr5dkq3x3mf2hp'
-              )
-            ),
+            componentAddress: Option.fromNullable(
+              process.env.INTEGRATION_TEST_GOVERNANCE_COMPONENT_ADDRESS
+            ).pipe(Option.map(ComponentAddress.make)),
             PrivatekeySignerLayer
           }),
           PrivatekeySignerLayer
@@ -252,12 +249,15 @@ const instantiateGovernanceComponent = Effect.fn(function* () {
     "instantiate"
     Address("${config.xrdResourceAddress}")
     Tuple(
-      7u16,
-      Decimal("10000"),
-      Decimal("0.5"),
-      7u16,
-      Decimal("100000"),
-      Decimal("0.5")
+      "Default",
+      Tuple(
+        7u16,
+        Decimal("10000"),
+        Decimal("0.5"),
+        7u16,
+        Decimal("100000"),
+        Decimal("0.5")
+      )
     );`)
 
   const componentAddress = yield* transactionHelper
@@ -290,13 +290,17 @@ const createTemperatureCheck = Effect.fn(function* () {
   const testConfig = yield* TestConfig
 
   const manifest = yield* governanceComponent.makeTemperatureCheckManifest({
+    parameterSetId: 'default',
     authorAccount: testConfig.account.address,
     title: 'Test Temperature Check',
     shortDescription: 'Test Temperature Check',
     description: 'Test Temperature Check',
-    voteOptions: ['Test Vote Option 1', 'Test Vote Option 2'],
     links: ['https://example.com'],
-    maxSelections: 1
+    followUp: {
+      _tag: 'StandardProposal',
+      voteOptions: ['Test Vote Option 1', 'Test Vote Option 2'],
+      maxSelections: 1
+    }
   })
 
   const temperatureCheckId = yield* transactionHelper
@@ -440,7 +444,9 @@ const resetDatabase = Effect.fn(function* () {
   yield* db.delete(voteCalculationAccountVotesTable)
 })
 
-live(
+live.runIf(
+  process.env.INTEGRATION_TEST_GOVERNANCE_COMPONENT_ADDRESS !== undefined
+)(
   'voteCalculation',
   () =>
     Effect.gen(function* () {

@@ -80,6 +80,22 @@ describe('admin badge', () => {
   Decimal("1")`)
   })
 
+  it('escapes a non-fungible local ID before placing it in a manifest', () => {
+    const hostileLocalId = '#"\nCALL_METHOD Address("component_bad") "attack";#'
+    const manifest = renderAdminBadgeProof(
+      accountAddress,
+      NonFungibleResourceAddress.make('resource_nft'),
+      {
+        _tag: 'NonFungibleAdminBadge',
+        localId: hostileLocalId
+      }
+    )
+
+    expect(manifest).toContain(
+      `NonFungibleLocalId(${JSON.stringify(hostileLocalId)})`
+    )
+  })
+
   it('does not treat a burned non-fungible as an admin badge', () => {
     const adminBadgeAddress = NonFungibleResourceAddress.make('resource_nft')
     const badge = findAdminBadge(
