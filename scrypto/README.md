@@ -88,7 +88,15 @@ CALL_FUNCTION
 Replace the placeholders:
 - `<PACKAGE_ADDRESS>` — the package address from step 2
 - `<OWNER_BADGE_ADDRESS>` — the owner badge resource address from step 3
-- The default parameter-set label and governance parameters: voting durations (in days), quorum amounts (in XRD), and approval thresholds (as decimals, e.g. `"0.5"` for 50%)
+- The default parameter-set label and governance parameters: voting durations
+  (minutes on Stokenet, days on Mainnet), quorum amounts (in XRD), and approval
+  thresholds (as decimals, e.g. `"0.5"` for 50%)
+
+The blueprint derives the duration unit from the ledger-controlled Bech32
+encoding of its package address. Only Stokenet (`package_tdx_2_...`) uses
+minutes; Mainnet and every other network default to days. There is no
+transaction argument or mutable component setting that can enable shortened
+durations on Mainnet.
 
 After submitting, note down the **component address** (e.g., `component_rdx1c...`)
 

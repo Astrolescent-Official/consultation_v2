@@ -30,6 +30,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { formatGovernanceDuration } from '@/lib/governanceDuration'
 import { useAppForm } from '../formHook'
 import { temperatureCheckFormOpts } from '../formOptions'
 import {
@@ -221,11 +222,11 @@ export function TemperatureCheckForm({
                   {selectedParameterSet ? (
                     <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
                       TC:{' '}
-                      {
+                      {formatGovernanceDuration(
                         selectedParameterSet.parameters.temperatureCheck
                           .votingDays
-                      }{' '}
-                      days · fixed quorum{' '}
+                      )}
+                      {' · fixed quorum '}
                       {selectedParameterSet.parameters.temperatureCheck.quorum}{' '}
                       XRD · approval{' '}
                       {
