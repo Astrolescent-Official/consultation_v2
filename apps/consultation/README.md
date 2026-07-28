@@ -24,7 +24,7 @@
 
 ## Public app configuration
 
-Public application and collector values are defined once in the selected
+Public application and voting values are defined once in the selected
 `wrangler.jsonc` environment. The Worker validates them and serves the same
 values to the browser from `/app-config.js` before hydration.
 
@@ -41,6 +41,7 @@ values to the browser from `/app-config.js` before hydration.
 | --- | --- | --- |
 | `dev` | `CLOUDFLARE_ENV=preview vite dev --port 3000` | Start the local Stokenet Worker on port 3000 |
 | `build` | `vite build` | Production build |
+| `tally` | `tsx scripts/tally.ts` | Direct-ledger TC/proposal tally; no D1 access required |
 | `test` | `vitest run --config vitest.config.ts` | Frontend and voting-domain unit tests |
 | `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
 | `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |
