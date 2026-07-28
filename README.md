@@ -12,6 +12,13 @@ Radix governance consultation dApp and vote collector, deployed together as one 
 
 The vote collector remains a separate workspace package for domain boundaries, but it has no independent runtime or deployment.
 
+The current component schema uses named governance parameter sets and is not
+compatible with the earlier singleton-parameter development component. For a
+launch or Stokenet rollout, publish a fresh package, instantiate a fresh
+Governance component, seed its approved parameter sets, then update the shared
+configuration before deploying the collector and consultation app together.
+There is no legacy component-data migration path.
+
 ## Local development
 
 ```sh

@@ -1,7 +1,14 @@
+import { AccountAddress } from '@radix-effects/shared'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import { Effect, Option, Ref } from 'effect'
+import { Data, Effect, Option, Ref } from 'effect'
 
 import { RadixDappToolkit } from '@/lib/dappToolkit'
+
+export class NoAccountConnectedError extends Data.TaggedError(
+  'NoAccountConnectedError'
+)<{
+  message: string
+}> {}
 
 // Stores the selected address for use inside Effects (outside of React)
 const selectedAccountAddressRef = Ref.unsafeMake<Option.Option<string>>(
@@ -55,4 +62,22 @@ export const getCurrentAccount = Effect.gen(function* () {
 
   // Default to first account
   return Option.fromNullable(accounts[0])
+})
+
+/**
+ * The current account as a branded address, failing when no wallet is
+ * connected. Every wallet-signed atom needs exactly this.
+ */
+export const getConnectedAccountAddress = Effect.fn(
+  'getConnectedAccountAddress'
+)(function* () {
+  const currentAccount = yield* getCurrentAccount
+
+  if (Option.isNone(currentAccount)) {
+    return yield* new NoAccountConnectedError({
+      message: 'Please connect your wallet first'
+    })
+  }
+
+  return AccountAddress.make(currentAccount.value.address)
 })

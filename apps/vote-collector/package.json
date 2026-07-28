@@ -10,22 +10,26 @@
 		"test": "vitest"
 	},
 	"dependencies": {
+		"@effect/experimental": "catalog:",
+		"@effect/platform": "catalog:",
+		"@effect/sql": "catalog:",
+		"@effect/sql-d1": "catalog:",
+		"@effect/sql-drizzle": "catalog:",
 		"@radix-effects/gateway": "catalog:",
 		"@radix-effects/shared": "catalog:",
 		"@radixdlt/babylon-gateway-api-sdk": "catalog:",
 		"bignumber.js": "catalog:",
 		"db": "workspace:*",
 		"decimal.js": "catalog:",
+		"drizzle-orm": "catalog:",
 		"effect": "catalog:",
 		"sbor-ez-mode": "catalog:",
 		"shared": "workspace:*"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260702.1",
-		"@effect/platform-node": "catalog:",
 		"@effect/language-service": "catalog:",
 		"@effect/vitest": "catalog:",
-		"@radix-effects/tx-tool": "^0.0.6",
 		"@types/node": "catalog:",
 		"tsx": "catalog:",
 		"vitest": "catalog:"

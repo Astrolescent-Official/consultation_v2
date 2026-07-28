@@ -5,6 +5,7 @@ import {
   runHttpEffect,
   type VoteCollectorWorkerEnv
 } from './layers'
+import { MajorityJudgmentRepo } from './majority-judgment/repo'
 import { PollService } from './poll'
 import { PollLock } from './pollLock'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
@@ -12,6 +13,10 @@ import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 const QueryParams = Schema.Struct({
   type: EntityType,
   entityId: Schema.NumberFromString
+})
+
+const MajorityJudgmentQueryParams = Schema.Struct({
+  electionId: Schema.NumberFromString.pipe(Schema.int(), Schema.nonNegative())
 })
 
 const jsonHeaders = {
@@ -37,6 +42,23 @@ const parseQuery = (request: Request) => {
   )
 }
 
+const parseMajorityJudgmentQuery = (request: Request) => {
+  const query = Object.fromEntries(new URL(request.url).searchParams)
+  return Schema.decodeUnknown(MajorityJudgmentQueryParams)(query, {
+    errors: 'all'
+  }).pipe(
+    Effect.mapError((error) =>
+      json(
+        {
+          error: 'Invalid query parameters',
+          details: ParseResult.ArrayFormatter.formatErrorSync(error)
+        },
+        400
+      )
+    )
+  )
+}
+
 export const handleVoteCollectorRequest = (
   request: Request,
   env: VoteCollectorWorkerEnv
@@ -44,9 +66,16 @@ export const handleVoteCollectorRequest = (
   runHttpEffect(
     env,
     Effect.gen(function* () {
+      const pathname = new URL(request.url).pathname
+
+      if (pathname === '/majority-judgment-election') {
+        const params = yield* parseMajorityJudgmentQuery(request)
+        const repo = yield* MajorityJudgmentRepo
+        return json(yield* repo.getElectionResponse(params.electionId))
+      }
+
       const params = yield* parseQuery(request)
       const repo = yield* VoteCalculationRepo
-      const pathname = new URL(request.url).pathname
 
       if (pathname === '/vote-results') {
         return json(
@@ -60,7 +89,16 @@ export const handleVoteCollectorRequest = (
       }
       return json({ error: 'Not found' }, 404)
     }).pipe(
-      Effect.catchAll((response) => Effect.succeed(response)),
+      Effect.catchTag('MajorityJudgmentProjectionNotFoundError', () =>
+        Effect.succeed(json({ error: 'Election not found' }, 404))
+      ),
+      Effect.catchAll((error) =>
+        error instanceof Response
+          ? Effect.succeed(error)
+          : Effect.logError('Vote API request failed', error).pipe(
+              Effect.as(json({ error: 'Internal server error' }, 500))
+            )
+      ),
       Effect.catchAllDefect((defect) =>
         Effect.logError('Unhandled vote API defect', defect).pipe(
           Effect.as(json({ error: 'Internal server error' }, 500))

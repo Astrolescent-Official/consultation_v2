@@ -5,6 +5,10 @@ import {
 } from '@effect/platform'
 import { Context, Data, Effect, Layer, Schema } from 'effect'
 import type { EntityId, EntityType } from 'shared/governance/brandedTypes'
+import {
+  type MajorityJudgmentElectionId,
+  MajorityJudgmentElectionResponseSchema
+} from 'shared/governance/index'
 import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
 
 const VoteResultSchema = Schema.Struct({
@@ -38,6 +42,12 @@ export class VoteClient extends Context.Tag('VoteClient')<
       entityId: EntityId
     }) => Effect.Effect<
       ReadonlyArray<typeof AccountVoteSchema.Type>,
+      VoteClientError
+    >
+    readonly GetMajorityJudgmentElection: (params: {
+      electionId: MajorityJudgmentElectionId
+    }) => Effect.Effect<
+      typeof MajorityJudgmentElectionResponseSchema.Type,
       VoteClientError
     >
   }
@@ -77,6 +87,23 @@ const VoteClientLive = Layer.effect(
             ),
             Effect.scoped,
             Effect.catchAll((e) => new VoteClientError({ message: String(e) }))
+          ),
+      GetMajorityJudgmentElection: ({ electionId }) =>
+        client
+          .execute(
+            HttpClientRequest.get(
+              `${baseUrl}/majority-judgment-election?electionId=${electionId}`
+            )
+          )
+          .pipe(
+            Effect.flatMap((response) => response.json),
+            Effect.flatMap(
+              Schema.decodeUnknown(MajorityJudgmentElectionResponseSchema)
+            ),
+            Effect.scoped,
+            Effect.catchAll(
+              (error) => new VoteClientError({ message: String(error) })
+            )
           )
     }
   })

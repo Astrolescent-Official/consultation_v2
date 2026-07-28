@@ -11,6 +11,7 @@
 		"@radix-effects/gateway": "catalog:",
 		"@radix-effects/shared": "catalog:",
 		"@radixdlt/babylon-gateway-api-sdk": "catalog:",
+		"bignumber.js": "catalog:",
 		"effect": "catalog:",
 		"sbor-ez-mode": "catalog:"
 	},

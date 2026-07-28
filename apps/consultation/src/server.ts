@@ -11,7 +11,9 @@ export default {
 
     if (
       request.method === 'GET' &&
-      (url.pathname === '/vote-results' || url.pathname === '/account-votes')
+      (url.pathname === '/vote-results' ||
+        url.pathname === '/account-votes' ||
+        url.pathname === '/majority-judgment-election')
     ) {
       return handleVoteCollectorRequest(request, env)
     }

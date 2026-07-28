@@ -12,7 +12,6 @@
  *   GOVERNANCE_COMPONENT_ADDRESS  — optional governance component override
  */
 
-import { NodeRuntime } from '@effect/platform-node'
 import { GetLedgerStateService } from '@radix-effects/gateway'
 import type { AccountAddress } from '@radix-effects/shared'
 import { StateVersion } from '@radix-effects/shared'
@@ -22,9 +21,9 @@ import {
   Layer,
   Logger,
   Option,
+  pipe,
   Record as R,
-  Schedule,
-  pipe
+  Schedule
 } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
 import type {
@@ -69,10 +68,16 @@ const tallyTemperatureCheck = (id: number) =>
     console.log(
       `  Period: ${tc.start.toISOString()} -> ${tc.deadline.toISOString()}`
     )
-    console.log(`  Quorum: ${tc.quorum} XRD`)
     console.log(
-      `  Options: ${tc.voteOptions.map((o) => o.label).join(', ')}`
+      `  Parameter set: ${tc.parameterSet.label} (${tc.parameterSet.id} v${tc.parameterSet.version})`
     )
+    console.log(
+      `  Quorum: ${tc.parameterSet.parameters.temperatureCheckQuorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${tc.parameterSet.parameters.temperatureCheckApprovalThreshold}`
+    )
+    console.log(`  Options: ${tc.voteOptions.map((o) => o.label).join(', ')}`)
     console.log(`  Total votes on-chain: ${tc.voteCount}`)
     console.log()
 
@@ -128,7 +133,15 @@ const tallyProposal = (id: number) =>
     console.log(
       `  Period: ${proposal.start.toISOString()} -> ${proposal.deadline.toISOString()}`
     )
-    console.log(`  Quorum: ${proposal.quorum} XRD`)
+    console.log(
+      `  Parameter set: ${proposal.parameterSet.label} (${proposal.parameterSet.id} v${proposal.parameterSet.version})`
+    )
+    console.log(
+      `  Quorum: ${proposal.parameterSet.parameters.proposalQuorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${proposal.parameterSet.parameters.proposalApprovalThreshold}`
+    )
     console.log(
       `  Options: ${proposal.voteOptions.map((o) => `[${o.id}] ${o.label}`).join(', ')}`
     )
@@ -221,7 +234,9 @@ const printResults = (
       ? '0.00'
       : power.dividedBy(totalPower).multipliedBy(100).toFixed(2)
     const label = optionLabels.get(vote) ?? vote
-    console.log(`  ${label.padEnd(30)} ${power.toFormat(2).padStart(20)} XRD  (${pct}%)`)
+    console.log(
+      `  ${label.padEnd(30)} ${power.toFormat(2).padStart(20)} XRD  (${pct}%)`
+    )
   }
 
   console.log()
@@ -284,4 +299,9 @@ const program =
       ? tallyProposal(id)
       : Effect.die(`Unknown type: ${type}. Use "tc" or "proposal".`)
 
-NodeRuntime.runMain(program.pipe(Effect.provide(TallyLayer)))
+void Effect.runPromise(program.pipe(Effect.provide(TallyLayer))).catch(
+  (error: unknown) => {
+    console.error(error)
+    process.exitCode = 1
+  }
+)

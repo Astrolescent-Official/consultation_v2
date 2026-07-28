@@ -72,12 +72,15 @@ CALL_FUNCTION
   "instantiate"
   Address("<OWNER_BADGE_ADDRESS>")
   Tuple(
-    <TEMPERATURE_CHECK_DAYS>u16,
-    Decimal("<TEMPERATURE_CHECK_QUORUM>"),
-    Decimal("<TEMPERATURE_CHECK_APPROVAL_THRESHOLD>"),
-    <PROPOSAL_LENGTH_DAYS>u16,
-    Decimal("<PROPOSAL_QUORUM>"),
-    Decimal("<PROPOSAL_APPROVAL_THRESHOLD>")
+    "Default",
+    Tuple(
+      <TEMPERATURE_CHECK_DAYS>u16,
+      Decimal("<TEMPERATURE_CHECK_QUORUM>"),
+      Decimal("<TEMPERATURE_CHECK_APPROVAL_THRESHOLD>"),
+      <PROPOSAL_LENGTH_DAYS>u16,
+      Decimal("<PROPOSAL_QUORUM>"),
+      Decimal("<PROPOSAL_APPROVAL_THRESHOLD>")
+    )
   )
 ;
 ```
@@ -85,9 +88,44 @@ CALL_FUNCTION
 Replace the placeholders:
 - `<PACKAGE_ADDRESS>` — the package address from step 2
 - `<OWNER_BADGE_ADDRESS>` — the owner badge resource address from step 3
-- The governance parameters: voting durations (in days), quorum amounts (in XRD), and approval thresholds (as decimals, e.g. `"0.5"` for 50%)
+- The default parameter-set label and governance parameters: voting durations (in days), quorum amounts (in XRD), and approval thresholds (as decimals, e.g. `"0.5"` for 50%)
 
 After submitting, note down the **component address** (e.g., `component_rdx1c...`)
+
+Instantiation creates the reserved `default` parameter set at version 1. Add
+the remaining RAC-approved sets with owner-authorized transactions after the
+component is globalized. For a fungible owner badge, a seed transaction has
+this shape:
+
+```
+CALL_METHOD
+  Address("<OWNER_ACCOUNT_ADDRESS>")
+  "create_proof_of_amount"
+  Address("<OWNER_BADGE_ADDRESS>")
+  Decimal("1")
+;
+
+CALL_METHOD
+  Address("<COMPONENT_ADDRESS>")
+  "add_governance_parameter_set"
+  "constitutional"
+  Tuple(
+    "Constitutional",
+    Tuple(
+      <TEMPERATURE_CHECK_DAYS>u16,
+      Decimal("<TEMPERATURE_CHECK_QUORUM>"),
+      Decimal("<TEMPERATURE_CHECK_APPROVAL_THRESHOLD>"),
+      <PROPOSAL_LENGTH_DAYS>u16,
+      Decimal("<PROPOSAL_QUORUM>"),
+      Decimal("<PROPOSAL_APPROVAL_THRESHOLD>")
+    )
+  )
+;
+```
+
+Repeat the owner call for each approved non-election identifier, such as
+`governance-process`, `treasury-budget`, or `executable`. Use exact values
+approved by the RAC; the blueprint intentionally does not hardcode policy.
 
 ### 5. Configure the web app
 
@@ -141,18 +179,25 @@ Send the transaction. You've now established a two-way link between the dApp def
 
 | Method | Access | Description |
 |--------|--------|-------------|
-| `make_temperature_check(author, draft)` | PUBLIC | Create a temperature check (author must prove account ownership) |
+| `make_temperature_check(author, draft, parameter_set_id)` | PUBLIC | Create a temperature check with `None` for `default` or `Some(id)` for another active set (author must prove account ownership) |
 | `vote_on_temperature_check(account, id, vote)` | PUBLIC | Vote For/Against on a temp check |
 | `vote_on_proposal(account, id, options)` | PUBLIC | Vote on a proposal (single or multiple choice) |
-| `get_governance_parameters()` | PUBLIC | Get current parameters |
 | `get_temperature_check_count()` | PUBLIC | Get total temperature checks |
 | `get_proposal_count()` | PUBLIC | Get total proposals |
 | `make_proposal(temperature_check_id)` | OWNER, ADMIN | Elevate a temp check to a proposal |
+| `add_governance_parameter_set(id, input)` | OWNER | Add an active set at version 1 |
+| `update_governance_parameter_set(id, input)` | OWNER | Update an active set and increment its version |
+| `retire_governance_parameter_set(id)` | OWNER | Permanently retire a non-default set |
 | `toggle_temperature_check_hidden(id)` | OWNER, ADMIN | Hide/show a temperature check |
 | `toggle_proposal_hidden(id)` | OWNER, ADMIN | Hide/show a proposal |
-| `update_governance_parameters(params)` | OWNER | Update governance parameters |
 
-### Governance Parameters
+### Governance Parameter Sets
+
+The component stores a string-keyed registry. Identifiers are immutable,
+lowercase kebab-case values up to 64 ASCII bytes. Labels and parameter values
+can be updated while active; each update increments the record version. Retired
+sets remain on-ledger, cannot be updated or reused, and cannot be selected for
+new TCs. The reserved `default` set cannot be retired.
 
 ```rust
 GovernanceParameters {
@@ -164,6 +209,11 @@ GovernanceParameters {
     proposal_approval_threshold: Decimal,     // Fraction needed to pass
 }
 ```
+
+Every TC stores a `GovernanceParameterSetSnapshot` containing the selected ID,
+label, version, and six parameter values. A GP copies that exact snapshot from
+its TC. Registry edits and retirement therefore cannot reinterpret an existing
+consultation.
 
 ### Creating a Temperature Check
 
@@ -213,6 +263,8 @@ TemperatureCheckCreatedEvent {
     title: String,
     start: Instant,
     deadline: Instant,
+    parameter_set_id: String,
+    parameter_set_version: u32,
 }
 
 TemperatureCheckVotedEvent {
@@ -229,6 +281,8 @@ ProposalCreatedEvent {
     title: String,
     start: Instant,
     deadline: Instant,
+    parameter_set_id: String,
+    parameter_set_version: u32,
 }
 
 ProposalVotedEvent {
@@ -239,8 +293,20 @@ ProposalVotedEvent {
     replacing_vote_id: Option<u64>,
 }
 
-GovernanceParametersUpdatedEvent {
-    new_params: GovernanceParameters,
+GovernanceParameterSetAddedEvent {
+    parameter_set_id: String,
+    parameter_set: GovernanceParameterSet,
+}
+
+GovernanceParameterSetUpdatedEvent {
+    parameter_set_id: String,
+    previous_version: u32,
+    parameter_set: GovernanceParameterSet,
+}
+
+GovernanceParameterSetRetiredEvent {
+    parameter_set_id: String,
+    version: u32,
 }
 ```
 

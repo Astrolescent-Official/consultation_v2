@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "account_id": "cdb0453c60d48cf58f44f34f9eb6bbe2",
   "name": "consultation",
-  "compatibility_date": "2026-07-19",
+  "compatibility_date": "2026-07-28",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
   // Custom domain requires astrolescent.com zone in this CF account

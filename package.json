@@ -9,6 +9,7 @@
 		"check-types": "turbo run check-types",
 		"db:generate": "turbo run db:generate",
 		"test": "turbo run test",
+		"prepare": "./scripts/prepare-effect.sh",
 		"deploy:preview": "./deploy.sh preview",
 		"deploy:production": "./deploy.sh production"
 	},

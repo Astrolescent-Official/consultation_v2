@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-form'
 import { LoaderIcon } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import { accountsAtom } from '@/atom/dappToolkitAtom'
+import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
 import { makeTemperatureCheckAtom } from '@/atom/temperatureChecksAtom'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +22,13 @@ import {
   FieldLabel
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppForm } from '../formHook'
 import { temperatureCheckFormOpts } from '../formOptions'
@@ -31,6 +39,7 @@ import {
   TemperatureCheckFormSchema,
   TitleSchema
 } from '../schema'
+import { CandidatesField } from './CandidatesField'
 import { LinksField } from './LinksField'
 import { MarkdownUploadField } from './MarkdownUploadField'
 import { MaxSelectionsField } from './MaxSelectionsField'
@@ -47,6 +56,7 @@ export function TemperatureCheckForm({
 }: TemperatureCheckFormProps) {
   const [makeResult, makeTemperatureCheck] = useAtom(makeTemperatureCheckAtom)
   const accountsResult = useAtomValue(accountsAtom)
+  const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
   const formId = useId()
   const titleId = `${formId}-title`
   const shortDescriptionId = `${formId}-shortDescription`
@@ -57,20 +67,36 @@ export function TemperatureCheckForm({
       onSubmit: effectSchemaValidator(TemperatureCheckFormSchema)
     },
     onSubmit: ({ value }) => {
-      // Combine radixTalkUrl with additional links
       const allLinks = [
         value.radixTalkUrl,
         ...value.links.filter((link) => link.trim() !== '')
       ]
-      // Transform vote options from {id, label} to just labels
-      const voteOptionLabels = value.voteOptions.map((option) => option.label)
       makeTemperatureCheck({
+        parameterSetId: value.parameterSetId,
         title: value.title,
         shortDescription: value.shortDescription,
         description: value.description,
         links: allLinks,
-        voteOptions: voteOptionLabels,
-        maxSelections: value.maxSelections
+        followUp:
+          value.processType === 'Standard'
+            ? {
+                _tag: 'StandardProposal',
+                voteOptions: value.voteOptions.map(({ label }) => label),
+                maxSelections: value.maxSelections
+              }
+            : {
+                _tag: 'MajorityJudgmentElection',
+                roleId: value.roleId,
+                seatCount: value.seatCount,
+                candidates: value.candidates.map((candidate) => ({
+                  reference: candidate.reference,
+                  displayName: candidate.displayName,
+                  description: candidate.description,
+                  links: candidate.links.filter(
+                    (link) => link.trim().length > 0
+                  )
+                }))
+              }
       })
     }
   })
@@ -84,6 +110,10 @@ export function TemperatureCheckForm({
     (state) => state.values.maxSelections
   )
   const canSubmit = useStore(form.store, (state) => state.canSubmit)
+  const parameterSetId = useStore(
+    form.store,
+    (state) => state.values.parameterSetId
+  )
 
   // Auto-adjust maxSelections if it exceeds option count (useEffect prevents render-during-render)
   useEffect(() => {
@@ -95,28 +125,37 @@ export function TemperatureCheckForm({
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
 
-  const makeError = Result.builder(makeResult)
-    .onFailure(() => true)
-    .orNull() ?? false
+  const makeError = Result.isFailure(makeResult)
 
   // Call onSuccess when the atom completes successfully
   useEffect(() => {
-    if (hasCalledSuccess.current || !onSuccess) return
+    if (hasCalledSuccess.current || !onSuccess || !Result.isSuccess(makeResult))
+      return
 
-    Result.builder(makeResult)
-      .onSuccess((value) => {
-        hasCalledSuccess.current = true
-        onSuccess(value)
-      })
-      .orNull()
+    hasCalledSuccess.current = true
+    onSuccess(makeResult.value)
   }, [makeResult, onSuccess])
 
   const hasAccounts =
-    Result.builder(accountsResult)
-      .onInitial(() => false)
-      .onFailure(() => false)
-      .onSuccess((accounts) => accounts.length > 0)
-      .orNull() ?? false
+    Result.isSuccess(accountsResult) && accountsResult.value.length > 0
+
+  const activeParameterSets = Result.isSuccess(parameterSetsResult)
+    ? parameterSetsResult.value.active
+    : []
+  const parameterSetsLoading = Result.isInitial(parameterSetsResult)
+  const parameterSetsFailed = Result.isFailure(parameterSetsResult)
+  const selectedParameterSet = activeParameterSets.find(
+    ({ id }) => id === parameterSetId
+  )
+  const isMajorityJudgment =
+    selectedParameterSet?.parameters._tag === 'MajorityJudgment'
+
+  useEffect(() => {
+    form.setFieldValue(
+      'processType',
+      isMajorityJudgment ? 'MajorityJudgment' : 'Standard'
+    )
+  }, [form, isMajorityJudgment])
 
   return (
     <form
@@ -136,6 +175,79 @@ export function TemperatureCheckForm({
 
         <CardContent>
           <FieldGroup>
+            <form.Field name="parameterSetId">
+              {(field) => (
+                <Field data-invalid={parameterSetsFailed}>
+                  <FieldLabel htmlFor={`${formId}-parameter-set`}>
+                    Governance rules
+                  </FieldLabel>
+                  <FieldDescription>
+                    {parameterSetsLoading
+                      ? 'Loading the available governance rules…'
+                      : 'The selected rules are snapshotted when the Temperature Check is created.'}
+                  </FieldDescription>
+                  <Select
+                    value={field.state.value}
+                    onValueChange={field.handleChange}
+                    disabled={activeParameterSets.length === 0}
+                  >
+                    <SelectTrigger
+                      id={`${formId}-parameter-set`}
+                      className="w-full"
+                    >
+                      <SelectValue
+                        placeholder={
+                          parameterSetsLoading
+                            ? 'Loading…'
+                            : 'Select a parameter set'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeParameterSets.map((parameterSet) => (
+                        <SelectItem
+                          key={parameterSet.id}
+                          value={parameterSet.id}
+                        >
+                          {parameterSet.label} (v{parameterSet.version} ·{' '}
+                          {parameterSet.parameters._tag === 'Standard'
+                            ? 'Standard'
+                            : 'Majority Judgment'}
+                          )
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedParameterSet ? (
+                    <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+                      TC:{' '}
+                      {
+                        selectedParameterSet.parameters.temperatureCheck
+                          .votingDays
+                      }{' '}
+                      days · fixed quorum{' '}
+                      {selectedParameterSet.parameters.temperatureCheck.quorum}{' '}
+                      XRD · approval{' '}
+                      {
+                        selectedParameterSet.parameters.temperatureCheck
+                          .approvalThreshold
+                      }
+                    </div>
+                  ) : null}
+                  {parameterSetsFailed ? (
+                    <FieldError
+                      errors={[
+                        {
+                          message:
+                            'Could not load the governance parameter sets, so a Temperature Check cannot be created right now. Reload the page to try again.'
+                        }
+                      ]}
+                    />
+                  ) : null}
+                </Field>
+              )}
+            </form.Field>
+
             {/* Title */}
             <form.Field
               name="title"
@@ -250,22 +362,70 @@ export function TemperatureCheckForm({
         </CardContent>
       </Card>
 
-      {/* Vote Options Section */}
+      {/* Formal continuation section */}
       <Card className="shadow-none">
         <CardContent className="pt-2">
-          {/* Selection Mode Toggle */}
-          <MaxSelectionsField form={form} optionCount={optionCount} />
-
           <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mt-6 mb-2">
-            Vote Options
+            {isMajorityJudgment
+              ? 'Majority Judgment Election'
+              : 'Governance Proposal'}
           </CardTitle>
           <CardDescription className="text-xs mb-6">
-            These options will be available if the TC is promoted to a
-            Governance Proposal. Provide at least 2 options.
+            {isMajorityJudgment
+              ? 'The role, seats, and complete candidate set are committed by this Temperature Check and cannot be replaced during formal elevation.'
+              : 'These options will be available if the TC is promoted to a Governance Proposal. Provide at least 2 options.'}
           </CardDescription>
 
-          {/* Vote Options */}
-          <VoteOptionsField form={form} maxOptions={maxVoteOptions} />
+          {isMajorityJudgment ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <form.Field name="roleId">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={`${formId}-role-id`}>
+                        Role identifier
+                      </FieldLabel>
+                      <Input
+                        id={`${formId}-role-id`}
+                        value={field.state.value}
+                        onChange={(event) =>
+                          field.handleChange(event.target.value)
+                        }
+                        placeholder="rac-member"
+                      />
+                    </Field>
+                  )}
+                </form.Field>
+                <form.Field name="seatCount">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={`${formId}-seat-count`}>
+                        Seats
+                      </FieldLabel>
+                      <Input
+                        id={`${formId}-seat-count`}
+                        type="number"
+                        min={1}
+                        value={field.state.value}
+                        onChange={(event) =>
+                          field.handleChange(Number(event.target.value))
+                        }
+                      />
+                    </Field>
+                  )}
+                </form.Field>
+              </div>
+              <CandidatesField form={form} />
+            </div>
+          ) : (
+            <>
+              <MaxSelectionsField form={form} optionCount={optionCount} />
+              <CardTitle className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Vote Options
+              </CardTitle>
+              <VoteOptionsField form={form} maxOptions={maxVoteOptions} />
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -279,7 +439,12 @@ export function TemperatureCheckForm({
       <CardFooter className="p-0">
         <Button
           type="submit"
-          disabled={!canSubmit || makeResult.waiting || !hasAccounts}
+          disabled={
+            !canSubmit ||
+            makeResult.waiting ||
+            !hasAccounts ||
+            activeParameterSets.length === 0
+          }
           className="w-full py-6 text-base"
         >
           {makeResult.waiting ? (

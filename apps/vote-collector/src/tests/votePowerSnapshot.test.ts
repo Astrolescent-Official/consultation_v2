@@ -123,9 +123,15 @@ describe('Vote Power Snapshot', () => {
       // Step 1: Disable shape pools
       const noShapeConfig = resolve({
         sources: epoch0.sources,
-        precisionPoolsV1: epoch0.precisionPoolsV1 ?? [],
-        precisionPoolsV2: epoch0.precisionPoolsV2 ?? [],
-        poolUnitPools: epoch0.poolUnitPools ?? []
+        ...(epoch0.precisionPoolsV1 === undefined
+          ? {}
+          : { precisionPoolsV1: epoch0.precisionPoolsV1 }),
+        ...(epoch0.precisionPoolsV2 === undefined
+          ? {}
+          : { precisionPoolsV2: epoch0.precisionPoolsV2 }),
+        ...(epoch0.poolUnitPools === undefined
+          ? {}
+          : { poolUnitPools: epoch0.poolUnitPools })
       })
       const noShapeResult = await runSnapshot(
         noShapeConfig,
@@ -138,7 +144,9 @@ describe('Vote Power Snapshot', () => {
       // Step 2: Also disable precision pools
       const noPrecisionConfig = resolve({
         sources: epoch0.sources,
-        poolUnitPools: epoch0.poolUnitPools ?? []
+        ...(epoch0.poolUnitPools === undefined
+          ? {}
+          : { poolUnitPools: epoch0.poolUnitPools })
       })
       const noPrecisionResult = await runSnapshot(
         noPrecisionConfig,
