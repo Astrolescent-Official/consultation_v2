@@ -68,7 +68,7 @@ export const getProposalVotesByAccountsAtom = Atom.family(
     )
 )
 
-export class AccountAlreadyVotedError extends Data.TaggedError(
+class AccountAlreadyVotedError extends Data.TaggedError(
   'AccountAlreadyVotedError'
 )<{
   message: string

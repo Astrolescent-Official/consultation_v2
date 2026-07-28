@@ -1,22 +1,21 @@
 # Consultation
 
-Radix governance consultation dApp and vote collector, deployed together as one Cloudflare Worker.
+Radix governance consultation dApp running entirely on Cloudflare Workers and D1.
 
 ## Architecture
 
 - TanStack Start serves the React dApp from the Worker.
-- `GET /vote-results` and `GET /account-votes` are same-origin Worker routes.
+- `GET /vote-results`, `GET /account-votes`, and
+  `GET /majority-judgment-election` are same-origin Worker routes.
 - the Worker's scheduled handler polls the Radix Gateway every five minutes in production.
 - Cloudflare D1 stores the cursor, lease, exact vote totals, and account votes.
 - production and preview use separate Workers, D1 databases, Radix networks, variables, and schedules.
-
-The vote collector remains a separate workspace package for domain boundaries, but it has no independent runtime or deployment.
 
 The current component schema uses named governance parameter sets and is not
 compatible with the earlier singleton-parameter development component. For a
 launch or Stokenet rollout, publish a fresh package, instantiate a fresh
 Governance component, seed its approved parameter sets, then update the shared
-configuration before deploying the collector and consultation app together.
+configuration before deploying the consultation Worker.
 There is no legacy component-data migration path.
 
 ## Local development
@@ -27,13 +26,13 @@ pnpm --filter consultation-dapp d1:migrate:local
 pnpm --filter consultation-dapp dev
 ```
 
-The app and both vote APIs are available on `http://localhost:3000`.
+The app and all three vote APIs are available on `http://localhost:3000`.
 
 ## Verification
 
 ```sh
 pnpm check-types
-pnpm --filter vote-collector test run
+pnpm --filter consultation-dapp test
 pnpm --filter consultation-dapp test:worker
 pnpm --filter consultation-dapp build
 ```
@@ -53,8 +52,7 @@ Each command applies pending D1 migrations to its target database, builds for th
 
 ```text
 apps/
-  consultation/   TanStack Start UI and Cloudflare Worker entry point
-  vote-collector/ Effect vote-domain module bundled into consultation
+  consultation/   TanStack Start UI, voting domain, and Cloudflare Worker
 packages/
   database/       SQLite schema and versioned D1 migrations
   shared/         Radix Gateway and governance services

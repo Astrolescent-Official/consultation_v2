@@ -4,16 +4,16 @@ import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import * as D1Client from '@effect/sql-d1/D1Client'
 import { Effect, Layer } from 'effect'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { VoteDatabaseLive } from '../../vote-collector/src/db/d1'
-import { ORM } from '../../vote-collector/src/db/orm'
+import { VoteDatabaseLive } from './server/voting/db/d1'
+import { ORM } from './server/voting/db/orm'
 import {
   type MajorityJudgmentProjectionInput,
   MajorityJudgmentRepo
-} from '../../vote-collector/src/majority-judgment/repo'
+} from './server/voting/majority-judgment/repo'
 import {
   type PollLeaseIdentity,
   withPollLease
-} from '../../vote-collector/src/pollLease'
+} from './server/voting/pollLease'
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv extends Env {

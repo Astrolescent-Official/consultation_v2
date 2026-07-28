@@ -1,9 +1,6 @@
 import handler from '@tanstack/react-start/server-entry'
-import {
-  handleVoteCollectorRequest,
-  runScheduledPoll
-} from 'vote-collector/worker'
 import { makeAppConfigScript } from './lib/appConfig'
+import { handleVotingRequest, runScheduledPoll } from './server/voting/worker'
 
 export default {
   async fetch(request: Request, env: Env) {
@@ -15,7 +12,7 @@ export default {
         url.pathname === '/account-votes' ||
         url.pathname === '/majority-judgment-election')
     ) {
-      return handleVoteCollectorRequest(request, env)
+      return handleVotingRequest(request, env)
     }
 
     if (request.method === 'GET' && url.pathname === '/app-config.js') {

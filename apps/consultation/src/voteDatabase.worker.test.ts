@@ -26,16 +26,16 @@ import {
   GovernanceConfigLayer
 } from 'shared/governance/index'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { VoteDatabaseLive } from '../../vote-collector/src/db/d1'
+import { VoteDatabaseLive } from './server/voting/db/d1'
 import {
   guardedBatch,
   type PollLeaseIdentity,
   withPollLease
-} from '../../vote-collector/src/pollLease'
-import { PollLock } from '../../vote-collector/src/pollLock'
-import { VoteCalculationRepo } from '../../vote-collector/src/vote-calculation/voteCalculationRepo'
-import { VotePowerSnapshot } from '../../vote-collector/src/vote-calculation/votePowerSnapshot'
-import { getVotePowerConfig } from '../../vote-collector/src/vote-calculation/voteSourceConfig'
+} from './server/voting/pollLease'
+import { PollLock } from './server/voting/pollLock'
+import { VoteCalculationRepo } from './server/voting/vote-calculation/voteCalculationRepo'
+import { VotePowerSnapshot } from './server/voting/vote-calculation/votePowerSnapshot'
+import { getVotePowerConfig } from './server/voting/vote-calculation/voteSourceConfig'
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv extends Env {

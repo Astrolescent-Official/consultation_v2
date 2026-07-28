@@ -8,7 +8,7 @@
 | D1 | `consultation-votes-production` | `consultation-votes-preview` |
 | Radix network | Mainnet (`1`) | Stokenet (`2`) |
 | Governance config | `GovernanceConfig.MainnetLive` | `GovernanceConfig.StokenetLive` |
-| Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cq...ctpnmc` |
+| Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cz...7vjyu4` |
 | Poll schedule | Every 5 minutes | Every 10 minutes |
 | Initial cursor | Current ledger state | Current ledger state |
 
@@ -22,14 +22,15 @@ pnpm --filter consultation-dapp dev
 ```
 
 The local Worker uses local D1 state under `apps/consultation/.wrangler/`. The
-two API routes are same-origin, so no backend URL or CORS configuration is
+three API routes are same-origin, so no backend URL or CORS configuration is
 needed. Public UI and poller configuration comes from the preview `vars` in
 `apps/consultation/wrangler.jsonc`; there are no duplicate Vite variables.
 
 ## Preview release
 
 1. Run `pnpm deploy:preview`.
-2. Verify `/.well-known/radix.json`, `/vote-results`, and `/account-votes` on the preview Worker.
+2. Verify `/.well-known/radix.json`, `/vote-results`, `/account-votes`, and
+   `/majority-judgment-election` on the preview Worker.
 3. Confirm the preview D1 cursor advances and the scheduled handler has no errors.
 
 The stable preview Worker is the wallet-test origin. Branch preview URLs are suitable for read-only UI review unless each origin is also claimed in Radix metadata.
@@ -38,7 +39,7 @@ The stable preview Worker is the wallet-test origin. Branch preview URLs are sui
 
 1. Run the Worker/D1 tests and production build.
 2. Run `pnpm deploy:production`.
-3. Verify the well-known file and both same-origin vote APIs.
+3. Verify the well-known file and all three same-origin vote APIs.
 4. Trigger or observe one scheduled poll and confirm the D1 cursor advances.
 5. Check Worker structured logs for lease, Gateway, D1, or timeout failures.
 
