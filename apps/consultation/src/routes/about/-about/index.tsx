@@ -7,6 +7,7 @@ import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
 import { Button } from '@/components/ui/button'
 import { H1 } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+import { formatGovernanceDuration } from '@/lib/governanceDuration'
 import { formatApprovalThreshold, formatQuorum } from '@/lib/utils'
 
 export const Page = () => {
@@ -109,14 +110,14 @@ const ParameterSetDetails = ({
       <div className="grid md:grid-cols-2 gap-8">
         <ParameterRules
           title="Temperature Check"
-          days={parameters.temperatureCheck.votingDays}
+          duration={parameters.temperatureCheck.votingDays}
           quorum={parameters.temperatureCheck.quorum}
           threshold={parameters.temperatureCheck.approvalThreshold}
         />
         {parameters._tag === 'Standard' ? (
           <ParameterRules
             title="Governance Proposal"
-            days={parameters.proposal.votingDays}
+            duration={parameters.proposal.votingDays}
             quorum={parameters.proposal.quorum}
             threshold={parameters.proposal.approvalThreshold}
           />
@@ -126,8 +127,14 @@ const ParameterSetDetails = ({
               Majority Judgment Election
             </h4>
             <ul className="list-inside list-disc space-y-2 pl-2 text-sm text-neutral-500">
-              <li>Candidate review: {parameters.election.reviewDays} days</li>
-              <li>Voting: {parameters.election.votingDays} days</li>
+              <li>
+                Candidate review:{' '}
+                {formatGovernanceDuration(parameters.election.reviewDays)}
+              </li>
+              <li>
+                Voting:{' '}
+                {formatGovernanceDuration(parameters.election.votingDays)}
+              </li>
               <li>Fixed quorum: {formatQuorum(parameters.election.quorum)}</li>
               <li>
                 Rerun fixed quorum:{' '}
@@ -143,19 +150,19 @@ const ParameterSetDetails = ({
 
 const ParameterRules = ({
   title,
-  days,
+  duration,
   quorum,
   threshold
 }: {
   title: string
-  days: number
+  duration: number
   quorum: string
   threshold: string
 }) => (
   <div className="space-y-3">
     <h4 className="font-semibold text-neutral-900 dark:text-white">{title}</h4>
     <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
-      <li>Voting period: {days} days</li>
+      <li>Voting period: {formatGovernanceDuration(duration)}</li>
       <li>Requires {formatQuorum(quorum)} quorum</li>
       <li>Approval threshold: {formatApprovalThreshold(threshold)}</li>
     </ul>

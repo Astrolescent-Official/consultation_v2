@@ -1,5 +1,23 @@
 use crate::*;
 
+const STOKENET_PACKAGE_ADDRESS_PREFIX: &str = "package_tdx_2_";
+
+fn uses_minute_governance_durations(encoded_package_address: &str) -> bool {
+    encoded_package_address.starts_with(STOKENET_PACKAGE_ADDRESS_PREFIX)
+}
+
+fn add_governance_duration(
+    instant: Instant,
+    duration: u32,
+    encoded_package_address: &str,
+) -> Option<Instant> {
+    if uses_minute_governance_durations(encoded_package_address) {
+        instant.add_minutes(i64::from(duration))
+    } else {
+        instant.add_days(i64::from(duration))
+    }
+}
+
 #[blueprint]
 #[events(
     TemperatureCheckCreatedEvent,
@@ -249,9 +267,10 @@ mod governance {
             }
         }
 
-        fn checked_add_days(instant: Instant, days: u32, name: &str) -> Instant {
-            instant
-                .add_days(i64::from(days))
+        fn checked_add_governance_duration(instant: Instant, duration: u32, name: &str) -> Instant {
+            let encoded_package_address =
+                Runtime::bech32_encode_address(Runtime::package_address());
+            add_governance_duration(instant, duration, &encoded_package_address)
                 .unwrap_or_else(|| panic!("{} timestamp overflow", name))
         }
 
@@ -511,7 +530,7 @@ mod governance {
                 .checked_add(1)
                 .expect("Temperature check identifier exhausted");
             let now = Clock::current_time_rounded_to_seconds();
-            let deadline = Self::checked_add_days(
+            let deadline = Self::checked_add_governance_duration(
                 now,
                 parameter_set.parameters.temperature_check().voting_days,
                 "Temperature check deadline",
@@ -588,8 +607,11 @@ mod governance {
                 .proposal_count
                 .checked_add(1)
                 .expect("Proposal identifier exhausted");
-            let deadline =
-                Self::checked_add_days(now, proposal_parameters.voting_days, "Proposal deadline");
+            let deadline = Self::checked_add_governance_duration(
+                now,
+                proposal_parameters.voting_days,
+                "Proposal deadline",
+            );
             let proposal = Proposal {
                 title: temperature_check.title.clone(),
                 short_description: temperature_check.short_description.clone(),
@@ -692,12 +714,12 @@ mod governance {
                 );
             }
 
-            let review_end = Self::checked_add_days(
+            let review_end = Self::checked_add_governance_duration(
                 review_start,
                 election_parameters.review_days,
                 "Election review deadline",
             );
-            let voting_deadline = Self::checked_add_days(
+            let voting_deadline = Self::checked_add_governance_duration(
                 review_end,
                 election_parameters.voting_days,
                 "Election voting deadline",
@@ -985,7 +1007,7 @@ mod governance {
                     panic!("Election does not contain Majority Judgment parameters")
                 }
             };
-            let deadline = Self::checked_add_days(
+            let deadline = Self::checked_add_governance_duration(
                 voting_start,
                 parameters.rerun_voting_days,
                 "Rerun voting deadline",
@@ -1204,5 +1226,33 @@ mod governance {
                 hidden,
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{add_governance_duration, uses_minute_governance_durations};
+    use scrypto::prelude::Instant;
+
+    #[test]
+    fn only_stokenet_package_addresses_use_minute_durations() {
+        assert!(uses_minute_governance_durations("package_tdx_2_1test"));
+        assert!(!uses_minute_governance_durations("package_rdx1test"));
+        assert!(!uses_minute_governance_durations("package_sim1test"));
+        assert!(!uses_minute_governance_durations("component_tdx_2_1test"));
+    }
+
+    #[test]
+    fn stokenet_adds_minutes_and_other_networks_add_days() {
+        let start = Instant::new(0);
+
+        assert_eq!(
+            add_governance_duration(start, 2, "package_tdx_2_1test"),
+            Some(Instant::new(120))
+        );
+        assert_eq!(
+            add_governance_duration(start, 2, "package_rdx1test"),
+            Some(Instant::new(172_800))
+        );
     }
 }
