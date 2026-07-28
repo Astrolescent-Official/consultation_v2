@@ -88,7 +88,7 @@ describe('runtime app configuration', () => {
       'application/javascript; charset=utf-8'
     )
     expect(await scriptResponse.text()).toBe(
-      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","GOVERNANCE_COMPONENT_ADDRESS":"component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y","NETWORK_ID":"1"};'
+      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","NETWORK_ID":"1"};'
     )
 
     const wellKnownResponse = await SELF.fetch(
@@ -104,16 +104,11 @@ describe('runtime app configuration', () => {
     })
   })
 
-  it('overrides the network default with the configured governance component', async () => {
-    const componentAddress =
-      'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
+  it('uses the documented Stokenet governance component', async () => {
     const layer = GovernanceConfigLayer.pipe(
       Layer.provide(
         Layer.setConfigProvider(
-          ConfigProvider.fromJson({
-            GOVERNANCE_COMPONENT_ADDRESS: componentAddress,
-            NETWORK_ID: 2
-          })
+          ConfigProvider.fromJson({ NETWORK_ID: 2 })
         )
       )
     )
@@ -123,7 +118,9 @@ describe('runtime app configuration', () => {
       }).pipe(Effect.provide(layer))
     )
 
-    expect(config.componentAddress).toBe(componentAddress)
+    expect(config.componentAddress).toBe(
+      'component_tdx_2_1cr3t55wx3dnhzgtk2hkn47mmkllr2z79lmwkvw65ltaluzylz4jpsc'
+    )
   })
 })
 

@@ -9,7 +9,6 @@
  *
  * Environment:
  *   NETWORK_ID                    — 1 (mainnet) or 2 (stokenet)
- *   GOVERNANCE_COMPONENT_ADDRESS  — optional governance component override
  */
 
 import { GetLedgerStateService } from '@radix-effects/gateway'
@@ -295,7 +294,6 @@ const printUsage = () => {
     '  NETWORK_ID=1|2                         Required — mainnet or stokenet'
   )
   console.error(
-    '  GOVERNANCE_COMPONENT_ADDRESS=<addr>    Optional component override'
   )
 }
 

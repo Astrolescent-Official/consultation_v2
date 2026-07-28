@@ -45,7 +45,7 @@ resolution of the externally supplied PostgreSQL resource.
   its lease (`owner = ''`, `expires_at = 0`).
 - The 2026-07-20 preview configuration release replaced duplicate Vite and
   Worker variables with the canonical runtime bindings `ENV`, `NETWORK_ID`,
-  `DAPP_DEFINITION_ADDRESS`, and `GOVERNANCE_COMPONENT_ADDRESS`. The Worker
+  `DAPP_DEFINITION_ADDRESS`. The Worker
   validates and exposes the public subset at `/app-config.js` before browser
   hydration; the UI and scheduled poll therefore use the same addresses.
 - The preview configuration release uploaded 3.77 MiB total / 780.74 KiB gzip,

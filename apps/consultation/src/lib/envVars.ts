@@ -8,8 +8,6 @@ const vitestMockEnvVars: typeof AppConfig.Encoded = {
   ENV: 'local',
   DAPP_DEFINITION_ADDRESS:
     'account_rdx129xqyvgkn9h73atyrzndal004fwye3tzw49kkygv9ltm2kyrv2lmda',
-  GOVERNANCE_COMPONENT_ADDRESS:
-    'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y',
   NETWORK_ID: '1'
 }
 
@@ -18,7 +16,6 @@ const runtimeEnvVars = () =>
     ? {
         ENV: process.env.ENV,
         DAPP_DEFINITION_ADDRESS: process.env.DAPP_DEFINITION_ADDRESS,
-        GOVERNANCE_COMPONENT_ADDRESS: process.env.GOVERNANCE_COMPONENT_ADDRESS,
         NETWORK_ID: process.env.NETWORK_ID
       }
     : window.__APP_CONFIG__

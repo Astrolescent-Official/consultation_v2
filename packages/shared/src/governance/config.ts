@@ -4,21 +4,14 @@ import {
   NonFungibleResourceAddress,
   PackageAddress
 } from '@radix-effects/shared'
-import {
-  Config as ConfigEffect,
-  Context,
-  Data,
-  Effect,
-  Layer,
-  Option
-} from 'effect'
+import { Config as ConfigEffect, Context, Data, Effect, Layer } from 'effect'
 
 const StokenetConfig = {
   packageAddress: PackageAddress.make(
-    'package_tdx_2_1p52l57u32xpsfqv5wtvd0c727mh485qafef0dlhm0x7r67nm3t6pj8'
+    'package_tdx_2_1pkg4qzu3heh592waney22cyxkeued3mlwfe4xxw3hz9rwtyrhdqhft'
   ),
   componentAddress: ComponentAddress.make(
-    'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
+    'component_tdx_2_1cr3t55wx3dnhzgtk2hkn47mmkllr2z79lmwkvw65ltaluzylz4jpsc'
   ),
   adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'
@@ -69,10 +62,6 @@ export const GovernanceConfigLayer = Layer.unwrapEffect(
     const networkId = yield* ConfigEffect.number('NETWORK_ID').pipe(
       Effect.orDie
     )
-    const componentAddress = yield* ConfigEffect.option(
-      ConfigEffect.string('GOVERNANCE_COMPONENT_ADDRESS')
-    )
-
     const config =
       networkId === 1
         ? MainnetConfig
@@ -86,12 +75,6 @@ export const GovernanceConfigLayer = Layer.unwrapEffect(
       })
     }
 
-    return Layer.succeed(GovernanceConfig, {
-      ...config,
-      componentAddress: Option.match(componentAddress, {
-        onNone: () => config.componentAddress,
-        onSome: ComponentAddress.make
-      })
-    })
+    return Layer.succeed(GovernanceConfig, config)
   })
 )

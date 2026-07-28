@@ -32,7 +32,6 @@ values to the browser from `/app-config.js` before hydration.
 | --- | --- | --- |
 | `ENV` | Environment (`local`, `preview`, or `production`) | — (required) |
 | `DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
-| `GOVERNANCE_COMPONENT_ADDRESS` | Governance component used by the UI and poller | — (required) |
 | `NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = Stokenet) | — (required) |
 
 ## Scripts
