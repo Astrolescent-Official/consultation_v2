@@ -1,4 +1,5 @@
 import { ParseResult, Schema } from 'effect'
+import { CandidateHttpUrlStringSchema } from 'shared/governance/index'
 import { GovernanceParameterSetIdSchema } from 'shared/governance/schemas'
 
 export function effectSchemaValidator<T, I>(schema: Schema.Schema<T, I>) {
@@ -58,20 +59,93 @@ const VoteOptionSchema = Schema.Struct({
   )
 })
 
-export const TemperatureCheckFormSchema = Schema.Struct({
+const CandidateLinkSchema = Schema.Union(
+  Schema.Literal(''),
+  CandidateHttpUrlStringSchema
+)
+
+const CandidateFormSchema = Schema.Struct({
+  id: Schema.String,
+  reference: Schema.String.pipe(
+    Schema.minLength(1, { message: () => 'Candidate reference is required' })
+  ),
+  displayName: Schema.String.pipe(
+    Schema.minLength(1, { message: () => 'Candidate name is required' })
+  ),
+  description: Schema.String.pipe(
+    Schema.minLength(1, { message: () => 'Candidate profile is required' })
+  ),
+  links: Schema.Array(CandidateLinkSchema).pipe(Schema.maxItems(5))
+})
+
+// The form carries both follow-up drafts at once, but only the selected profile's
+// editor is rendered. The unselected draft keeps its blank seeded rows, so it must
+// stay unconstrained or it would block submission with errors the user cannot fix.
+const UnusedVoteOptionSchema = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String
+})
+
+const UnusedCandidateSchema = Schema.Struct({
+  id: Schema.String,
+  reference: Schema.String,
+  displayName: Schema.String,
+  description: Schema.String,
+  links: Schema.Array(Schema.String)
+})
+
+const sharedFields = {
   parameterSetId: GovernanceParameterSetIdSchema,
   title: TitleSchema,
   shortDescription: ShortDescriptionSchema,
   description: DescriptionSchema,
   radixTalkUrl: RadixTalkUrlSchema,
   links: Schema.Array(LinkSchema),
-  voteOptions: Schema.Array(VoteOptionSchema).pipe(
-    Schema.minItems(2, { message: () => 'At least 2 options required' })
-  ),
   maxSelections: Schema.Union(
     Schema.Literal(1),
     Schema.Number.pipe(Schema.greaterThan(1))
-  )
+  ),
+  seatCount: Schema.Number.pipe(Schema.int(), Schema.positive())
+}
+
+const StandardTemperatureCheckFormSchema = Schema.Struct({
+  ...sharedFields,
+  processType: Schema.Literal('Standard'),
+  voteOptions: Schema.Array(VoteOptionSchema).pipe(
+    Schema.minItems(2, { message: () => 'At least 2 options required' })
+  ),
+  roleId: Schema.String,
+  candidates: Schema.Array(UnusedCandidateSchema)
 })
+
+const MajorityJudgmentTemperatureCheckFormSchema = Schema.Struct({
+  ...sharedFields,
+  processType: Schema.Literal('MajorityJudgment'),
+  voteOptions: Schema.Array(UnusedVoteOptionSchema),
+  roleId: Schema.String.pipe(
+    Schema.filter((value) => value.trim().length > 0, {
+      message: () => 'Role identifier is required'
+    })
+  ),
+  candidates: Schema.Array(CandidateFormSchema).pipe(
+    Schema.minItems(2, { message: () => 'At least 2 candidates required' }),
+    Schema.maxItems(20, { message: () => 'At most 20 candidates allowed' }),
+    Schema.filter(
+      (candidates) =>
+        new Set(candidates.map(({ reference }) => reference)).size ===
+        candidates.length,
+      { message: () => 'Candidate references must be unique' }
+    )
+  )
+}).pipe(
+  Schema.filter(({ seatCount, candidates }) => seatCount < candidates.length, {
+    message: () => 'Seats must be fewer than the number of candidates'
+  })
+)
+
+export const TemperatureCheckFormSchema = Schema.Union(
+  StandardTemperatureCheckFormSchema,
+  MajorityJudgmentTemperatureCheckFormSchema
+)
 
 export type TemperatureCheckFormData = typeof TemperatureCheckFormSchema.Type

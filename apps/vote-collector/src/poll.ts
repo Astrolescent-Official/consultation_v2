@@ -1,16 +1,13 @@
 import { GatewayApiClient } from '@radix-effects/gateway'
 import { StateVersion } from '@radix-effects/shared'
-import { Array as A, Effect, Order, Option, pipe } from 'effect'
+import { Array as A, Clock, Effect, Option, Order, pipe } from 'effect'
 import { GovernanceConfig } from 'shared/governance/config'
-import { LedgerCursor } from './ledgerCursor'
 import { GovernanceEventProcessor } from './governanceEvents'
-import type { VoteCalculationPayload } from './vote-calculation/types'
+import { LedgerCursor } from './ledgerCursor'
+import { MajorityJudgmentCalculation } from './majority-judgment/calculation'
+import { MajorityJudgmentFinalizer } from './majority-judgment/finalizer'
+import { MajorityJudgmentProjection } from './majority-judgment/projection'
 import { VoteCalculation } from './vote-calculation/voteCalculation'
-
-type Payload = typeof VoteCalculationPayload.Type
-type EntityKey = `${Payload['type']}-${number}`
-
-const makeKey = (p: Payload): EntityKey => `${p.type}-${p.entityId}`
 
 const PAGE_SIZE = 100
 
@@ -18,13 +15,19 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
   dependencies: [
     LedgerCursor.Default,
     GovernanceEventProcessor.Default,
-    VoteCalculation.Default
+    VoteCalculation.Default,
+    MajorityJudgmentProjection.Default,
+    MajorityJudgmentCalculation.Default,
+    MajorityJudgmentFinalizer.Default
   ],
   effect: Effect.gen(function* () {
     const cursor = yield* LedgerCursor
     const gateway = yield* GatewayApiClient
     const { processBatch } = yield* GovernanceEventProcessor
     const calculateVotes = yield* VoteCalculation
+    const projectMajorityJudgment = yield* MajorityJudgmentProjection
+    const calculateMajorityJudgment = yield* MajorityJudgmentCalculation
+    const majorityJudgmentFinalizer = yield* MajorityJudgmentFinalizer
     const config = yield* GovernanceConfig
 
     const fetchPage = (stateVersion: StateVersion) =>
@@ -71,29 +74,55 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
           toSv: maxSv
         })
 
-        const payloads = yield* processBatch(sorted)
+        const actions = yield* processBatch(sorted)
 
-        if (A.isNonEmptyArray(payloads)) {
-          const deduped = A.dedupeWith(
-            A.reverse(payloads),
-            (a, b) => makeKey(a) === makeKey(b)
-          )
-
-          yield* Effect.log('Calculating votes', {
-            entities: deduped.length
+        if (A.isNonEmptyArray(actions)) {
+          yield* Effect.log('Processing governance actions', {
+            actions: actions.length
           })
 
           yield* Effect.forEach(
-            deduped,
-            (payload) =>
-              calculateVotes(payload).pipe(
-                Effect.tap(() => Effect.log('Vote calculation complete')),
-                Effect.annotateLogs({
-                  type: payload.type,
-                  entityId: payload.entityId
-                })
-              ),
-            { concurrency: 5 }
+            actions,
+            Effect.fn('PollService.processGovernanceAction')(
+              function* (action) {
+                switch (action._tag) {
+                  case 'StandardVotesChanged':
+                    yield* calculateVotes(action.payload)
+                    break
+                  case 'MajorityJudgmentCreated':
+                  case 'MajorityJudgmentRerunStarted':
+                  case 'MajorityJudgmentVisibilityChanged':
+                    yield* projectMajorityJudgment(
+                      action.electionId,
+                      action.observedAt,
+                      action.stateVersion
+                    )
+                    break
+                  case 'MajorityJudgmentVotesChanged':
+                    yield* projectMajorityJudgment(
+                      action.electionId,
+                      action.observedAt,
+                      action.stateVersion
+                    )
+                    yield* calculateMajorityJudgment(action)
+                    break
+                  case 'MajorityJudgmentTieResolutionRecorded':
+                    yield* projectMajorityJudgment(
+                      action.electionId,
+                      action.observedAt,
+                      action.stateVersion
+                    )
+                    yield* majorityJudgmentFinalizer.resolveTie({
+                      electionId: action.electionId,
+                      round: action.round,
+                      orderedCandidateIds: action.orderedCandidateIds,
+                      recordedAt: action.observedAt
+                    })
+                    break
+                }
+              }
+            ),
+            { concurrency: 1 }
           )
         }
 
@@ -118,6 +147,9 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
           body: (s) => processPage(s.stateVersion)
         }
       )
+
+      const now = new Date(yield* Clock.currentTimeMillis)
+      yield* majorityJudgmentFinalizer.finalize(now)
     })
   })
 }) {}

@@ -1,6 +1,14 @@
-import { FetchHttpClient, HttpClient, HttpClientRequest } from '@effect/platform'
+import {
+  FetchHttpClient,
+  HttpClient,
+  HttpClientRequest
+} from '@effect/platform'
 import { Context, Data, Effect, Layer, Schema } from 'effect'
 import type { EntityId, EntityType } from 'shared/governance/brandedTypes'
+import {
+  type MajorityJudgmentElectionId,
+  MajorityJudgmentElectionResponseSchema
+} from 'shared/governance/index'
 import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
 import { envVars } from '@/lib/envVars'
 
@@ -37,6 +45,12 @@ export class VoteClient extends Context.Tag('VoteClient')<
       ReadonlyArray<typeof AccountVoteSchema.Type>,
       VoteClientError
     >
+    readonly GetMajorityJudgmentElection: (params: {
+      electionId: MajorityJudgmentElectionId
+    }) => Effect.Effect<
+      typeof MajorityJudgmentElectionResponseSchema.Type,
+      VoteClientError
+    >
   }
 >() {}
 
@@ -58,9 +72,7 @@ const VoteClientLive = Layer.effect(
             Effect.flatMap((res) => res.json),
             Effect.flatMap(Schema.decodeUnknown(GetVoteResultsResponse)),
             Effect.scoped,
-            Effect.catchAll((e) =>
-              new VoteClientError({ message: String(e) })
-            )
+            Effect.catchAll((e) => new VoteClientError({ message: String(e) }))
           ),
       GetAccountVotes: ({ type, entityId }) =>
         client
@@ -75,8 +87,23 @@ const VoteClientLive = Layer.effect(
               Schema.decodeUnknown(Schema.Array(AccountVoteSchema))
             ),
             Effect.scoped,
-            Effect.catchAll((e) =>
-              new VoteClientError({ message: String(e) })
+            Effect.catchAll((e) => new VoteClientError({ message: String(e) }))
+          ),
+      GetMajorityJudgmentElection: ({ electionId }) =>
+        client
+          .execute(
+            HttpClientRequest.get(
+              `${baseUrl}/majority-judgment-election?electionId=${electionId}`
+            )
+          )
+          .pipe(
+            Effect.flatMap((response) => response.json),
+            Effect.flatMap(
+              Schema.decodeUnknown(MajorityJudgmentElectionResponseSchema)
+            ),
+            Effect.scoped,
+            Effect.catchAll(
+              (error) => new VoteClientError({ message: String(error) })
             )
           )
     }

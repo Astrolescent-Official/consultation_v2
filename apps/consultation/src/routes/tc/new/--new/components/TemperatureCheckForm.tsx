@@ -39,6 +39,7 @@ import {
   TemperatureCheckFormSchema,
   TitleSchema
 } from '../schema'
+import { CandidatesField } from './CandidatesField'
 import { LinksField } from './LinksField'
 import { MarkdownUploadField } from './MarkdownUploadField'
 import { MaxSelectionsField } from './MaxSelectionsField'
@@ -66,21 +67,36 @@ export function TemperatureCheckForm({
       onSubmit: effectSchemaValidator(TemperatureCheckFormSchema)
     },
     onSubmit: ({ value }) => {
-      // Combine radixTalkUrl with additional links
       const allLinks = [
         value.radixTalkUrl,
         ...value.links.filter((link) => link.trim() !== '')
       ]
-      // Transform vote options from {id, label} to just labels
-      const voteOptionLabels = value.voteOptions.map((option) => option.label)
       makeTemperatureCheck({
         parameterSetId: value.parameterSetId,
         title: value.title,
         shortDescription: value.shortDescription,
         description: value.description,
         links: allLinks,
-        voteOptions: voteOptionLabels,
-        maxSelections: value.maxSelections
+        followUp:
+          value.processType === 'Standard'
+            ? {
+                _tag: 'StandardProposal',
+                voteOptions: value.voteOptions.map(({ label }) => label),
+                maxSelections: value.maxSelections
+              }
+            : {
+                _tag: 'MajorityJudgmentElection',
+                roleId: value.roleId,
+                seatCount: value.seatCount,
+                candidates: value.candidates.map((candidate) => ({
+                  reference: candidate.reference,
+                  displayName: candidate.displayName,
+                  description: candidate.description,
+                  links: candidate.links.filter(
+                    (link) => link.trim().length > 0
+                  )
+                }))
+              }
       })
     }
   })
@@ -94,6 +110,10 @@ export function TemperatureCheckForm({
     (state) => state.values.maxSelections
   )
   const canSubmit = useStore(form.store, (state) => state.canSubmit)
+  const parameterSetId = useStore(
+    form.store,
+    (state) => state.values.parameterSetId
+  )
 
   // Auto-adjust maxSelections if it exceeds option count (useEffect prevents render-during-render)
   useEffect(() => {
@@ -124,6 +144,18 @@ export function TemperatureCheckForm({
     : []
   const parameterSetsLoading = Result.isInitial(parameterSetsResult)
   const parameterSetsFailed = Result.isFailure(parameterSetsResult)
+  const selectedParameterSet = activeParameterSets.find(
+    ({ id }) => id === parameterSetId
+  )
+  const isMajorityJudgment =
+    selectedParameterSet?.parameters._tag === 'MajorityJudgment'
+
+  useEffect(() => {
+    form.setFieldValue(
+      'processType',
+      isMajorityJudgment ? 'MajorityJudgment' : 'Standard'
+    )
+  }, [form, isMajorityJudgment])
 
   return (
     <form
@@ -177,11 +209,31 @@ export function TemperatureCheckForm({
                           key={parameterSet.id}
                           value={parameterSet.id}
                         >
-                          {parameterSet.label} (v{parameterSet.version})
+                          {parameterSet.label} (v{parameterSet.version} ·{' '}
+                          {parameterSet.parameters._tag === 'Standard'
+                            ? 'Standard'
+                            : 'Majority Judgment'}
+                          )
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {selectedParameterSet ? (
+                    <div className="rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+                      TC:{' '}
+                      {
+                        selectedParameterSet.parameters.temperatureCheck
+                          .votingDays
+                      }{' '}
+                      days · fixed quorum{' '}
+                      {selectedParameterSet.parameters.temperatureCheck.quorum}{' '}
+                      XRD · approval{' '}
+                      {
+                        selectedParameterSet.parameters.temperatureCheck
+                          .approvalThreshold
+                      }
+                    </div>
+                  ) : null}
                   {parameterSetsFailed ? (
                     <FieldError
                       errors={[
@@ -310,22 +362,70 @@ export function TemperatureCheckForm({
         </CardContent>
       </Card>
 
-      {/* Vote Options Section */}
+      {/* Formal continuation section */}
       <Card className="shadow-none">
         <CardContent className="pt-2">
-          {/* Selection Mode Toggle */}
-          <MaxSelectionsField form={form} optionCount={optionCount} />
-
           <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mt-6 mb-2">
-            Vote Options
+            {isMajorityJudgment
+              ? 'Majority Judgment Election'
+              : 'Governance Proposal'}
           </CardTitle>
           <CardDescription className="text-xs mb-6">
-            These options will be available if the TC is promoted to a
-            Governance Proposal. Provide at least 2 options.
+            {isMajorityJudgment
+              ? 'The role, seats, and complete candidate set are committed by this Temperature Check and cannot be replaced during formal elevation.'
+              : 'These options will be available if the TC is promoted to a Governance Proposal. Provide at least 2 options.'}
           </CardDescription>
 
-          {/* Vote Options */}
-          <VoteOptionsField form={form} maxOptions={maxVoteOptions} />
+          {isMajorityJudgment ? (
+            <div className="space-y-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <form.Field name="roleId">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={`${formId}-role-id`}>
+                        Role identifier
+                      </FieldLabel>
+                      <Input
+                        id={`${formId}-role-id`}
+                        value={field.state.value}
+                        onChange={(event) =>
+                          field.handleChange(event.target.value)
+                        }
+                        placeholder="rac-member"
+                      />
+                    </Field>
+                  )}
+                </form.Field>
+                <form.Field name="seatCount">
+                  {(field) => (
+                    <Field>
+                      <FieldLabel htmlFor={`${formId}-seat-count`}>
+                        Seats
+                      </FieldLabel>
+                      <Input
+                        id={`${formId}-seat-count`}
+                        type="number"
+                        min={1}
+                        value={field.state.value}
+                        onChange={(event) =>
+                          field.handleChange(Number(event.target.value))
+                        }
+                      />
+                    </Field>
+                  )}
+                </form.Field>
+              </div>
+              <CandidatesField form={form} />
+            </div>
+          ) : (
+            <>
+              <MaxSelectionsField form={form} optionCount={optionCount} />
+              <CardTitle className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Vote Options
+              </CardTitle>
+              <VoteOptionsField form={form} maxOptions={maxVoteOptions} />
+            </>
+          )}
         </CardContent>
       </Card>
 

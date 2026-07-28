@@ -1,0 +1,826 @@
+{
+	"id": "c2f8efe1-89b7-4f71-bac5-558abc590139",
+	"prevId": "2f3120e7-1064-4731-8f44-a157919b3b5d",
+	"version": "7",
+	"dialect": "postgresql",
+	"tables": {
+		"public.config": {
+			"name": "config",
+			"schema": "",
+			"columns": {
+				"key": {
+					"name": "key",
+					"type": "varchar(255)",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"value": {
+					"name": "value",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.mj_account_ballot": {
+			"name": "mj_account_ballot",
+			"schema": "",
+			"columns": {
+				"election_id": {
+					"name": "election_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"round": {
+					"name": "round",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"account_address": {
+					"name": "account_address",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"vote_id": {
+					"name": "vote_id",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"grades": {
+					"name": "grades",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"voting_power": {
+					"name": "voting_power",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"cast_at": {
+					"name": "cast_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"mj_account_ballot_round_fk": {
+					"name": "mj_account_ballot_round_fk",
+					"tableFrom": "mj_account_ballot",
+					"tableTo": "mj_round",
+					"columnsFrom": ["election_id", "round"],
+					"columnsTo": ["election_id", "round"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"mj_account_ballot_election_id_round_account_address_pk": {
+					"name": "mj_account_ballot_election_id_round_account_address_pk",
+					"columns": ["election_id", "round", "account_address"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"mj_account_ballot_round": {
+					"name": "mj_account_ballot_round",
+					"value": "\"mj_account_ballot\".\"round\" IN (1, 2)"
+				},
+				"mj_account_ballot_vote_id_non_negative": {
+					"name": "mj_account_ballot_vote_id_non_negative",
+					"value": "\"mj_account_ballot\".\"vote_id\" >= 0"
+				},
+				"mj_account_ballot_power_positive": {
+					"name": "mj_account_ballot_power_positive",
+					"value": "\"mj_account_ballot\".\"voting_power\"::numeric > 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.mj_candidate": {
+			"name": "mj_candidate",
+			"schema": "",
+			"columns": {
+				"election_id": {
+					"name": "election_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"candidate_id": {
+					"name": "candidate_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"reference": {
+					"name": "reference",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"display_name": {
+					"name": "display_name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"description": {
+					"name": "description",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"links": {
+					"name": "links",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"display_order": {
+					"name": "display_order",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"mj_candidate_election_id_mj_election_id_fk": {
+					"name": "mj_candidate_election_id_mj_election_id_fk",
+					"tableFrom": "mj_candidate",
+					"tableTo": "mj_election",
+					"columnsFrom": ["election_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"mj_candidate_election_id_candidate_id_pk": {
+					"name": "mj_candidate_election_id_candidate_id_pk",
+					"columns": ["election_id", "candidate_id"]
+				}
+			},
+			"uniqueConstraints": {
+				"mj_candidate_reference_unique": {
+					"name": "mj_candidate_reference_unique",
+					"nullsNotDistinct": false,
+					"columns": ["election_id", "reference"]
+				},
+				"mj_candidate_display_order_unique": {
+					"name": "mj_candidate_display_order_unique",
+					"nullsNotDistinct": false,
+					"columns": ["election_id", "display_order"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {
+				"mj_candidate_id_non_negative": {
+					"name": "mj_candidate_id_non_negative",
+					"value": "\"mj_candidate\".\"candidate_id\" >= 0"
+				},
+				"mj_candidate_display_order_non_negative": {
+					"name": "mj_candidate_display_order_non_negative",
+					"value": "\"mj_candidate\".\"display_order\" >= 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.mj_election": {
+			"name": "mj_election",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "integer",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"temperature_check_id": {
+					"name": "temperature_check_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"role_id": {
+					"name": "role_id",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"title": {
+					"name": "title",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"short_description": {
+					"name": "short_description",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"description": {
+					"name": "description",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"seat_count": {
+					"name": "seat_count",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"review_start": {
+					"name": "review_start",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"review_end": {
+					"name": "review_end",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"parameter_set_id": {
+					"name": "parameter_set_id",
+					"type": "varchar(64)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"parameter_set_version": {
+					"name": "parameter_set_version",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"reserve_list_days": {
+					"name": "reserve_list_days",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"status": {
+					"name": "status",
+					"type": "varchar(32)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"hidden": {
+					"name": "hidden",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true,
+					"default": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"mj_election_temperature_check_unique": {
+					"name": "mj_election_temperature_check_unique",
+					"nullsNotDistinct": false,
+					"columns": ["temperature_check_id"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {
+				"mj_election_seat_count_positive": {
+					"name": "mj_election_seat_count_positive",
+					"value": "\"mj_election\".\"seat_count\" > 0"
+				},
+				"mj_election_parameter_version_positive": {
+					"name": "mj_election_parameter_version_positive",
+					"value": "\"mj_election\".\"parameter_set_version\" > 0"
+				},
+				"mj_election_reserve_days_non_negative": {
+					"name": "mj_election_reserve_days_non_negative",
+					"value": "\"mj_election\".\"reserve_list_days\" >= 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.mj_grade_histogram": {
+			"name": "mj_grade_histogram",
+			"schema": "",
+			"columns": {
+				"election_id": {
+					"name": "election_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"round": {
+					"name": "round",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"candidate_id": {
+					"name": "candidate_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"grade": {
+					"name": "grade",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"voting_power": {
+					"name": "voting_power",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'0'"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"mj_grade_histogram_round_fk": {
+					"name": "mj_grade_histogram_round_fk",
+					"tableFrom": "mj_grade_histogram",
+					"tableTo": "mj_round",
+					"columnsFrom": ["election_id", "round"],
+					"columnsTo": ["election_id", "round"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"mj_grade_histogram_candidate_fk": {
+					"name": "mj_grade_histogram_candidate_fk",
+					"tableFrom": "mj_grade_histogram",
+					"tableTo": "mj_candidate",
+					"columnsFrom": ["election_id", "candidate_id"],
+					"columnsTo": ["election_id", "candidate_id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"mj_grade_histogram_election_id_round_candidate_id_grade_pk": {
+					"name": "mj_grade_histogram_election_id_round_candidate_id_grade_pk",
+					"columns": ["election_id", "round", "candidate_id", "grade"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"mj_grade_histogram_round": {
+					"name": "mj_grade_histogram_round",
+					"value": "\"mj_grade_histogram\".\"round\" IN (1, 2)"
+				},
+				"mj_grade_histogram_grade": {
+					"name": "mj_grade_histogram_grade",
+					"value": "\"mj_grade_histogram\".\"grade\" BETWEEN 0 AND 4"
+				},
+				"mj_grade_histogram_power_non_negative": {
+					"name": "mj_grade_histogram_power_non_negative",
+					"value": "\"mj_grade_histogram\".\"voting_power\"::numeric >= 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.mj_result": {
+			"name": "mj_result",
+			"schema": "",
+			"columns": {
+				"election_id": {
+					"name": "election_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"round": {
+					"name": "round",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"computed_at": {
+					"name": "computed_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"total_voting_power": {
+					"name": "total_voting_power",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"quorum_xrd": {
+					"name": "quorum_xrd",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"quorum_met": {
+					"name": "quorum_met",
+					"type": "boolean",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"minimum_median_grade": {
+					"name": "minimum_median_grade",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"candidate_results": {
+					"name": "candidate_results",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"seated_candidate_ids": {
+					"name": "seated_candidate_ids",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"reserve_candidate_ids": {
+					"name": "reserve_candidate_ids",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"reserve_expires_at": {
+					"name": "reserve_expires_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"referred_seats": {
+					"name": "referred_seats",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"tie_break_iterations": {
+					"name": "tie_break_iterations",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"unresolved_candidate_ids": {
+					"name": "unresolved_candidate_ids",
+					"type": "jsonb",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"status": {
+					"name": "status",
+					"type": "varchar(32)",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"mj_result_round_fk": {
+					"name": "mj_result_round_fk",
+					"tableFrom": "mj_result",
+					"tableTo": "mj_round",
+					"columnsFrom": ["election_id", "round"],
+					"columnsTo": ["election_id", "round"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"mj_result_election_id_round_pk": {
+					"name": "mj_result_election_id_round_pk",
+					"columns": ["election_id", "round"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"mj_result_round": {
+					"name": "mj_result_round",
+					"value": "\"mj_result\".\"round\" IN (1, 2)"
+				},
+				"mj_result_total_power_non_negative": {
+					"name": "mj_result_total_power_non_negative",
+					"value": "\"mj_result\".\"total_voting_power\"::numeric >= 0"
+				},
+				"mj_result_quorum_positive": {
+					"name": "mj_result_quorum_positive",
+					"value": "\"mj_result\".\"quorum_xrd\"::numeric > 0"
+				},
+				"mj_result_minimum_grade": {
+					"name": "mj_result_minimum_grade",
+					"value": "\"mj_result\".\"minimum_median_grade\" BETWEEN 0 AND 4"
+				},
+				"mj_result_referred_seats_non_negative": {
+					"name": "mj_result_referred_seats_non_negative",
+					"value": "\"mj_result\".\"referred_seats\" >= 0"
+				},
+				"mj_result_tie_iterations_non_negative": {
+					"name": "mj_result_tie_iterations_non_negative",
+					"value": "\"mj_result\".\"tie_break_iterations\" >= 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.mj_round": {
+			"name": "mj_round",
+			"schema": "",
+			"columns": {
+				"election_id": {
+					"name": "election_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"round": {
+					"name": "round",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"snapshot_at": {
+					"name": "snapshot_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"snapshot_state_version": {
+					"name": "snapshot_state_version",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"voting_start": {
+					"name": "voting_start",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"voting_end": {
+					"name": "voting_end",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"quorum_xrd": {
+					"name": "quorum_xrd",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"minimum_median_grade": {
+					"name": "minimum_median_grade",
+					"type": "smallint",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"votes_kvs_address": {
+					"name": "votes_kvs_address",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"voters_kvs_address": {
+					"name": "voters_kvs_address",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"last_vote_count": {
+					"name": "last_vote_count",
+					"type": "bigint",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "0"
+				},
+				"status": {
+					"name": "status",
+					"type": "varchar(32)",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"mj_round_election_id_mj_election_id_fk": {
+					"name": "mj_round_election_id_mj_election_id_fk",
+					"tableFrom": "mj_round",
+					"tableTo": "mj_election",
+					"columnsFrom": ["election_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"mj_round_election_id_round_pk": {
+					"name": "mj_round_election_id_round_pk",
+					"columns": ["election_id", "round"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"mj_round_number": {
+					"name": "mj_round_number",
+					"value": "\"mj_round\".\"round\" IN (1, 2)"
+				},
+				"mj_round_quorum_positive": {
+					"name": "mj_round_quorum_positive",
+					"value": "\"mj_round\".\"quorum_xrd\"::numeric > 0"
+				},
+				"mj_round_minimum_grade": {
+					"name": "mj_round_minimum_grade",
+					"value": "\"mj_round\".\"minimum_median_grade\" BETWEEN 0 AND 4"
+				},
+				"mj_round_last_vote_count_non_negative": {
+					"name": "mj_round_last_vote_count_non_negative",
+					"value": "\"mj_round\".\"last_vote_count\" >= 0"
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.vote_calculation_account_votes": {
+			"name": "vote_calculation_account_votes",
+			"schema": "",
+			"columns": {
+				"state_id": {
+					"name": "state_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"account_address": {
+					"name": "account_address",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"vote": {
+					"name": "vote",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"vote_power": {
+					"name": "vote_power",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'0'"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"vote_calculation_account_votes_state_id_vote_calculation_state_id_fk": {
+					"name": "vote_calculation_account_votes_state_id_vote_calculation_state_id_fk",
+					"tableFrom": "vote_calculation_account_votes",
+					"tableTo": "vote_calculation_state",
+					"columnsFrom": ["state_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"vote_calculation_account_votes_state_id_account_address_vote_pk": {
+					"name": "vote_calculation_account_votes_state_id_account_address_vote_pk",
+					"columns": ["state_id", "account_address", "vote"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.vote_calculation_results": {
+			"name": "vote_calculation_results",
+			"schema": "",
+			"columns": {
+				"state_id": {
+					"name": "state_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"vote": {
+					"name": "vote",
+					"type": "varchar(255)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"vote_power": {
+					"name": "vote_power",
+					"type": "numeric",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'0'"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"vote_calculation_results_state_id_vote_calculation_state_id_fk": {
+					"name": "vote_calculation_results_state_id_vote_calculation_state_id_fk",
+					"tableFrom": "vote_calculation_results",
+					"tableTo": "vote_calculation_state",
+					"columnsFrom": ["state_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"vote_calculation_results_state_id_vote_pk": {
+					"name": "vote_calculation_results_state_id_vote_pk",
+					"columns": ["state_id", "vote"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.vote_calculation_state": {
+			"name": "vote_calculation_state",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "serial",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"type": {
+					"name": "type",
+					"type": "varchar(50)",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"entity_id": {
+					"name": "entity_id",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"last_vote_count": {
+					"name": "last_vote_count",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"default": 0
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"vote_calculation_state_type_entity_id_unique": {
+					"name": "vote_calculation_state_type_entity_id_unique",
+					"nullsNotDistinct": false,
+					"columns": ["type", "entity_id"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		}
+	},
+	"enums": {},
+	"schemas": {},
+	"sequences": {},
+	"roles": {},
+	"policies": {},
+	"views": {},
+	"_meta": {
+		"columns": {},
+		"schemas": {},
+		"tables": {}
+	}
+}

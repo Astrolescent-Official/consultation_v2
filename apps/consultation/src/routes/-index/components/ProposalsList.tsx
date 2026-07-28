@@ -40,7 +40,11 @@ export function ProposalsList({ sortOrder }: ProposalsListProps) {
                 author={proposal.author}
                 start={proposal.start}
                 deadline={proposal.deadline}
-                quorum={Number(proposal.parameterSet.parameters.proposalQuorum)}
+                quorum={Number(
+                  proposal.parameterSet.parameters._tag === 'Standard'
+                    ? proposal.parameterSet.parameters.proposal.quorum
+                    : '0'
+                )}
                 linkPrefix="/proposal"
                 hidden={proposal.hidden}
               />

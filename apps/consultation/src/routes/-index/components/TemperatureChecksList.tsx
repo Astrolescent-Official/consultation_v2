@@ -46,7 +46,7 @@ export function TemperatureChecksList({
                 start={tc.start}
                 deadline={tc.deadline}
                 quorum={Number(
-                  tc.parameterSet.parameters.temperatureCheckQuorum
+                  tc.parameterSet.parameters.temperatureCheck.quorum
                 )}
                 linkPrefix="/tc"
                 hidden={tc.hidden}

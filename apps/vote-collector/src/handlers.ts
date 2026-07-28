@@ -2,21 +2,22 @@ import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyResultV2
 } from 'aws-lambda'
-import {
-  Effect,
-  Schema,
-  ParseResult
-} from 'effect'
+import { Effect, ParseResult, Schema } from 'effect'
 
 import { EntityType } from 'shared/governance/index'
+import { CronRuntime, HttpRuntime } from './layers'
+import { MajorityJudgmentRepo } from './majority-judgment/repo'
 import { PollService } from './poll'
 import { PollLock } from './pollLock'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
-import { CronRuntime, HttpRuntime } from './layers'
 
 const QueryParams = Schema.Struct({
   type: EntityType,
   entityId: Schema.NumberFromString
+})
+
+const MajorityJudgmentQueryParams = Schema.Struct({
+  electionId: Schema.NumberFromString.pipe(Schema.int(), Schema.nonNegative())
 })
 
 // Cron handler: poll for new governance transactions
@@ -107,6 +108,63 @@ export const getAccountVotes = async (
     }).pipe(
       Effect.catchAllDefect((defect) =>
         Effect.logError('Unhandled defect in getAccountVotes', defect).pipe(
+          Effect.as({
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Internal server error' })
+          })
+        )
+      )
+    )
+  )
+
+// GET /majority-judgment-election
+export const getMajorityJudgmentElection = async (
+  event: APIGatewayProxyEventV2
+): Promise<APIGatewayProxyResultV2> =>
+  HttpRuntime.runPromise(
+    Effect.gen(function* () {
+      const parsed = yield* Schema.decodeUnknown(MajorityJudgmentQueryParams)(
+        event.queryStringParameters ?? {},
+        { errors: 'all' }
+      )
+      const repo = yield* MajorityJudgmentRepo
+      const election = yield* repo.getElectionResponse(parsed.electionId)
+      return {
+        statusCode: 200,
+        body: JSON.stringify(election)
+      }
+    }).pipe(
+      Effect.catchTag('ParseError', (error) =>
+        Effect.succeed({
+          statusCode: 400,
+          body: JSON.stringify({
+            error: 'Invalid query parameters',
+            details: ParseResult.ArrayFormatter.formatErrorSync(error)
+          })
+        })
+      ),
+      Effect.catchTag('MajorityJudgmentProjectionNotFoundError', () =>
+        Effect.succeed({
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Election not found' })
+        })
+      ),
+      Effect.catchAll((error) =>
+        Effect.logError(
+          'Failed to load Majority Judgment election',
+          error
+        ).pipe(
+          Effect.as({
+            statusCode: 500,
+            body: JSON.stringify({ error: 'Internal server error' })
+          })
+        )
+      ),
+      Effect.catchAllDefect((defect) =>
+        Effect.logError(
+          'Unhandled defect in getMajorityJudgmentElection',
+          defect
+        ).pipe(
           Effect.as({
             statusCode: 500,
             body: JSON.stringify({ error: 'Internal server error' })

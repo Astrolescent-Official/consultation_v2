@@ -37,6 +37,7 @@ import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { formatQuorum } from '@/lib/utils'
 
 type ParameterSetForm = {
+  processType: 'Standard' | 'MajorityJudgment'
   label: string
   temperatureCheckDays: string
   temperatureCheckQuorum: string
@@ -44,42 +45,142 @@ type ParameterSetForm = {
   proposalLengthDays: string
   proposalQuorum: string
   proposalApprovalThreshold: string
+  reviewDays: string
+  votingDays: string
+  electionQuorum: string
+  minimumMedianGrade: string
+  rerunVotingDays: string
+  rerunQuorum: string
+  rerunMinimumMedianGrade: string
+  reserveListDays: string
 }
 
+const majorityJudgmentFields: ReadonlyArray<
+  readonly [keyof ParameterSetForm, string, 'number' | 'text']
+> = [
+  ['reviewDays', 'Candidate review (days)', 'number'],
+  ['votingDays', 'Round one voting (days)', 'number'],
+  ['electionQuorum', 'Round one quorum (XRD)', 'text'],
+  ['minimumMedianGrade', 'Round one minimum grade (0–4)', 'number'],
+  ['rerunVotingDays', 'Rerun voting (days)', 'number'],
+  ['rerunQuorum', 'Rerun quorum (XRD)', 'text'],
+  ['rerunMinimumMedianGrade', 'Rerun minimum grade (0–4)', 'number'],
+  ['reserveListDays', 'Reserve list (days)', 'number']
+]
+
 const emptyParameterSetForm: ParameterSetForm = {
+  processType: 'Standard',
   label: '',
   temperatureCheckDays: '7',
   temperatureCheckQuorum: '1000000',
   temperatureCheckApprovalThreshold: '0.5',
   proposalLengthDays: '7',
   proposalQuorum: '1000000',
-  proposalApprovalThreshold: '0.5'
+  proposalApprovalThreshold: '0.5',
+  reviewDays: '7',
+  votingDays: '7',
+  electionQuorum: '1000000',
+  minimumMedianGrade: '2',
+  rerunVotingDays: '5',
+  rerunQuorum: '500000',
+  rerunMinimumMedianGrade: '3',
+  reserveListDays: '90'
 }
 
 const toFormValues = (
   parameterSet: GovernanceParameterSet
-): ParameterSetForm => ({
-  label: parameterSet.label,
-  temperatureCheckDays: parameterSet.parameters.temperatureCheckDays.toString(),
-  temperatureCheckQuorum: parameterSet.parameters.temperatureCheckQuorum,
-  temperatureCheckApprovalThreshold:
-    parameterSet.parameters.temperatureCheckApprovalThreshold,
-  proposalLengthDays: parameterSet.parameters.proposalLengthDays.toString(),
-  proposalQuorum: parameterSet.parameters.proposalQuorum,
-  proposalApprovalThreshold: parameterSet.parameters.proposalApprovalThreshold
-})
+): ParameterSetForm => {
+  const common = {
+    ...emptyParameterSetForm,
+    processType: parameterSet.parameters._tag,
+    label: parameterSet.label,
+    temperatureCheckDays:
+      parameterSet.parameters.temperatureCheck.votingDays.toString(),
+    temperatureCheckQuorum: parameterSet.parameters.temperatureCheck.quorum,
+    temperatureCheckApprovalThreshold:
+      parameterSet.parameters.temperatureCheck.approvalThreshold
+  }
+  return parameterSet.parameters._tag === 'Standard'
+    ? {
+        ...common,
+        proposalLengthDays:
+          parameterSet.parameters.proposal.votingDays.toString(),
+        proposalQuorum: parameterSet.parameters.proposal.quorum,
+        proposalApprovalThreshold:
+          parameterSet.parameters.proposal.approvalThreshold
+      }
+    : {
+        ...common,
+        reviewDays: parameterSet.parameters.election.reviewDays.toString(),
+        votingDays: parameterSet.parameters.election.votingDays.toString(),
+        electionQuorum: parameterSet.parameters.election.quorum,
+        minimumMedianGrade:
+          parameterSet.parameters.election.minimumMedianGrade.toString(),
+        rerunVotingDays:
+          parameterSet.parameters.election.rerunVotingDays.toString(),
+        rerunQuorum: parameterSet.parameters.election.rerunQuorum,
+        rerunMinimumMedianGrade:
+          parameterSet.parameters.election.rerunMinimumMedianGrade.toString(),
+        reserveListDays:
+          parameterSet.parameters.election.reserveListDays.toString()
+      }
+}
 
 const toParameterSetInput = (
   form: ParameterSetForm
-): GovernanceParameterSetInput => ({
-  label: form.label,
-  temperatureCheckDays: Number(form.temperatureCheckDays),
-  temperatureCheckQuorum: form.temperatureCheckQuorum,
-  temperatureCheckApprovalThreshold: form.temperatureCheckApprovalThreshold,
-  proposalLengthDays: Number(form.proposalLengthDays),
-  proposalQuorum: form.proposalQuorum,
-  proposalApprovalThreshold: form.proposalApprovalThreshold
-})
+): GovernanceParameterSetInput =>
+  form.processType === 'Standard'
+    ? {
+        _tag: 'Standard',
+        label: form.label,
+        temperatureCheck: {
+          votingDays: Number(form.temperatureCheckDays),
+          quorum: form.temperatureCheckQuorum,
+          approvalThreshold: form.temperatureCheckApprovalThreshold
+        },
+        proposal: {
+          votingDays: Number(form.proposalLengthDays),
+          quorum: form.proposalQuorum,
+          approvalThreshold: form.proposalApprovalThreshold
+        }
+      }
+    : {
+        _tag: 'MajorityJudgment',
+        label: form.label,
+        temperatureCheck: {
+          votingDays: Number(form.temperatureCheckDays),
+          quorum: form.temperatureCheckQuorum,
+          approvalThreshold: form.temperatureCheckApprovalThreshold
+        },
+        election: {
+          reviewDays: Number(form.reviewDays),
+          votingDays: Number(form.votingDays),
+          quorum: form.electionQuorum,
+          minimumMedianGrade:
+            Number(form.minimumMedianGrade) === 0
+              ? 0
+              : Number(form.minimumMedianGrade) === 1
+                ? 1
+                : Number(form.minimumMedianGrade) === 2
+                  ? 2
+                  : Number(form.minimumMedianGrade) === 3
+                    ? 3
+                    : 4,
+          rerunVotingDays: Number(form.rerunVotingDays),
+          rerunQuorum: form.rerunQuorum,
+          rerunMinimumMedianGrade:
+            Number(form.rerunMinimumMedianGrade) === 0
+              ? 0
+              : Number(form.rerunMinimumMedianGrade) === 1
+                ? 1
+                : Number(form.rerunMinimumMedianGrade) === 2
+                  ? 2
+                  : Number(form.rerunMinimumMedianGrade) === 3
+                    ? 3
+                    : 4,
+          reserveListDays: Number(form.reserveListDays)
+        }
+      }
 
 export const Page = () => {
   const currentAccount = useCurrentAccount()
@@ -271,6 +372,7 @@ const ParameterSetEditor = ({
             idPrefix={`edit-${parameterSet.id}`}
             form={form}
             setForm={setForm}
+            lockProcessType
           />
         </CardContent>
         <CardFooter className="gap-3">
@@ -305,11 +407,13 @@ const ParameterSetEditor = ({
 const ParameterSetFields = ({
   idPrefix,
   form,
-  setForm
+  setForm,
+  lockProcessType = false
 }: {
   idPrefix: string
   form: ParameterSetForm
   setForm: Dispatch<SetStateAction<ParameterSetForm>>
+  lockProcessType?: boolean
 }) => {
   const handleChange = (field: keyof ParameterSetForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }))
@@ -328,6 +432,30 @@ const ParameterSetFields = ({
         />
       </div>
 
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-process-type`}>Process type</Label>
+        <select
+          id={`${idPrefix}-process-type`}
+          value={form.processType}
+          disabled={lockProcessType}
+          onChange={(event) => {
+            const value = event.target.value
+            if (value === 'Standard' || value === 'MajorityJudgment') {
+              handleChange('processType', value)
+            }
+          }}
+          className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+        >
+          <option value="Standard">Standard proposal</option>
+          <option value="MajorityJudgment">Majority Judgment election</option>
+        </select>
+        {lockProcessType ? (
+          <p className="text-xs text-muted-foreground">
+            A stable parameter-set identifier cannot change process type.
+          </p>
+        ) : null}
+      </div>
+
       <div className="grid md:grid-cols-2 gap-6">
         <ParameterGroup
           idPrefix={`${idPrefix}-tc`}
@@ -338,15 +466,45 @@ const ParameterSetFields = ({
           quorumField="temperatureCheckQuorum"
           thresholdField="temperatureCheckApprovalThreshold"
         />
-        <ParameterGroup
-          idPrefix={`${idPrefix}-gp`}
-          title="Governance Proposal"
-          form={form}
-          onChange={handleChange}
-          daysField="proposalLengthDays"
-          quorumField="proposalQuorum"
-          thresholdField="proposalApprovalThreshold"
-        />
+        {form.processType === 'Standard' ? (
+          <ParameterGroup
+            idPrefix={`${idPrefix}-gp`}
+            title="Governance Proposal"
+            form={form}
+            onChange={handleChange}
+            daysField="proposalLengthDays"
+            quorumField="proposalQuorum"
+            thresholdField="proposalApprovalThreshold"
+          />
+        ) : (
+          <fieldset className="space-y-4">
+            <legend className="font-medium">Majority Judgment Election</legend>
+            {majorityJudgmentFields.map(([field, label, type]) => (
+              <ParameterInput
+                key={field}
+                id={`${idPrefix}-${field}`}
+                label={label}
+                type={type}
+                min={
+                  field === 'minimumMedianGrade' ||
+                  field === 'rerunMinimumMedianGrade'
+                    ? '0'
+                    : type === 'number'
+                      ? '1'
+                      : undefined
+                }
+                max={
+                  field === 'minimumMedianGrade' ||
+                  field === 'rerunMinimumMedianGrade'
+                    ? '4'
+                    : undefined
+                }
+                value={form[field]}
+                onChange={(value) => handleChange(field, value)}
+              />
+            ))}
+          </fieldset>
+        )}
       </div>
     </div>
   )
@@ -435,14 +593,14 @@ const RetiredParameterSet = ({
     </CardHeader>
     <CardContent className="grid gap-4 text-sm md:grid-cols-2">
       <p className="text-muted-foreground">
-        TC: {parameterSet.parameters.temperatureCheckDays} days ·{' '}
-        {formatQuorum(parameterSet.parameters.temperatureCheckQuorum)} quorum ·{' '}
-        {parameterSet.parameters.temperatureCheckApprovalThreshold} approval
+        TC: {parameterSet.parameters.temperatureCheck.votingDays} days ·{' '}
+        {formatQuorum(parameterSet.parameters.temperatureCheck.quorum)} quorum ·{' '}
+        {parameterSet.parameters.temperatureCheck.approvalThreshold} approval
       </p>
       <p className="text-muted-foreground">
-        GP: {parameterSet.parameters.proposalLengthDays} days ·{' '}
-        {formatQuorum(parameterSet.parameters.proposalQuorum)} quorum ·{' '}
-        {parameterSet.parameters.proposalApprovalThreshold} approval
+        {parameterSet.parameters._tag === 'Standard'
+          ? `GP: ${parameterSet.parameters.proposal.votingDays} days · ${formatQuorum(parameterSet.parameters.proposal.quorum)} quorum · ${parameterSet.parameters.proposal.approvalThreshold} approval`
+          : `MJ: ${parameterSet.parameters.election.reviewDays} review days · ${parameterSet.parameters.election.votingDays} voting days · ${formatQuorum(parameterSet.parameters.election.quorum)} quorum`}
       </p>
     </CardContent>
   </Card>

@@ -127,11 +127,9 @@ const TestLayer = Layer.mergeAll(
         return Layer.merge(
           Layer.succeed(TestConfig, {
             account,
-            componentAddress: Option.some(
-              ComponentAddress.make(
-                'component_tdx_2_1cqz0v72y7a5kt76lqalakadsc7ksrsjqactdarqylr5dkq3x3mf2hp'
-              )
-            ),
+            componentAddress: Option.fromNullable(
+              process.env.INTEGRATION_TEST_GOVERNANCE_COMPONENT_ADDRESS
+            ).pipe(Option.map(ComponentAddress.make)),
             PrivatekeySignerLayer
           }),
           PrivatekeySignerLayer
@@ -297,9 +295,12 @@ const createTemperatureCheck = Effect.fn(function* () {
     title: 'Test Temperature Check',
     shortDescription: 'Test Temperature Check',
     description: 'Test Temperature Check',
-    voteOptions: ['Test Vote Option 1', 'Test Vote Option 2'],
     links: ['https://example.com'],
-    maxSelections: 1
+    followUp: {
+      _tag: 'StandardProposal',
+      voteOptions: ['Test Vote Option 1', 'Test Vote Option 2'],
+      maxSelections: 1
+    }
   })
 
   const temperatureCheckId = yield* transactionHelper
@@ -443,7 +444,9 @@ const resetDatabase = Effect.fn(function* () {
   yield* db.delete(voteCalculationAccountVotesTable)
 })
 
-live(
+live.runIf(
+  process.env.INTEGRATION_TEST_GOVERNANCE_COMPONENT_ADDRESS !== undefined
+)(
   'voteCalculation',
   () =>
     Effect.gen(function* () {

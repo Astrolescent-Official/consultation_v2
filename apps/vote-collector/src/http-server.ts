@@ -1,26 +1,31 @@
 import { serve } from '@hono/node-server'
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import {
-  Effect,
-  ManagedRuntime,
-  ParseResult,
-  Schedule,
-  Schema,
   Config,
   Duration,
-  Option
+  Effect,
+  ManagedRuntime,
+  Option,
+  ParseResult,
+  Schedule,
+  Schema
 } from 'effect'
+import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { EntityType } from 'shared/governance/index'
-import { HttpServerLayer } from './layers'
-import { PollLock } from './pollLock'
-import { PollService } from './poll'
-import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 import { DatabaseMigrations } from './db/migrate'
+import { HttpServerLayer } from './layers'
+import { MajorityJudgmentRepo } from './majority-judgment/repo'
+import { PollService } from './poll'
+import { PollLock } from './pollLock'
+import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 
 const QueryParams = Schema.Struct({
   type: EntityType,
   entityId: Schema.NumberFromString
+})
+
+const MajorityJudgmentQueryParams = Schema.Struct({
+  electionId: Schema.NumberFromString.pipe(Schema.int(), Schema.nonNegative())
 })
 
 const runtime = ManagedRuntime.make(HttpServerLayer)
@@ -109,6 +114,46 @@ app.get('/account-votes', async (c) =>
         Effect.logError('Unhandled defect in getAccountVotes', defect).pipe(
           Effect.as(c.json({ error: 'Internal server error' }, 500))
         )
+      )
+    )
+  )
+)
+
+app.get('/majority-judgment-election', async (c) =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      const parsed = yield* Schema.decodeUnknown(MajorityJudgmentQueryParams)(
+        c.req.query(),
+        { errors: 'all' }
+      )
+      const repo = yield* MajorityJudgmentRepo
+      return c.json(yield* repo.getElectionResponse(parsed.electionId))
+    }).pipe(
+      Effect.catchTag('ParseError', (error) =>
+        Effect.succeed(
+          c.json(
+            {
+              error: 'Invalid query parameters',
+              details: ParseResult.ArrayFormatter.formatErrorSync(error)
+            },
+            400
+          )
+        )
+      ),
+      Effect.catchTag('MajorityJudgmentProjectionNotFoundError', () =>
+        Effect.succeed(c.json({ error: 'Election not found' }, 404))
+      ),
+      Effect.catchAll((error) =>
+        Effect.logError(
+          'Failed to load Majority Judgment election',
+          error
+        ).pipe(Effect.as(c.json({ error: 'Internal server error' }, 500)))
+      ),
+      Effect.catchAllDefect((defect) =>
+        Effect.logError(
+          'Unhandled defect in getMajorityJudgmentElection',
+          defect
+        ).pipe(Effect.as(c.json({ error: 'Internal server error' }, 500)))
       )
     )
   )

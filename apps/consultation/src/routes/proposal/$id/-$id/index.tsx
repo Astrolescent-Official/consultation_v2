@@ -77,7 +77,11 @@ function PageContentInner({
         <QuorumBadge
           entityType="proposal"
           entityId={id}
-          quorum={Number(proposal.parameterSet.parameters.proposalQuorum)}
+          quorum={Number(
+            proposal.parameterSet.parameters._tag === 'Standard'
+              ? proposal.parameterSet.parameters.proposal.quorum
+              : '0'
+          )}
         />
       }
       originBadge={

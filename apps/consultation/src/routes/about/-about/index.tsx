@@ -109,16 +109,33 @@ const ParameterSetDetails = ({
       <div className="grid md:grid-cols-2 gap-8">
         <ParameterRules
           title="Temperature Check"
-          days={parameters.temperatureCheckDays}
-          quorum={parameters.temperatureCheckQuorum}
-          threshold={parameters.temperatureCheckApprovalThreshold}
+          days={parameters.temperatureCheck.votingDays}
+          quorum={parameters.temperatureCheck.quorum}
+          threshold={parameters.temperatureCheck.approvalThreshold}
         />
-        <ParameterRules
-          title="Governance Proposal"
-          days={parameters.proposalLengthDays}
-          quorum={parameters.proposalQuorum}
-          threshold={parameters.proposalApprovalThreshold}
-        />
+        {parameters._tag === 'Standard' ? (
+          <ParameterRules
+            title="Governance Proposal"
+            days={parameters.proposal.votingDays}
+            quorum={parameters.proposal.quorum}
+            threshold={parameters.proposal.approvalThreshold}
+          />
+        ) : (
+          <div className="space-y-3">
+            <h4 className="font-semibold text-neutral-900 dark:text-white">
+              Majority Judgment Election
+            </h4>
+            <ul className="list-inside list-disc space-y-2 pl-2 text-sm text-neutral-500">
+              <li>Candidate review: {parameters.election.reviewDays} days</li>
+              <li>Voting: {parameters.election.votingDays} days</li>
+              <li>Fixed quorum: {formatQuorum(parameters.election.quorum)}</li>
+              <li>
+                Rerun fixed quorum:{' '}
+                {formatQuorum(parameters.election.rerunQuorum)}
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   )

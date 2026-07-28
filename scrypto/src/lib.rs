@@ -4,217 +4,353 @@ pub mod governance;
 pub mod vote_delegation;
 
 // =============================================================================
-// Shared Types
+// Shared vote types
 // =============================================================================
 
-/// Vote option for temperature checks (for/against)
 #[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TemperatureCheckVote {
     For,
     Against,
 }
 
-/// A recorded vote on a temperature check
 #[derive(ScryptoSbor, Clone, Debug)]
 pub struct TemperatureCheckVoteRecord {
     pub voter: Global<Account>,
     pub vote: TemperatureCheckVote,
-    /// If this vote replaces a previous vote, this is the ID of the replaced vote
     pub replacing_vote_id: Option<u64>,
 }
 
-/// Voter entry for temperature checks - combines vote_id with vote data
-/// Stored in the voters KVS to minimize gateway calls when looking up a voter
 #[derive(ScryptoSbor, Clone, Debug)]
 pub struct TemperatureCheckVoterEntry {
     pub vote_id: u64,
     pub vote: TemperatureCheckVote,
 }
 
-/// A recorded vote on a proposal
 #[derive(ScryptoSbor, Clone, Debug)]
 pub struct ProposalVoteRecord {
     pub voter: Global<Account>,
     pub options: Vec<ProposalVoteOptionId>,
-    /// If this vote replaces a previous vote, this is the ID of the replaced vote
     pub replacing_vote_id: Option<u64>,
 }
 
-/// Voter entry for proposals - combines vote_id with vote data
-/// Stored in the voters KVS to minimize gateway calls when looking up a voter
 #[derive(ScryptoSbor, Clone, Debug)]
 pub struct ProposalVoterEntry {
     pub vote_id: u64,
     pub options: Vec<ProposalVoteOptionId>,
 }
 
-/// Unique identifier for a proposal vote option
-#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ProposalVoteOptionId(pub u32);
 
-/// Input for creating a vote option (user provides label only, ID is auto-generated)
 #[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
 pub struct ProposalVoteOptionInput {
     pub label: String,
 }
 
-/// A vote option for proposals (e.g., "For", "Against")
-/// The ID is auto-generated based on the order of options (0, 1, 2, ...)
-#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq, Eq)]
 pub struct ProposalVoteOption {
     pub id: ProposalVoteOptionId,
     pub label: String,
 }
 
-/// Maximum number of links per temperature check / proposal
 pub const MAX_LINKS: usize = 10;
-/// Maximum number of vote options per proposal
+pub const MAX_CANDIDATE_LINKS: usize = 5;
 pub const MAX_VOTE_OPTIONS: usize = 10;
-/// Maximum number of selections in a multiple-choice vote
 pub const MAX_SELECTIONS: u32 = 5;
+pub const MIN_MAJORITY_JUDGMENT_CANDIDATES: usize = 2;
+pub const MAX_MAJORITY_JUDGMENT_CANDIDATES: usize = 20;
 
 // =============================================================================
-// Delegation Constants
+// Governance parameter registry
 // =============================================================================
 
-/// Maximum number of delegations a single account can have
-pub const MAX_DELEGATIONS: usize = 50;
-/// Minimum delegation fraction (1% = 0.01)
-pub const MIN_DELEGATION_FRACTION: &str = "0.01";
-
-// =============================================================================
-// Governance Types
-// =============================================================================
-
-/// Input data for creating a temperature check
-#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
-pub struct TemperatureCheckDraft {
-    pub title: String,
-    /// Short summary of the proposal
-    pub short_description: String,
-    /// Full description in markdown format
-    pub description: String,
-    /// Vote options with labels and colors (IDs are auto-generated)
-    pub vote_options: Vec<ProposalVoteOptionInput>,
-    /// External links related to the proposal
-    pub links: Vec<Url>,
-    /// Maximum number of options a voter can select in the proposal.
-    /// If None, only one option can be selected (single choice).
-    /// If Some(n), up to n options can be selected (multiple choice).
-    pub max_selections: Option<u32>,
-}
-
-/// Governance parameters that control voting behavior
 #[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
-pub struct GovernanceParameters {
-    pub temperature_check_days: u16,
-    pub temperature_check_quorum: Decimal,
-    pub temperature_check_approval_threshold: Decimal,
-    pub proposal_length_days: u16,
-    pub proposal_quorum: Decimal,
-    pub proposal_approval_threshold: Decimal,
+pub struct TemperatureCheckParameters {
+    pub voting_days: u32,
+    pub quorum: Decimal,
+    pub approval_threshold: Decimal,
 }
 
-/// Owner-supplied data for a governance parameter set.
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
+pub struct StandardProposalParameters {
+    pub voting_days: u32,
+    pub quorum: Decimal,
+    pub approval_threshold: Decimal,
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Grade {
+    Poor,
+    Acceptable,
+    Good,
+    VeryGood,
+    Excellent,
+}
+
+impl Grade {
+    pub fn score(self) -> u8 {
+        match self {
+            Self::Poor => 0,
+            Self::Acceptable => 1,
+            Self::Good => 2,
+            Self::VeryGood => 3,
+            Self::Excellent => 4,
+        }
+    }
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
+pub struct MajorityJudgmentParameters {
+    pub review_days: u32,
+    pub voting_days: u32,
+    pub quorum: Decimal,
+    pub minimum_median_grade: Grade,
+    pub rerun_voting_days: u32,
+    pub rerun_quorum: Decimal,
+    pub rerun_minimum_median_grade: Grade,
+    pub reserve_list_days: u32,
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
+pub enum GovernanceProcessParameters {
+    Standard {
+        temperature_check: TemperatureCheckParameters,
+        proposal: StandardProposalParameters,
+    },
+    MajorityJudgment {
+        temperature_check: TemperatureCheckParameters,
+        election: MajorityJudgmentParameters,
+    },
+}
+
+impl GovernanceProcessParameters {
+    pub fn temperature_check(&self) -> &TemperatureCheckParameters {
+        match self {
+            Self::Standard {
+                temperature_check, ..
+            }
+            | Self::MajorityJudgment {
+                temperature_check, ..
+            } => temperature_check,
+        }
+    }
+
+    pub fn same_variant(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Standard { .. }, Self::Standard { .. })
+                | (Self::MajorityJudgment { .. }, Self::MajorityJudgment { .. })
+        )
+    }
+}
+
 #[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
 pub struct GovernanceParameterSetInput {
     pub label: String,
-    pub parameters: GovernanceParameters,
+    pub parameters: GovernanceProcessParameters,
 }
 
-/// A live or retired record in the governance parameter registry.
 #[derive(ScryptoSbor, Clone, Debug, PartialEq)]
 pub struct GovernanceParameterSet {
     pub label: String,
     pub version: u32,
     pub retired: bool,
-    pub parameters: GovernanceParameters,
+    pub parameters: GovernanceProcessParameters,
 }
 
-/// Immutable parameter-set data captured by a consultation at creation time.
 #[derive(ScryptoSbor, Clone, Debug, PartialEq)]
 pub struct GovernanceParameterSetSnapshot {
     pub id: String,
     pub label: String,
     pub version: u32,
-    pub parameters: GovernanceParameters,
+    pub parameters: GovernanceProcessParameters,
 }
 
 pub const DEFAULT_PARAMETER_SET_ID: &str = "default";
 pub const MAX_PARAMETER_SET_ID_BYTES: usize = 64;
 pub const MAX_PARAMETER_SET_LABEL_BYTES: usize = 128;
 
-/// Struct used to hold submitted temperature check data
+// =============================================================================
+// Consultation drafts and stored follow-ups
+// =============================================================================
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+pub struct MajorityJudgmentCandidateInput {
+    pub reference: String,
+    pub display_name: String,
+    pub description: String,
+    pub links: Vec<Url>,
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MajorityJudgmentCandidateId(pub u32);
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
+pub struct MajorityJudgmentCandidate {
+    pub id: MajorityJudgmentCandidateId,
+    pub reference: String,
+    pub display_name: String,
+    pub description: String,
+    pub links: Vec<Url>,
+    pub display_order: u32,
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+pub enum TemperatureCheckFollowUpDraft {
+    StandardProposal {
+        vote_options: Vec<ProposalVoteOptionInput>,
+        max_selections: Option<u32>,
+    },
+    MajorityJudgmentElection {
+        role_id: String,
+        seat_count: u32,
+        candidates: Vec<MajorityJudgmentCandidateInput>,
+    },
+}
+
+#[derive(ScryptoSbor, Clone, Debug, PartialEq)]
+pub enum TemperatureCheckFollowUp {
+    StandardProposal {
+        vote_options: Vec<ProposalVoteOption>,
+        max_selections: Option<u32>,
+    },
+    MajorityJudgmentElection {
+        role_id: String,
+        seat_count: u32,
+        candidates: Vec<MajorityJudgmentCandidate>,
+    },
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Debug)]
+pub struct TemperatureCheckDraft {
+    pub title: String,
+    pub short_description: String,
+    pub description: String,
+    pub links: Vec<Url>,
+    pub follow_up: TemperatureCheckFollowUpDraft,
+}
+
+#[derive(ScryptoSbor, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConsultationContinuation {
+    Proposal(u64),
+    MajorityJudgmentElection(u64),
+}
+
 #[derive(ScryptoSbor)]
 pub struct TemperatureCheck {
     pub title: String,
-    /// Short summary of the proposal
     pub short_description: String,
-    /// Full description in markdown format
     pub description: String,
-    pub vote_options: Vec<ProposalVoteOption>,
-    /// External links related to the proposal
     pub links: Vec<Url>,
+    pub follow_up: TemperatureCheckFollowUp,
     pub parameter_set: GovernanceParameterSetSnapshot,
-    /// Maximum number of options a voter can select in the proposal.
-    /// If None, only one option can be selected (single choice).
-    /// If Some(n), up to n options can be selected (multiple choice).
-    pub max_selections: Option<u32>,
-    /// Maps voter accounts to their vote entry (for deduplication and single-call lookup)
     pub voters: KeyValueStore<Global<Account>, TemperatureCheckVoterEntry>,
-    /// Maps sequential vote IDs to vote records (for enumeration)
     pub votes: KeyValueStore<u64, TemperatureCheckVoteRecord>,
-    /// Counter for votes, incremented with each new vote
     pub vote_count: u64,
-    /// Counter for revotes, so unique voters = vote_count - revote_count
     pub revote_count: u64,
     pub start: Instant,
     pub deadline: Instant,
-    pub elevated_proposal_id: Option<u64>,
-    /// The account that created this temperature check
+    pub continuation: Option<ConsultationContinuation>,
     pub author: Global<Account>,
-    /// Whether this temperature check is hidden from the front-end
     pub hidden: bool,
 }
 
-/// Struct for a proposal (GP - Governance Proposal)
 #[derive(ScryptoSbor)]
 pub struct Proposal {
     pub title: String,
-    /// Short summary of the proposal
     pub short_description: String,
-    /// Full description in markdown format
     pub description: String,
     pub vote_options: Vec<ProposalVoteOption>,
-    /// External links related to the proposal
     pub links: Vec<Url>,
     pub parameter_set: GovernanceParameterSetSnapshot,
-    /// Maximum number of options a voter can select.
-    /// If None, only one option can be selected (single choice).
-    /// If Some(n), up to n options can be selected (multiple choice).
     pub max_selections: Option<u32>,
-    /// Maps voter accounts to their vote entry (for deduplication and single-call lookup)
     pub voters: KeyValueStore<Global<Account>, ProposalVoterEntry>,
-    /// Maps sequential vote IDs to vote records (for enumeration)
     pub votes: KeyValueStore<u64, ProposalVoteRecord>,
-    /// Counter for votes, incremented with each new vote
     pub vote_count: u64,
-    /// Counter for revotes, so unique voters = vote_count - revote_count
     pub revote_count: u64,
     pub start: Instant,
     pub deadline: Instant,
     pub temperature_check_id: u64,
-    /// The account that created the original temperature check
     pub author: Global<Account>,
-    /// Whether this proposal is hidden from the front-end
     pub hidden: bool,
 }
 
 // =============================================================================
-// Delegation Types
+// Majority Judgment elections
 // =============================================================================
 
-/// Represents a delegation from one account to another
+#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MajorityJudgmentRoundId {
+    RoundOne,
+    Rerun,
+}
+
+#[derive(ScryptoSbor, ManifestSbor, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CandidateGrade {
+    pub candidate_id: MajorityJudgmentCandidateId,
+    pub grade: Grade,
+}
+
+#[derive(ScryptoSbor, Clone, Debug)]
+pub struct MajorityJudgmentVoteRecord {
+    pub voter: Global<Account>,
+    pub grades: Vec<CandidateGrade>,
+    pub replacing_vote_id: Option<u64>,
+}
+
+#[derive(ScryptoSbor, Clone, Debug)]
+pub struct MajorityJudgmentVoterEntry {
+    pub vote_id: u64,
+    pub grades: Vec<CandidateGrade>,
+}
+
+#[derive(ScryptoSbor)]
+pub struct MajorityJudgmentRound {
+    pub snapshot: Instant,
+    pub start: Instant,
+    pub deadline: Instant,
+    pub quorum: Decimal,
+    pub minimum_median_grade: Grade,
+    pub voters: KeyValueStore<Global<Account>, MajorityJudgmentVoterEntry>,
+    pub votes: KeyValueStore<u64, MajorityJudgmentVoteRecord>,
+    pub vote_count: u64,
+    pub revote_count: u64,
+}
+
+#[derive(ScryptoSbor, Clone, Debug, PartialEq, Eq)]
+pub struct MajorityJudgmentTieResolution {
+    pub round: MajorityJudgmentRoundId,
+    pub ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
+    pub recorded_at: Instant,
+}
+
+#[derive(ScryptoSbor)]
+pub struct MajorityJudgmentElection {
+    pub temperature_check_id: u64,
+    pub title: String,
+    pub short_description: String,
+    pub description: String,
+    pub links: Vec<Url>,
+    pub author: Global<Account>,
+    pub role_id: String,
+    pub seat_count: u32,
+    pub candidates: Vec<MajorityJudgmentCandidate>,
+    pub parameter_set: GovernanceParameterSetSnapshot,
+    pub review_start: Instant,
+    pub review_end: Instant,
+    pub round_one: MajorityJudgmentRound,
+    pub rerun: Option<MajorityJudgmentRound>,
+    pub tie_resolution: Option<MajorityJudgmentTieResolution>,
+    pub hidden: bool,
+}
+
+// =============================================================================
+// Delegation
+// =============================================================================
+
+pub const MAX_DELEGATIONS: usize = 50;
+pub const MIN_DELEGATION_FRACTION: &str = "0.01";
+
 #[derive(ScryptoSbor, Clone, Debug)]
 pub struct Delegation {
     pub delegatee: Global<Account>,
@@ -226,7 +362,6 @@ pub struct Delegation {
 // Events
 // =============================================================================
 
-/// Emitted when a temperature check is created
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct TemperatureCheckCreatedEvent {
     pub temperature_check_id: u64,
@@ -237,18 +372,15 @@ pub struct TemperatureCheckCreatedEvent {
     pub parameter_set_version: u32,
 }
 
-/// Emitted when a vote is cast on a temperature check
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct TemperatureCheckVotedEvent {
     pub temperature_check_id: u64,
     pub vote_id: u64,
     pub account: Global<Account>,
     pub vote: TemperatureCheckVote,
-    /// If this vote replaces a previous vote, this is the ID of the replaced vote
     pub replacing_vote_id: Option<u64>,
 }
 
-/// Emitted when a temperature check is elevated to a proposal
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct ProposalCreatedEvent {
     pub proposal_id: u64,
@@ -260,25 +392,21 @@ pub struct ProposalCreatedEvent {
     pub parameter_set_version: u32,
 }
 
-/// Emitted when a vote is cast on a proposal
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct ProposalVotedEvent {
     pub proposal_id: u64,
     pub vote_id: u64,
     pub account: Global<Account>,
     pub options: Vec<ProposalVoteOptionId>,
-    /// If this vote replaces a previous vote, this is the ID of the replaced vote
     pub replacing_vote_id: Option<u64>,
 }
 
-/// Emitted when a governance parameter set is added.
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct GovernanceParameterSetAddedEvent {
     pub parameter_set_id: String,
     pub parameter_set: GovernanceParameterSet,
 }
 
-/// Emitted when a governance parameter set is updated.
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct GovernanceParameterSetUpdatedEvent {
     pub parameter_set_id: String,
@@ -286,14 +414,61 @@ pub struct GovernanceParameterSetUpdatedEvent {
     pub parameter_set: GovernanceParameterSet,
 }
 
-/// Emitted when a governance parameter set is permanently retired.
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct GovernanceParameterSetRetiredEvent {
     pub parameter_set_id: String,
     pub version: u32,
 }
 
-/// Emitted when a delegation is created or updated
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct MajorityJudgmentElectionCreatedEvent {
+    pub election_id: u64,
+    pub temperature_check_id: u64,
+    pub role_id: String,
+    pub seat_count: u32,
+    pub review_start: Instant,
+    pub review_end: Instant,
+    pub snapshot: Instant,
+    pub voting_start: Instant,
+    pub voting_deadline: Instant,
+    pub parameter_set_id: String,
+    pub parameter_set_version: u32,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct MajorityJudgmentElectionVotedEvent {
+    pub election_id: u64,
+    pub round: MajorityJudgmentRoundId,
+    pub vote_id: u64,
+    pub account: Global<Account>,
+    pub grades: Vec<CandidateGrade>,
+    pub replacing_vote_id: Option<u64>,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct MajorityJudgmentRerunStartedEvent {
+    pub election_id: u64,
+    pub snapshot: Instant,
+    pub start: Instant,
+    pub deadline: Instant,
+    pub quorum: Decimal,
+    pub minimum_median_grade: Grade,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct MajorityJudgmentTieResolutionRecordedEvent {
+    pub election_id: u64,
+    pub round: MajorityJudgmentRoundId,
+    pub ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
+    pub recorded_at: Instant,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct MajorityJudgmentElectionHiddenToggledEvent {
+    pub election_id: u64,
+    pub hidden: bool,
+}
+
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct DelegationCreatedEvent {
     pub delegator: Global<Account>,
@@ -302,7 +477,6 @@ pub struct DelegationCreatedEvent {
     pub valid_until: Instant,
 }
 
-/// Emitted when a delegation is removed
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
 pub struct DelegationRemovedEvent {
     pub delegator: Global<Account>,

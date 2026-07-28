@@ -17,6 +17,8 @@ import {
   GovernanceParameterSetKeyValueStoreKey,
   GovernanceParameterSetKeyValueStoreValue,
   KeyValueStoreAddress,
+  MajorityJudgmentElectionKeyValueStoreKey,
+  MajorityJudgmentElectionKeyValueStoreValue,
   ProposalKeyValueStoreValue,
   TemperatureCheckKeyValueStoreKey,
   TemperatureCheckKeyValueStoreValue,
@@ -28,14 +30,32 @@ import type { ProposalId, TemperatureCheckId } from './brandedTypes'
 import { GovernanceConfig } from './config'
 import {
   encodeManifestString,
+  renderCandidateGrades,
+  renderCandidateOrder,
   renderGovernanceParameterSetInput,
+  renderInstant,
   renderParameterSetIdOption,
   renderTemperatureCheckDraft
 } from './governanceManifests'
+import {
+  type MakeMajorityJudgmentElectionInput,
+  MakeMajorityJudgmentElectionInputSchema,
+  type MakeMajorityJudgmentTieResolutionInput,
+  MakeMajorityJudgmentTieResolutionInputSchema,
+  type MakeMajorityJudgmentVoteInput,
+  MakeMajorityJudgmentVoteInputSchema,
+  type StartMajorityJudgmentRerunInput,
+  StartMajorityJudgmentRerunInputSchema,
+  type ToggleMajorityJudgmentElectionHiddenInput,
+  ToggleMajorityJudgmentElectionHiddenInputSchema
+} from './majorityJudgment'
 import { makeVoteIndexKeys } from './makeVoteIndexKeys'
 import {
   DEFAULT_PARAMETER_SET_ID,
   GovernanceParameterSetSchema,
+  MajorityJudgmentElectionSchema,
+  MajorityJudgmentVoteRecord,
+  MajorityJudgmentVoteValueSchema,
   type MakeAddGovernanceParameterSetInput,
   MakeAddGovernanceParameterSetInputSchema,
   type MakeProposalVoteInput,
@@ -58,6 +78,17 @@ import {
   TemperatureCheckVoteValueSchema
 } from './schemas'
 
+export const makeMajorityJudgmentElectionKey = (electionId: number) => ({
+  key_json: { kind: 'U64' as const, value: electionId.toString() }
+})
+
+export const makeMajorityJudgmentVoterKeys = (
+  accounts: ReadonlyArray<AccountAddress>
+) =>
+  accounts.map((account) => ({
+    key_json: { kind: 'Reference' as const, value: account }
+  }))
+
 export class KeyValueStoreNotFoundError extends Data.TaggedError(
   'KeyValueStoreNotFoundError'
 )<{
@@ -79,6 +110,55 @@ class TemperatureCheckNotFoundError extends Data.TaggedError(
 class ProposalNotFoundError extends Data.TaggedError('ProposalNotFoundError')<{
   message: string
 }> {}
+
+export class MajorityJudgmentElectionNotFoundError extends Data.TaggedError(
+  'MajorityJudgmentElectionNotFoundError'
+)<{
+  message: string
+}> {}
+
+export class MissingMajorityJudgmentVoteRecordsError extends Data.TaggedError(
+  'MissingMajorityJudgmentVoteRecordsError'
+)<{
+  readonly fromIndexInclusive: number
+  readonly toIndexInclusive: number
+  readonly missingVoteIds: ReadonlyArray<number>
+  readonly unexpectedVoteIds: ReadonlyArray<number>
+}> {}
+
+export const validateMajorityJudgmentVoteSlice = (input: {
+  readonly fromIndexInclusive: number
+  readonly toIndexInclusive: number
+  readonly voteIds: ReadonlyArray<number>
+}) => {
+  const expectedVoteIds = Array.from(
+    {
+      length: input.toIndexInclusive - input.fromIndexInclusive + 1
+    },
+    (_, index) => input.fromIndexInclusive + index
+  )
+  const actualVoteIds = new Set(input.voteIds)
+  const expectedVoteIdSet = new Set(expectedVoteIds)
+  const missingVoteIds = expectedVoteIds.filter(
+    (voteId) => !actualVoteIds.has(voteId)
+  )
+  const unexpectedVoteIds = input.voteIds.filter(
+    (voteId) => !expectedVoteIdSet.has(voteId)
+  )
+
+  return missingVoteIds.length === 0 &&
+    unexpectedVoteIds.length === 0 &&
+    actualVoteIds.size === input.voteIds.length
+    ? Effect.void
+    : Effect.fail(
+        new MissingMajorityJudgmentVoteRecordsError({
+          fromIndexInclusive: input.fromIndexInclusive,
+          toIndexInclusive: input.toIndexInclusive,
+          missingVoteIds,
+          unexpectedVoteIds
+        })
+      )
+}
 
 export class AdminBadgeNotFoundError extends Data.TaggedError(
   'AdminBadgeNotFoundError'
@@ -515,9 +595,171 @@ CALL_METHOD
             temperatureChecksKvs: KeyValueStoreAddress.make(
               componentState.temperature_checks
             ),
-            proposalsKvs: KeyValueStoreAddress.make(componentState.proposals)
+            proposalsKvs: KeyValueStoreAddress.make(componentState.proposals),
+            majorityJudgmentElectionCount:
+              componentState.majority_judgment_election_count,
+            majorityJudgmentElectionsKvs: KeyValueStoreAddress.make(
+              componentState.majority_judgment_elections
+            )
           }
         })
+
+      const getMajorityJudgmentElections = () =>
+        Effect.gen(function* () {
+          const ledgerState = yield* getLedgerState({})
+          const atLedgerState = { state_version: ledgerState.state_version }
+          const componentState = yield* getComponentState(atLedgerState)
+          if (componentState.majority_judgment_election_count === 0) {
+            return []
+          }
+          const registry = yield* keyValueStore({
+            address: componentState.majority_judgment_elections,
+            at_ledger_state: atLedgerState
+          })
+
+          return yield* Effect.forEach(
+            registry.entries,
+            Effect.fn(function* (entry) {
+              const [id, value] = yield* Effect.all(
+                [
+                  parseSbor(
+                    entry.key.programmatic_json,
+                    MajorityJudgmentElectionKeyValueStoreKey
+                  ),
+                  parseSbor(
+                    entry.value.programmatic_json,
+                    MajorityJudgmentElectionKeyValueStoreValue
+                  )
+                ],
+                { concurrency: 2 }
+              )
+              return yield* Schema.decodeUnknown(
+                MajorityJudgmentElectionSchema
+              )({ id, ...value })
+            }),
+            { concurrency: 10 }
+          )
+        })
+
+      const getMajorityJudgmentElectionById = (
+        electionId: number,
+        atLedgerStateInput?: { state_version: number }
+      ) =>
+        Effect.gen(function* () {
+          const atLedgerState = atLedgerStateInput ?? {
+            state_version: (yield* getLedgerState({})).state_version
+          }
+          const componentState = yield* getComponentState(atLedgerState)
+          const responses = yield* keyValueStoreDataService({
+            key_value_store_address: componentState.majority_judgment_elections,
+            keys: [makeMajorityJudgmentElectionKey(electionId)],
+            at_ledger_state: atLedgerState
+          })
+          const programmaticJson = yield* pipe(
+            responses,
+            A.flatMap((response) => response.entries),
+            A.head,
+            Option.flatMap((entry) =>
+              Option.fromNullable(entry.value.programmatic_json)
+            ),
+            Option.match({
+              onNone: () =>
+                Effect.fail(
+                  new MajorityJudgmentElectionNotFoundError({
+                    message: `Majority Judgment election ${electionId} not found`
+                  })
+                ),
+              onSome: Effect.succeed
+            })
+          )
+          const value = yield* parseSbor(
+            programmaticJson,
+            MajorityJudgmentElectionKeyValueStoreValue
+          )
+          return yield* Schema.decodeUnknown(MajorityJudgmentElectionSchema)({
+            id: electionId,
+            ...value
+          })
+        })
+
+      const getMajorityJudgmentVotesByIndex = (input: {
+        keyValueStoreAddress: KeyValueStoreAddress
+        fromIndexInclusive: number
+        toIndexInclusive: number
+        atLedgerState?: { state_version: number }
+      }) =>
+        Effect.gen(function* () {
+          const votes = yield* keyValueStoreDataService({
+            key_value_store_address: input.keyValueStoreAddress,
+            keys: makeVoteIndexKeys(
+              input.fromIndexInclusive,
+              input.toIndexInclusive
+            ),
+            ...(input.atLedgerState === undefined
+              ? {}
+              : { at_ledger_state: input.atLedgerState })
+          }).pipe(
+            Effect.map(A.flatMap((response) => response.entries)),
+            Effect.flatMap(
+              Effect.forEach(
+                Effect.fn('GovernanceComponent.decodeMajorityJudgmentVote')(
+                  function* (item) {
+                    const key = yield* Schema.decodeUnknown(
+                      Schema.Struct({ value: Schema.NumberFromString })
+                    )(item.key.programmatic_json)
+                    const vote = yield* Schema.decodeUnknown(
+                      MajorityJudgmentVoteRecord
+                    )(item.value.programmatic_json)
+                    return { voteId: key.value, ...vote }
+                  }
+                ),
+                { concurrency: 10 }
+              )
+            )
+          )
+
+          yield* validateMajorityJudgmentVoteSlice({
+            fromIndexInclusive: input.fromIndexInclusive,
+            toIndexInclusive: input.toIndexInclusive,
+            voteIds: votes.map(({ voteId }) => voteId)
+          })
+          return votes
+        })
+
+      const getMajorityJudgmentVoterEntriesByAccounts = (input: {
+        keyValueStoreAddress: KeyValueStoreAddress
+        accounts: ReadonlyArray<AccountAddress>
+        atLedgerState?: { state_version: number }
+      }) => {
+        if (A.isEmptyReadonlyArray(input.accounts)) {
+          return Effect.succeed([])
+        }
+        return keyValueStoreDataService({
+          key_value_store_address: input.keyValueStoreAddress,
+          keys: makeMajorityJudgmentVoterKeys(input.accounts),
+          ...(input.atLedgerState === undefined
+            ? {}
+            : { at_ledger_state: input.atLedgerState })
+        }).pipe(
+          Effect.map(A.flatMap((response) => response.entries)),
+          Effect.flatMap(
+            Effect.forEach(
+              Effect.fn('GovernanceComponent.decodeMajorityJudgmentVoter')(
+                function* (item) {
+                  const key = yield* Schema.decodeUnknown(
+                    Schema.Struct({ value: AccountAddress })
+                  )(item.key.programmatic_json)
+                  const entry = yield* Schema.decodeUnknown(
+                    MajorityJudgmentVoteValueSchema
+                  )(item.value.programmatic_json)
+                  return { accountAddress: key.value, ...entry }
+                }
+              ),
+              { concurrency: 10 }
+            )
+          )
+        )
+      }
 
       const getProposalById = (id: ProposalId) =>
         Effect.gen(function* () {
@@ -846,16 +1088,8 @@ CALL_METHOD
           const adminBadgeProof = yield* makeAdminBadgeProof(
             parsedInput.accountAddress
           )
-          const parameterSetInput = renderGovernanceParameterSetInput({
-            label: parsedInput.label,
-            temperatureCheckDays: parsedInput.temperatureCheckDays,
-            temperatureCheckQuorum: parsedInput.temperatureCheckQuorum,
-            temperatureCheckApprovalThreshold:
-              parsedInput.temperatureCheckApprovalThreshold,
-            proposalLengthDays: parsedInput.proposalLengthDays,
-            proposalQuorum: parsedInput.proposalQuorum,
-            proposalApprovalThreshold: parsedInput.proposalApprovalThreshold
-          })
+          const parameterSetInput =
+            renderGovernanceParameterSetInput(parsedInput)
 
           return TransactionManifestString.make(`
 ${adminBadgeProof}
@@ -878,16 +1112,8 @@ CALL_METHOD
           const adminBadgeProof = yield* makeAdminBadgeProof(
             parsedInput.accountAddress
           )
-          const parameterSetInput = renderGovernanceParameterSetInput({
-            label: parsedInput.label,
-            temperatureCheckDays: parsedInput.temperatureCheckDays,
-            temperatureCheckQuorum: parsedInput.temperatureCheckQuorum,
-            temperatureCheckApprovalThreshold:
-              parsedInput.temperatureCheckApprovalThreshold,
-            proposalLengthDays: parsedInput.proposalLengthDays,
-            proposalQuorum: parsedInput.proposalQuorum,
-            proposalApprovalThreshold: parsedInput.proposalApprovalThreshold
-          })
+          const parameterSetInput =
+            renderGovernanceParameterSetInput(parsedInput)
 
           return TransactionManifestString.make(`
 ${adminBadgeProof}
@@ -985,6 +1211,124 @@ CALL_METHOD
           `)
         })
 
+      const makeMajorityJudgmentElectionManifest = (
+        input: MakeMajorityJudgmentElectionInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            MakeMajorityJudgmentElectionInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "make_majority_judgment_election"
+  ${parsedInput.temperatureCheckId}u64
+  ${renderInstant(parsedInput.reviewStart)}
+  ${renderCandidateOrder(parsedInput.candidateOrder)}
+;
+          `)
+        })
+
+      const makeMajorityJudgmentVoteManifest = (
+        input: MakeMajorityJudgmentVoteInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            MakeMajorityJudgmentVoteInputSchema
+          )(input)
+          const round =
+            parsedInput.round === 'RoundOne' ? 'Enum<0u8>()' : 'Enum<1u8>()'
+
+          return TransactionManifestString.make(`
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "vote_on_majority_judgment_election"
+  Address(${encodeManifestString(parsedInput.accountAddress)})
+  ${parsedInput.electionId}u64
+  ${round}
+  ${renderCandidateGrades(parsedInput.grades)}
+;
+CALL_METHOD
+  Address(${encodeManifestString(parsedInput.accountAddress)})
+  "deposit_batch"
+  Expression("ENTIRE_WORKTOP")
+;
+          `)
+        })
+
+      const startMajorityJudgmentRerunManifest = (
+        input: StartMajorityJudgmentRerunInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            StartMajorityJudgmentRerunInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "start_majority_judgment_rerun"
+  ${parsedInput.electionId}u64
+  ${renderInstant(parsedInput.votingStart)}
+;
+          `)
+        })
+
+      const recordMajorityJudgmentTieResolutionManifest = (
+        input: MakeMajorityJudgmentTieResolutionInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            MakeMajorityJudgmentTieResolutionInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+          const round =
+            parsedInput.round === 'RoundOne' ? 'Enum<0u8>()' : 'Enum<1u8>()'
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "record_majority_judgment_tie_resolution"
+  ${parsedInput.electionId}u64
+  ${round}
+  ${renderCandidateOrder(parsedInput.orderedCandidateIds)}
+;
+          `)
+        })
+
+      const makeToggleMajorityJudgmentElectionHiddenManifest = (
+        input: ToggleMajorityJudgmentElectionHiddenInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            ToggleMajorityJudgmentElectionHiddenInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "toggle_majority_judgment_election_hidden"
+  ${parsedInput.electionId}u64
+;
+          `)
+        })
+
       return {
         getTemperatureChecks,
         getAllTemperatureChecksVotes,
@@ -1006,7 +1350,16 @@ CALL_METHOD
         getProposalVotesByAccounts,
         makeProposalVoteManifest,
         makeToggleTemperatureCheckHiddenManifest,
-        makeToggleProposalHiddenManifest
+        makeToggleProposalHiddenManifest,
+        getMajorityJudgmentElections,
+        getMajorityJudgmentElectionById,
+        getMajorityJudgmentVotesByIndex,
+        getMajorityJudgmentVoterEntriesByAccounts,
+        makeMajorityJudgmentElectionManifest,
+        makeMajorityJudgmentVoteManifest,
+        startMajorityJudgmentRerunManifest,
+        recordMajorityJudgmentTieResolutionManifest,
+        makeToggleMajorityJudgmentElectionHiddenManifest
       }
     })
   }

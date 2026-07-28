@@ -3,15 +3,31 @@ import { useState } from 'react'
 import type { SortOrder } from '@/atom/proposalsAtom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { H1, P } from '@/components/ui/typography'
-import { ProposalsList, SortToggle, TemperatureChecksList } from './components'
+import {
+  ElectionsList,
+  ProposalsList,
+  SortToggle,
+  TemperatureChecksList
+} from './components'
 
 export const Page: React.FC = () => {
   const [activeTab, setActiveTab] = useState('proposals')
   const [proposalSort, setProposalSort] = useState<SortOrder>('desc')
   const [tcSort, setTcSort] = useState<SortOrder>('desc')
+  const [electionSort, setElectionSort] = useState<SortOrder>('desc')
 
-  const currentSort = activeTab === 'proposals' ? proposalSort : tcSort
-  const onSortChange = activeTab === 'proposals' ? setProposalSort : setTcSort
+  const currentSort =
+    activeTab === 'proposals'
+      ? proposalSort
+      : activeTab === 'temperature-checks'
+        ? tcSort
+        : electionSort
+  const onSortChange =
+    activeTab === 'proposals'
+      ? setProposalSort
+      : activeTab === 'temperature-checks'
+        ? setTcSort
+        : setElectionSort
 
   return (
     <>
@@ -43,6 +59,9 @@ export const Page: React.FC = () => {
             >
               Temperature Checks
             </TabsTrigger>
+            <TabsTrigger value="elections" className="text-xs sm:text-sm">
+              Elections
+            </TabsTrigger>
           </TabsList>
 
           <SortToggle
@@ -57,6 +76,10 @@ export const Page: React.FC = () => {
 
         <TabsContent value="temperature-checks">
           <TemperatureChecksList key={tcSort} sortOrder={tcSort} />
+        </TabsContent>
+
+        <TabsContent value="elections">
+          <ElectionsList key={electionSort} sortOrder={electionSort} />
         </TabsContent>
       </Tabs>
     </>

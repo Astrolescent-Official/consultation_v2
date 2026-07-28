@@ -39,13 +39,17 @@ fn create_owner_badge_with_account(
 fn create_governance_parameters() -> GovernanceParameterSetInput {
     GovernanceParameterSetInput {
         label: "Default".to_string(),
-        parameters: GovernanceParameters {
-            temperature_check_days: 7,
-            temperature_check_quorum: dec!(1000),
-            temperature_check_approval_threshold: dec!("0.5"),
-            proposal_length_days: 14,
-            proposal_quorum: dec!(5000),
-            proposal_approval_threshold: dec!("0.5"),
+        parameters: GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 7,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.5"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 14,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.5"),
+            },
         },
     }
 }
@@ -56,16 +60,18 @@ fn create_temp_check_draft() -> TemperatureCheckDraft {
         short_description: "A short summary of the test proposal".to_string(),
         description: "# Test Proposal\n\nA full markdown description of the test proposal."
             .to_string(),
-        vote_options: vec![
-            ProposalVoteOptionInput {
-                label: "For".to_string(),
-            },
-            ProposalVoteOptionInput {
-                label: "Against".to_string(),
-            },
-        ],
         links: vec![Url::of("https://radixtalk.com/proposal/123")],
-        max_selections: None, // Single choice
+        follow_up: TemperatureCheckFollowUpDraft::StandardProposal {
+            vote_options: vec![
+                ProposalVoteOptionInput {
+                    label: "For".to_string(),
+                },
+                ProposalVoteOptionInput {
+                    label: "Against".to_string(),
+                },
+            ],
+            max_selections: None,
+        },
     }
 }
 
@@ -76,20 +82,30 @@ fn create_multi_choice_temp_check_draft() -> TemperatureCheckDraft {
         description:
             "# Multi-Choice Proposal\n\nA full markdown description with multiple choice voting."
                 .to_string(),
-        vote_options: vec![
-            ProposalVoteOptionInput {
-                label: "Option A".to_string(),
-            },
-            ProposalVoteOptionInput {
-                label: "Option B".to_string(),
-            },
-            ProposalVoteOptionInput {
-                label: "Option C".to_string(),
-            },
-        ],
         links: vec![Url::of("https://radixtalk.com/proposal/456")],
-        max_selections: Some(2), // Can select up to 2 options
+        follow_up: TemperatureCheckFollowUpDraft::StandardProposal {
+            vote_options: vec![
+                ProposalVoteOptionInput {
+                    label: "Option A".to_string(),
+                },
+                ProposalVoteOptionInput {
+                    label: "Option B".to_string(),
+                },
+                ProposalVoteOptionInput {
+                    label: "Option C".to_string(),
+                },
+            ],
+            max_selections: Some(2),
+        },
     }
+}
+
+fn advance_by_days(ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>, days: i64) {
+    let next_round = ledger.get_consensus_manager_state().round.number() + 1;
+    let timestamp = ledger.get_current_proposer_timestamp_ms() + days * 24 * 60 * 60 * 1000;
+    ledger
+        .advance_to_round_at_timestamp(Round::of(next_round), timestamp)
+        .expect_commit_success();
 }
 
 // =============================================================================
@@ -366,7 +382,8 @@ fn test_make_proposal_from_temperature_check() {
         )
         .expect_commit_success();
 
-    // Elevate to proposal (requires owner badge proof for auth)
+    // Elevate to proposal after the temperature check closes.
+    advance_by_days(&mut ledger, 30);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -397,6 +414,8 @@ struct GovernanceState {
     temperature_check_count: u64,
     proposals: Own,
     proposal_count: u64,
+    majority_judgment_elections: Own,
+    majority_judgment_election_count: u64,
 }
 
 fn instantiate_governance(
@@ -421,19 +440,47 @@ fn instantiate_governance(
 
 fn parameter_set_input(
     label: &str,
-    temperature_check_days: u16,
-    proposal_length_days: u16,
+    temperature_check_days: u32,
+    proposal_length_days: u32,
 ) -> GovernanceParameterSetInput {
     GovernanceParameterSetInput {
         label: label.to_string(),
-        parameters: GovernanceParameters {
-            temperature_check_days,
-            temperature_check_quorum: dec!(1000),
-            temperature_check_approval_threshold: dec!("0.6"),
-            proposal_length_days,
-            proposal_quorum: dec!(5000),
-            proposal_approval_threshold: dec!("0.7"),
+        parameters: GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: temperature_check_days,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: proposal_length_days,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
+    }
+}
+
+fn standard_temperature_check_parameters(
+    parameters: &GovernanceProcessParameters,
+) -> &TemperatureCheckParameters {
+    match parameters {
+        GovernanceProcessParameters::Standard {
+            temperature_check, ..
+        } => temperature_check,
+        GovernanceProcessParameters::MajorityJudgment { .. } => {
+            panic!("expected Standard parameters")
+        }
+    }
+}
+
+fn standard_proposal_parameters(
+    parameters: &GovernanceProcessParameters,
+) -> &StandardProposalParameters {
+    match parameters {
+        GovernanceProcessParameters::Standard { proposal, .. } => proposal,
+        GovernanceProcessParameters::MajorityJudgment { .. } => {
+            panic!("expected Standard parameters")
+        }
     }
 }
 
@@ -847,29 +894,77 @@ fn test_named_parameter_set_validation_and_boundaries() {
     );
 
     let invalid_parameters = [
-        GovernanceParameters {
-            temperature_check_days: 0,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 0,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
-        GovernanceParameters {
-            temperature_check_quorum: Decimal::ZERO,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 1,
+                quorum: Decimal::ZERO,
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
-        GovernanceParameters {
-            temperature_check_approval_threshold: Decimal::ZERO,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 1,
+                quorum: dec!(1000),
+                approval_threshold: Decimal::ZERO,
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
-        GovernanceParameters {
-            proposal_length_days: 0,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 1,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 0,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
-        GovernanceParameters {
-            proposal_quorum: Decimal::ZERO,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 1,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: Decimal::ZERO,
+                approval_threshold: dec!("0.7"),
+            },
         },
-        GovernanceParameters {
-            proposal_approval_threshold: dec!("1.01"),
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 1,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: dec!(5000),
+                approval_threshold: dec!("1.01"),
+            },
         },
     ];
     for (index, parameters) in invalid_parameters.into_iter().enumerate() {
@@ -898,9 +993,17 @@ fn test_named_parameter_set_validation_and_boundaries() {
         "default",
         GovernanceParameterSetInput {
             label: "Default".to_string(),
-            parameters: GovernanceParameters {
-                proposal_approval_threshold: dec!("1.01"),
-                ..parameter_set_input("Invalid", 1, 1).parameters
+            parameters: GovernanceProcessParameters::Standard {
+                temperature_check: TemperatureCheckParameters {
+                    voting_days: 1,
+                    quorum: dec!(1000),
+                    approval_threshold: dec!("0.6"),
+                },
+                proposal: StandardProposalParameters {
+                    voting_days: 1,
+                    quorum: dec!(5000),
+                    approval_threshold: dec!("1.01"),
+                },
             },
         },
         false,
@@ -908,9 +1011,17 @@ fn test_named_parameter_set_validation_and_boundaries() {
 
     let invalid_default = GovernanceParameterSetInput {
         label: "Default".to_string(),
-        parameters: GovernanceParameters {
-            temperature_check_days: 0,
-            ..parameter_set_input("Invalid", 1, 1).parameters
+        parameters: GovernanceProcessParameters::Standard {
+            temperature_check: TemperatureCheckParameters {
+                voting_days: 0,
+                quorum: dec!(1000),
+                approval_threshold: dec!("0.6"),
+            },
+            proposal: StandardProposalParameters {
+                voting_days: 1,
+                quorum: dec!(5000),
+                approval_threshold: dec!("0.7"),
+            },
         },
     };
     let package_address = ledger.compile_and_publish(this_package!());
@@ -1002,11 +1113,8 @@ fn test_parameter_set_selection_and_default_resolution() {
     assert_eq!(none_tc.parameter_set.version, 1);
     assert_eq!(explicit_default_tc.parameter_set.version, 1);
     assert_eq!(
-        none_tc.parameter_set.parameters.temperature_check_quorum,
-        explicit_default_tc
-            .parameter_set
-            .parameters
-            .temperature_check_quorum
+        standard_temperature_check_parameters(&none_tc.parameter_set.parameters).quorum,
+        standard_temperature_check_parameters(&explicit_default_tc.parameter_set.parameters).quorum
     );
     assert_eq!(
         none_tc.deadline.seconds_since_unix_epoch - none_tc.start.seconds_since_unix_epoch,
@@ -1070,6 +1178,7 @@ fn test_parameter_set_snapshot_is_immutable_through_edit_retirement_and_elevatio
         true,
     );
 
+    advance_by_days(&mut ledger, 30);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1099,19 +1208,13 @@ fn test_parameter_set_snapshot_is_immutable_through_edit_retirement_and_elevatio
     assert_eq!(version_one_tc.parameter_set.version, 1);
     assert_eq!(version_one_tc.parameter_set.label, "Executable");
     assert_eq!(
-        version_one_tc
-            .parameter_set
-            .parameters
-            .temperature_check_days,
+        standard_temperature_check_parameters(&version_one_tc.parameter_set.parameters).voting_days,
         3
     );
     assert_eq!(version_two_tc.parameter_set.version, 2);
     assert_eq!(version_two_tc.parameter_set.label, "Executable revised");
     assert_eq!(
-        version_two_tc
-            .parameter_set
-            .parameters
-            .temperature_check_days,
+        standard_temperature_check_parameters(&version_two_tc.parameter_set.parameters).voting_days,
         7
     );
     assert_eq!(proposal.parameter_set.id, version_one_tc.parameter_set.id);
@@ -1120,8 +1223,8 @@ fn test_parameter_set_snapshot_is_immutable_through_edit_retirement_and_elevatio
         version_one_tc.parameter_set.version
     );
     assert_eq!(
-        proposal.parameter_set.parameters.proposal_length_days,
-        version_one_tc.parameter_set.parameters.proposal_length_days
+        standard_proposal_parameters(&proposal.parameter_set.parameters).voting_days,
+        standard_proposal_parameters(&version_one_tc.parameter_set.parameters).voting_days
     );
     assert_eq!(
         proposal.deadline.seconds_since_unix_epoch - proposal.start.seconds_since_unix_epoch,
@@ -1195,6 +1298,7 @@ fn test_parameter_set_and_consultation_events_include_identity_and_version() {
     assert_eq!(tc_event.parameter_set_id, "governance-process");
     assert_eq!(tc_event.parameter_set_version, 1);
 
+    advance_by_days(&mut ledger, 30);
     let proposal_manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1603,7 +1707,8 @@ fn test_multi_choice_proposal_voting() {
         )
         .expect_commit_success();
 
-    // Elevate to proposal
+    // Elevate to proposal after the temperature check closes.
+    advance_by_days(&mut ledger, 30);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1680,7 +1785,8 @@ fn test_multi_choice_exceeds_max_selections() {
         )
         .expect_commit_success();
 
-    // Elevate to proposal
+    // Elevate to proposal after the temperature check closes.
+    advance_by_days(&mut ledger, 30);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1761,7 +1867,8 @@ fn test_single_choice_requires_exactly_one_vote() {
         )
         .expect_commit_success();
 
-    // Elevate to proposal
+    // Elevate to proposal after the temperature check closes.
+    advance_by_days(&mut ledger, 30);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
