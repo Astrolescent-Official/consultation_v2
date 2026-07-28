@@ -163,6 +163,7 @@ export function MajorityJudgmentElectionView({
         initialGrades.map(({ candidateId, grade }) => [candidateId, grade])
       )
   )
+  const [now, setNow] = useState(Date.now)
 
   useEffect(() => {
     setSelectedGrades(
@@ -172,7 +173,23 @@ export function MajorityJudgmentElectionView({
     )
   }, [initialGrades])
 
-  const votingOpen = status === 'LIVE' || status === 'RERUN_LIVE'
+  useEffect(() => {
+    if (votingEnd === undefined || now >= votingEnd.getTime()) return
+    const maximumTimeout = 2_147_483_647
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(votingEnd.getTime() - now, maximumTimeout)
+    )
+    return () => window.clearTimeout(timer)
+  }, [now, votingEnd])
+
+  const liveStatus = status === 'LIVE' || status === 'RERUN_LIVE'
+  const votingOpen =
+    liveStatus && (votingEnd === undefined || now < votingEnd.getTime())
+  const currentStatusCopy =
+    liveStatus && !votingOpen
+      ? 'Voting closed; finalizing result'
+      : statusCopy(status)
   const remaining = candidates.filter(
     (candidate) => !selectedGrades.has(candidate.id)
   ).length
@@ -219,7 +236,7 @@ export function MajorityJudgmentElectionView({
           </div>
         ) : null}
         <div className="rounded-md border px-4 py-3 text-sm font-medium">
-          {statusCopy(status)}
+          {currentStatusCopy}
         </div>
         {reviewStart !== undefined &&
         reviewEnd !== undefined &&
@@ -238,7 +255,7 @@ export function MajorityJudgmentElectionView({
             {status === 'REVIEW_OPEN' ? (
               <Countdown label="Voting opens" target={votingStart} />
             ) : null}
-            {status === 'LIVE' || status === 'RERUN_LIVE' ? (
+            {votingOpen ? (
               <Countdown label="Voting closes" target={votingEnd} />
             ) : null}
           </div>

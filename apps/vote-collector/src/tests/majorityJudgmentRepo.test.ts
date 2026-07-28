@@ -92,6 +92,11 @@ const projection = {
   }
 }
 
+const watermark = (timestamp: string, stateVersion: number) => ({
+  stateVersion,
+  proposerRoundTimestamp: new Date(timestamp)
+})
+
 layer(TestLayer, { timeout: '60 seconds' })(
   'majority judgment PostgreSQL repository',
   (it) => {
@@ -154,6 +159,13 @@ layer(TestLayer, { timeout: '60 seconds' })(
           }
         })
 
+        yield* finalizer.finalize(watermark('2026-07-14T23:59:59.000Z', 999))
+        const beforeDeadline = yield* repo.getResult(7, 1)
+        assert.strictEqual(beforeDeadline._tag, 'Some')
+        if (beforeDeadline._tag === 'Some') {
+          assert.strictEqual(beforeDeadline.value.status, 'LIVE')
+        }
+
         yield* repo.commitCalculation({
           electionId: 7,
           round: 1,
@@ -214,12 +226,33 @@ layer(TestLayer, { timeout: '60 seconds' })(
         assert.strictEqual(response.candidates.length, 2)
         assert.strictEqual(response.result?.provisional, true)
 
-        yield* finalizer.finalize(new Date('2026-07-16T00:00:00.000Z'))
-        yield* finalizer.finalize(new Date('2026-07-16T00:00:00.000Z'))
+        yield* repo.projectRound({
+          electionId: 7,
+          round: 2,
+          snapshotAt: new Date('2026-07-18T00:00:00.000Z'),
+          snapshotStateVersion: 456n,
+          votingStart: new Date('2026-07-20T00:00:00.000Z'),
+          votingEnd: new Date('2026-07-25T00:00:00.000Z'),
+          quorumXrd: '50',
+          minimumMedianGrade: 3,
+          votesKvsAddress: 'internal_keyvaluestore_rerun_votes',
+          votersKvsAddress: 'internal_keyvaluestore_rerun_voters',
+          lastVoteCount: 0n,
+          status: 'RERUN_PENDING'
+        })
+
+        yield* finalizer.finalize(watermark('2026-07-16T00:00:00.000Z', 1000))
+        yield* finalizer.finalize(watermark('2026-07-16T00:00:00.000Z', 1000))
 
         const finalized = yield* repo.getElectionResponse(7)
         assert.strictEqual(finalized.election.status, 'RERUN_PENDING')
         assert.isUndefined(finalized.result)
+        const finalizedRoundOne = yield* repo.getResult(7, 1)
+        assert.strictEqual(finalizedRoundOne._tag, 'Some')
+        if (finalizedRoundOne._tag === 'Some') {
+          assert.strictEqual(finalizedRoundOne.value.status, 'RERUN_PENDING')
+          assert.strictEqual(finalizedRoundOne.value.totalVotingPower, '10')
+        }
 
         const closedRoundUpdate = yield* Effect.either(
           repo.commitCalculation({
@@ -253,20 +286,6 @@ layer(TestLayer, { timeout: '60 seconds' })(
           )
         }
 
-        yield* repo.projectRound({
-          electionId: 7,
-          round: 2,
-          snapshotAt: new Date('2026-07-18T00:00:00.000Z'),
-          snapshotStateVersion: 456n,
-          votingStart: new Date('2026-07-20T00:00:00.000Z'),
-          votingEnd: new Date('2026-07-25T00:00:00.000Z'),
-          quorumXrd: '50',
-          minimumMedianGrade: 3,
-          votesKvsAddress: 'internal_keyvaluestore_rerun_votes',
-          votersKvsAddress: 'internal_keyvaluestore_rerun_voters',
-          lastVoteCount: 0n,
-          status: 'RERUN_LIVE'
-        })
         yield* repo.setPhaseStatus(7, 2, 'RERUN_LIVE')
         yield* repo.commitCalculation({
           electionId: 7,
@@ -308,8 +327,8 @@ layer(TestLayer, { timeout: '60 seconds' })(
         assert.strictEqual((yield* repo.getBallots(7, 1)).length, 1)
         assert.strictEqual((yield* repo.getBallots(7, 2)).length, 1)
 
-        yield* finalizer.finalize(new Date('2026-07-26T00:00:00.000Z'))
-        yield* finalizer.finalize(new Date('2026-07-26T00:00:00.000Z'))
+        yield* finalizer.finalize(watermark('2026-07-26T00:00:00.000Z', 2000))
+        yield* finalizer.finalize(watermark('2026-07-26T00:00:00.000Z', 2000))
 
         const failed = yield* repo.getElectionResponse(7)
         assert.strictEqual(failed.election.status, 'FAILED')

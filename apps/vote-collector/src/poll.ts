@@ -1,15 +1,33 @@
 import { GatewayApiClient } from '@radix-effects/gateway'
 import { StateVersion } from '@radix-effects/shared'
-import { Array as A, Clock, Effect, Option, Order, pipe } from 'effect'
+import { Array as A, Effect, Option, Order, pipe, Schema } from 'effect'
 import { GovernanceConfig } from 'shared/governance/config'
 import { GovernanceEventProcessor } from './governanceEvents'
 import { LedgerCursor } from './ledgerCursor'
 import { MajorityJudgmentCalculation } from './majority-judgment/calculation'
-import { MajorityJudgmentFinalizer } from './majority-judgment/finalizer'
+import {
+  MajorityJudgmentFinalizer,
+  type MajorityJudgmentLedgerWatermark
+} from './majority-judgment/finalizer'
 import { MajorityJudgmentProjection } from './majority-judgment/projection'
 import { VoteCalculation } from './vote-calculation/voteCalculation'
 
 const PAGE_SIZE = 100
+
+const LedgerDrainStateSchema = Schema.Struct({
+  state_version: Schema.Number,
+  proposer_round_timestamp: Schema.Date
+})
+
+export const decodeLedgerDrainWatermark = Effect.fn(
+  'PollService.decodeLedgerDrainWatermark'
+)(function* (input: unknown) {
+  const ledgerState = yield* Schema.decodeUnknown(LedgerDrainStateSchema)(input)
+  return {
+    stateVersion: ledgerState.state_version,
+    proposerRoundTimestamp: ledgerState.proposer_round_timestamp
+  } satisfies MajorityJudgmentLedgerWatermark
+})
 
 export class PollService extends Effect.Service<PollService>()('PollService', {
   dependencies: [
@@ -50,10 +68,11 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
     const processPage = (stateVersion: StateVersion) =>
       Effect.gen(function* () {
         const result = yield* fetchPage(stateVersion)
+        const watermark = yield* decodeLedgerDrainWatermark(result.ledger_state)
 
         if (A.isEmptyArray(result.items)) {
           yield* Effect.log('No transactions to process, poll complete')
-          return { stateVersion, drained: true }
+          return { stateVersion, drained: true, watermark }
         }
 
         const sorted = A.sortWith(
@@ -131,7 +150,8 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
 
         return {
           stateVersion: nextSv,
-          drained: result.items.length < PAGE_SIZE
+          drained: result.items.length < PAGE_SIZE,
+          watermark
         }
       })
 
@@ -140,16 +160,32 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
 
       yield* Effect.log('Poll started', { fromStateVersion: sv })
 
-      yield* Effect.iterate(
-        { stateVersion: sv, drained: false },
+      const drained = yield* Effect.iterate(
+        {
+          stateVersion: sv,
+          drained: false,
+          watermark: Option.none<MajorityJudgmentLedgerWatermark>()
+        },
         {
           while: (s) => !s.drained,
-          body: (s) => processPage(s.stateVersion)
+          body: (s) =>
+            processPage(s.stateVersion).pipe(
+              Effect.map((page) => ({
+                ...page,
+                watermark: Option.some(page.watermark)
+              }))
+            )
         }
       )
 
-      const now = new Date(yield* Clock.currentTimeMillis)
-      yield* majorityJudgmentFinalizer.finalize(now)
+      // The stream response's ledger state is the stable point through which
+      // this affected-entity query was exhausted. Its proposer timestamp, not
+      // collector wall time, proves that every valid pre-deadline vote visible
+      // at that ledger point was processed before a terminal result is written.
+      yield* Option.match(drained.watermark, {
+        onNone: () => Effect.void,
+        onSome: majorityJudgmentFinalizer.finalize
+      })
     })
   })
 }) {}

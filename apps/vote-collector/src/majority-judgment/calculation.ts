@@ -2,16 +2,16 @@ import { GetLedgerStateService } from '@radix-effects/gateway'
 import { AccountAddress, StateVersion } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
 import { Effect, Schedule } from 'effect'
-import { GovernanceComponent } from 'shared/governance/index'
 import type {
   Grade,
   MajorityJudgmentElectionStatus
 } from 'shared/governance/index'
+import { GovernanceComponent } from 'shared/governance/index'
 import { KeyValueStoreAddress } from 'shared/schemas'
-import { calculateMajorityJudgment } from './calculator'
-import { type MajorityJudgmentBallotWrite, MajorityJudgmentRepo } from './repo'
 import { VotePowerSnapshot } from '../vote-calculation/votePowerSnapshot'
 import { getVotePowerConfig } from '../vote-calculation/voteSourceConfig'
+import { calculateMajorityJudgment } from './calculator'
+import { type MajorityJudgmentBallotWrite, MajorityJudgmentRepo } from './repo'
 
 export type IndexedMajorityJudgmentVote = {
   readonly voteId: number
@@ -218,52 +218,34 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
           unresolvedCandidateIds: result.unresolvedCandidateIds
         })
 
-        // The finalization grace period should keep a ballot from ever landing
-        // after its round closed. If one still does, surface it loudly rather
-        // than failing the poll: a failure here leaves the ledger cursor parked
-        // on this page forever and stops every projection, MJ or not.
-        yield* repo
-          .commitCalculation({
-            electionId: action.electionId,
-            round: numericRound,
-            lastVoteCount: BigInt(action.voteCount),
-            ballots,
-            histograms: result.candidateResults.flatMap((candidate) =>
-              candidate.histogram.map((votingPower, grade) => ({
-                candidateId: candidate.candidateId,
-                grade,
-                votingPower
-              }))
-            ),
-            result: {
-              computedAt: action.observedAt,
-              totalVotingPower: result.totalVotingPower,
-              quorumXrd: result.quorumXrd,
-              quorumMet: result.quorumMet,
-              minimumMedianGrade: result.minimumMedianGrade,
-              candidateResults: result.candidateResults,
-              seatedCandidateIds: result.seatedCandidateIds,
-              reserveCandidateIds: result.reserveCandidateIds,
-              reserveExpiresAt: result.reserveExpiresAt,
-              referredSeats: result.referredSeats,
-              tieBreakIterations: result.tieBreakIterations,
-              unresolvedCandidateIds: result.unresolvedCandidateIds,
-              status
-            }
-          })
-          .pipe(
-            Effect.catchTag('TerminalMajorityJudgmentResultError', (error) =>
-              Effect.logError(
-                'Majority Judgment ballot arrived after its round was finalized; it is excluded from the recorded result and needs operator review',
-                {
-                  electionId: action.electionId,
-                  round: action.round,
-                  voteCount: action.voteCount,
-                  recordedStatus: error.status
-                }
-              )
-            )
-          )
+        yield* repo.commitCalculation({
+          electionId: action.electionId,
+          round: numericRound,
+          lastVoteCount: BigInt(action.voteCount),
+          ballots,
+          histograms: result.candidateResults.flatMap((candidate) =>
+            candidate.histogram.map((votingPower, grade) => ({
+              candidateId: candidate.candidateId,
+              grade,
+              votingPower
+            }))
+          ),
+          result: {
+            computedAt: action.observedAt,
+            totalVotingPower: result.totalVotingPower,
+            quorumXrd: result.quorumXrd,
+            quorumMet: result.quorumMet,
+            minimumMedianGrade: result.minimumMedianGrade,
+            candidateResults: result.candidateResults,
+            seatedCandidateIds: result.seatedCandidateIds,
+            reserveCandidateIds: result.reserveCandidateIds,
+            reserveExpiresAt: result.reserveExpiresAt,
+            referredSeats: result.referredSeats,
+            tieBreakIterations: result.tieBreakIterations,
+            unresolvedCandidateIds: result.unresolvedCandidateIds,
+            status
+          }
+        })
       })
     })
   }

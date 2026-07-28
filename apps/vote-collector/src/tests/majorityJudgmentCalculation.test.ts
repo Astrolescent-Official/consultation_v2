@@ -269,6 +269,47 @@ describe('majority judgment weighted calculation', () => {
     assert.strictEqual(resolved.referredSeats, 0)
   })
 
+  it('narrows the unresolved group when a candidate separates above the boundary', () => {
+    const result = calculate(
+      [
+        ballot('account-a', 0, '1', [
+          [0, 4],
+          [1, 3],
+          [2, 3]
+        ]),
+        ballot('account-b', 1, '5', [
+          [0, 3],
+          [1, 3],
+          [2, 3]
+        ]),
+        ballot('account-c', 2, '6', [
+          [0, 4],
+          [1, 4],
+          [2, 4]
+        ])
+      ],
+      { seatCount: 2 }
+    )
+
+    assert.strictEqual(result.status, 'TIE_UNRESOLVED')
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ majorityGrade }) => majorityGrade),
+      [4, 4, 4]
+    )
+    assert.deepStrictEqual(result.unresolvedCandidateIds, [1, 2])
+    assert.deepStrictEqual(result.seatedCandidateIds, [0])
+
+    const resolved = applyMajorityJudgmentTieResolution({
+      result,
+      orderedCandidateIds: [2, 1],
+      seatCount: 2,
+      roundEndsAt: new Date('2026-07-01T00:00:00.000Z'),
+      reserveListDays: 90
+    })
+    assert.deepStrictEqual(resolved.seatedCandidateIds, [0, 2])
+    assert.deepStrictEqual(resolved.reserveCandidateIds, [1])
+  })
+
   it('uses rerun quorum and grade-floor rules independently', () => {
     const firstRound = calculate(
       [

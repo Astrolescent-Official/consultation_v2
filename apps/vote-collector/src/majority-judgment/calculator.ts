@@ -238,38 +238,29 @@ const removeMedianContribution = (candidate: TieCandidate) => {
   return true
 }
 
-// Only the candidates still sharing the working majority grade at the seat
-// boundary are unresolved. Group members that separated above or below it during
-// the removal cycles are decided, and reporting them as unresolved would force the
-// recorded governance determination to cover candidates that were never tied.
-const contestedCandidateIds = (
-  ordered: ReadonlyArray<TieCandidate>,
-  seatsAvailable: number
-) => {
-  const boundaryGrade = ordered[seatsAvailable - 1]?.majority ?? null
-  return ordered
-    .filter(({ majority }) => majority === boundaryGrade)
-    .map(({ candidate }) => candidate.id)
-}
-
 const resolveBoundaryTie = (
   candidates: ReadonlyArray<WorkingCandidate>,
   seatsAvailable: number
 ) => {
-  const working = [...candidates]
+  let active = [...candidates]
     .sort((left, right) => left.id - right.id)
     .map(makeTieCandidate)
+  let activeSeats = seatsAvailable
+  const decidedAbove: Array<TieCandidate> = []
+  const decidedBelow: Array<TieCandidate> = []
   const finish = () =>
-    rankedTieCandidates(working).map(({ candidate, majority }) => ({
-      ...candidate,
-      finalMajorityGrade: majority
-    }))
+    [...decidedAbove, ...rankedTieCandidates(active), ...decidedBelow].map(
+      ({ candidate, majority }) => ({
+        ...candidate,
+        finalMajorityGrade: majority
+      })
+    )
 
   let iterations = 0
   while (true) {
-    const ordered = rankedTieCandidates(working)
-    const lastWinner = ordered[seatsAvailable - 1]
-    const firstReserve = ordered[seatsAvailable]
+    const ordered = rankedTieCandidates(active)
+    const lastWinner = ordered[activeSeats - 1]
+    const firstReserve = ordered[activeSeats]
     const lastWinnerGrade = lastWinner?.majority ?? null
     const firstReserveGrade = firstReserve?.majority ?? null
 
@@ -280,31 +271,52 @@ const resolveBoundaryTie = (
       return {
         ordered: finish(),
         iterations,
-        unresolvedCandidateIds: Array<number>()
+        unresolvedCandidateIds: []
       }
     }
 
+    const separatedAbove = ordered.filter(({ majority }) =>
+      lastWinnerGrade === null
+        ? false
+        : majority !== null && majority > lastWinnerGrade
+    )
+    const separatedBelow = ordered.filter(({ majority }) =>
+      lastWinnerGrade === null
+        ? false
+        : majority === null || majority < lastWinnerGrade
+    )
+    if (separatedAbove.length > 0 || separatedBelow.length > 0) {
+      const boundary = ordered.filter(
+        ({ majority }) => majority === lastWinnerGrade
+      )
+      // Candidates that have separated from the seat boundary are decided.
+      // Continuing to remove their contributions can make them converge again
+      // after exhaustion and incorrectly expand a later unresolved group.
+      decidedAbove.push(...separatedAbove)
+      decidedBelow.unshift(...separatedBelow)
+      active = boundary
+      activeSeats -= separatedAbove.length
+      continue
+    }
+
     let removed = 0
-    for (const candidate of working) {
+    for (const candidate of active) {
       if (removeMedianContribution(candidate)) removed += 1
     }
     if (removed === 0) {
       return {
         ordered: finish(),
         iterations,
-        unresolvedCandidateIds: contestedCandidateIds(ordered, seatsAvailable)
+        unresolvedCandidateIds: ordered.map(({ candidate }) => candidate.id)
       }
     }
     iterations += 1
 
-    if (working.every((candidate) => candidate.total.isZero())) {
+    if (active.every((candidate) => candidate.total.isZero())) {
       return {
         ordered: finish(),
         iterations,
-        unresolvedCandidateIds: contestedCandidateIds(
-          rankedTieCandidates(working),
-          seatsAvailable
-        )
+        unresolvedCandidateIds: active.map(({ candidate }) => candidate.id)
       }
     }
   }
@@ -545,6 +557,6 @@ export const applyMajorityJudgmentTieResolution = (input: {
     reserveCandidateIds,
     reserveExpiresAt: reserveExpiry(input.roundEndsAt, input.reserveListDays),
     referredSeats: input.seatCount - seatedCandidateIds.length,
-    unresolvedCandidateIds: Array<number>()
+    unresolvedCandidateIds: []
   }
 }

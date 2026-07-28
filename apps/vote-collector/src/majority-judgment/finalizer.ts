@@ -14,12 +14,10 @@ export class InvalidMajorityJudgmentTieResolutionError extends Data.TaggedError(
   readonly reason: string
 }> {}
 
-// A ballot is valid on-ledger until the very last second of a round, but the
-// collector only observes it on a later poll. Closing a round the instant the
-// wall clock passes its deadline can therefore race a ballot that is still in
-// flight, and the resulting terminal result would reject that ballot's
-// calculation for good. Waiting out a few poll intervals removes the race.
-const FINALIZATION_GRACE_MS = 5 * 60 * 1000
+export type MajorityJudgmentLedgerWatermark = {
+  readonly stateVersion: number
+  readonly proposerRoundTimestamp: Date
+}
 
 export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFinalizer>()(
   'MajorityJudgmentFinalizer',
@@ -124,7 +122,8 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
       )
 
       const finalize = Effect.fn('MajorityJudgmentFinalizer.finalize')(
-        function* (now: Date) {
+        function* (watermark: MajorityJudgmentLedgerWatermark) {
+          const now = watermark.proposerRoundTimestamp
           const projected = yield* repo.getActiveElectionRounds()
           const roundsByElection = new Map<
             number,
@@ -152,12 +151,7 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                 if (latest === undefined) return
                 for (const { election, round } of rounds) {
                   if (round.round === latest.round.round) continue
-                  if (
-                    now.getTime() <
-                    round.votingEnd.getTime() + FINALIZATION_GRACE_MS
-                  ) {
-                    continue
-                  }
+                  if (now < round.votingEnd) continue
                   yield* closeRound(election, round, now, false)
                 }
 
@@ -195,15 +189,16 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                   return
                 }
 
-                // Hold the round open until in-flight ballots cast before the
-                // deadline have had time to reach the collector.
-                if (
-                  now.getTime() <
-                  round.votingEnd.getTime() + FINALIZATION_GRACE_MS
-                ) {
-                  return
-                }
-
+                yield* Effect.logDebug(
+                  'Finalizing from drained ledger watermark',
+                  {
+                    electionId: election.id,
+                    round: round.round,
+                    stateVersion: watermark.stateVersion,
+                    proposerRoundTimestamp:
+                      watermark.proposerRoundTimestamp.toISOString()
+                  }
+                )
                 yield* closeRound(election, round, now, true)
               }
             ),

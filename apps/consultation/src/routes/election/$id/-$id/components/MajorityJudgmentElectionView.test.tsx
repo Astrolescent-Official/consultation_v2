@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, assert, describe, it, vi } from 'vitest'
 import { MajorityJudgmentElectionView } from './MajorityJudgmentElectionView'
 
@@ -19,7 +19,10 @@ const candidates = [
   }
 ]
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 describe('majority judgment election view', () => {
   it('shows candidate review, disables grades, and hides tallies', () => {
@@ -166,5 +169,40 @@ describe('majority judgment election view', () => {
         { candidateId: 1, grade: 2 }
       ]
     ])
+  })
+
+  it('closes ballot controls at the Scrypto deadline even if status is still live', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-29T09:59:59.000Z'))
+    const onSubmit = vi.fn()
+
+    render(
+      <MajorityJudgmentElectionView
+        title="RAC election"
+        status="LIVE"
+        candidates={candidates}
+        seatCount={1}
+        votingEnd={new Date('2026-07-29T10:00:00.000Z')}
+        quorumXrd="1000000"
+        totalVotingPower="500000"
+        initialGrades={[
+          { candidateId: 0, grade: 4 },
+          { candidateId: 1, grade: 2 }
+        ]}
+        onSubmit={onSubmit}
+      />
+    )
+
+    assert.isNotNull(screen.getByRole('button', { name: 'Replace ballot' }))
+    act(() => vi.advanceTimersByTime(1_000))
+
+    assert.isTrue(
+      screen
+        .getAllByRole('radio')
+        .every((radio) => radio.hasAttribute('disabled'))
+    )
+    assert.isNull(screen.queryByRole('button', { name: 'Replace ballot' }))
+    assert.isNotNull(screen.getByText('Voting closed; finalizing result'))
+    assert.strictEqual(onSubmit.mock.calls.length, 0)
   })
 })
