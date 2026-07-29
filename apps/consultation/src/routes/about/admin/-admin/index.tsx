@@ -49,7 +49,6 @@ type ParameterSetForm = {
   proposalLengthDays: string
   proposalQuorum: string
   proposalApprovalThreshold: string
-  reviewDays: string
   votingDays: string
   electionQuorum: string
   minimumMedianGrade: string
@@ -62,11 +61,6 @@ type ParameterSetForm = {
 const majorityJudgmentFields: ReadonlyArray<
   readonly [keyof ParameterSetForm, string, 'number' | 'text']
 > = [
-  [
-    'reviewDays',
-    `Candidate review (${governanceDurationUnitPlural})`,
-    'number'
-  ],
   [
     'votingDays',
     `Round one voting (${governanceDurationUnitPlural})`,
@@ -93,7 +87,6 @@ const emptyParameterSetForm: ParameterSetForm = {
   proposalLengthDays: '7',
   proposalQuorum: '1000000',
   proposalApprovalThreshold: '0.5',
-  reviewDays: '7',
   votingDays: '7',
   electionQuorum: '1000000',
   minimumMedianGrade: '2',
@@ -127,7 +120,6 @@ const toFormValues = (
       }
     : {
         ...common,
-        reviewDays: parameterSet.parameters.election.reviewDays.toString(),
         votingDays: parameterSet.parameters.election.votingDays.toString(),
         electionQuorum: parameterSet.parameters.election.quorum,
         minimumMedianGrade:
@@ -169,7 +161,6 @@ const toParameterSetInput = (
           approvalThreshold: form.temperatureCheckApprovalThreshold
         },
         election: {
-          reviewDays: Number(form.reviewDays),
           votingDays: Number(form.votingDays),
           quorum: form.electionQuorum,
           minimumMedianGrade:
@@ -619,7 +610,7 @@ const RetiredParameterSet = ({
       <p className="text-muted-foreground">
         {parameterSet.parameters._tag === 'Standard'
           ? `GP: ${formatGovernanceDuration(parameterSet.parameters.proposal.votingDays)} · ${formatQuorum(parameterSet.parameters.proposal.quorum)} quorum · ${parameterSet.parameters.proposal.approvalThreshold} approval`
-          : `MJ: ${formatGovernanceDuration(parameterSet.parameters.election.reviewDays)} review · ${formatGovernanceDuration(parameterSet.parameters.election.votingDays)} voting · ${formatQuorum(parameterSet.parameters.election.quorum)} quorum`}
+          : `MJ: ${formatGovernanceDuration(parameterSet.parameters.election.votingDays)} voting · ${formatQuorum(parameterSet.parameters.election.quorum)} quorum`}
       </p>
     </CardContent>
   </Card>

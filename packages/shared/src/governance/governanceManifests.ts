@@ -52,7 +52,7 @@ export const renderGovernanceParameterSetInput = (
   const process =
     input._tag === 'Standard'
       ? `Enum<0u8>(${temperatureCheck}, Tuple(${input.proposal.votingDays}u32, Decimal(${encodeManifestString(input.proposal.quorum)}), Decimal(${encodeManifestString(input.proposal.approvalThreshold)})))`
-      : `Enum<1u8>(${temperatureCheck}, Tuple(${input.election.reviewDays}u32, ${input.election.votingDays}u32, Decimal(${encodeManifestString(input.election.quorum)}), Enum<${gradeDiscriminant(input.election.minimumMedianGrade)}u8>(), ${input.election.rerunVotingDays}u32, Decimal(${encodeManifestString(input.election.rerunQuorum)}), Enum<${gradeDiscriminant(input.election.rerunMinimumMedianGrade)}u8>(), ${input.election.reserveListDays}u32))`
+      : `Enum<1u8>(${temperatureCheck}, Tuple(${input.election.votingDays}u32, Decimal(${encodeManifestString(input.election.quorum)}), Enum<${gradeDiscriminant(input.election.minimumMedianGrade)}u8>(), ${input.election.rerunVotingDays}u32, Decimal(${encodeManifestString(input.election.rerunQuorum)}), Enum<${gradeDiscriminant(input.election.rerunMinimumMedianGrade)}u8>(), ${input.election.reserveListDays}u32))`
 
   return `Tuple(${encodeManifestString(input.label)}, ${process})`
 }

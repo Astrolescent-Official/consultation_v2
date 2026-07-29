@@ -1,9 +1,13 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { useStore } from '@tanstack/react-form'
+import { Option } from 'effect'
 import { LoaderIcon } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
+import { MajorityJudgmentCandidateIdSchema } from 'shared/governance/index'
+import { createMajorityJudgmentElectionAtom } from '@/atom/adminAtom'
 import { accountsAtom } from '@/atom/dappToolkitAtom'
 import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
+import { majorityJudgmentElectionsAtom } from '@/atom/majorityJudgmentAtom'
 import { makeTemperatureCheckAtom } from '@/atom/temperatureChecksAtom'
 import { Button } from '@/components/ui/button'
 import {
@@ -30,14 +34,16 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useIsAdmin } from '@/hooks/useIsAdmin'
 import { formatGovernanceDuration } from '@/lib/governanceDuration'
+import { secureShuffleCandidateIds } from '@/routes/tc/$id/-$id/components/candidateOrder'
 import { useAppForm } from '../formHook'
 import { temperatureCheckFormOpts } from '../formOptions'
 import {
   effectSchemaValidator,
+  makeTemperatureCheckFormSchema,
   RadixTalkUrlSchema,
   ShortDescriptionSchema,
-  TemperatureCheckFormSchema,
   TitleSchema
 } from '../schema'
 import { CandidatesField } from './CandidatesField'
@@ -56,48 +62,90 @@ export function TemperatureCheckForm({
   onSuccess
 }: TemperatureCheckFormProps) {
   const [makeResult, makeTemperatureCheck] = useAtom(makeTemperatureCheckAtom)
+  const [makeElectionResult, makeElection] = useAtom(
+    createMajorityJudgmentElectionAtom
+  )
   const accountsResult = useAtomValue(accountsAtom)
   const parameterSetsResult = useAtomValue(governanceParameterSetsAtom)
+  const electionsResult = useAtomValue(majorityJudgmentElectionsAtom)
+  const isAdmin = useIsAdmin()
   const formId = useId()
   const titleId = `${formId}-title`
   const shortDescriptionId = `${formId}-shortDescription`
 
+  const activeParameterSets = Result.isSuccess(parameterSetsResult)
+    ? parameterSetsResult.value.active
+    : []
+
   const form = useAppForm({
     ...temperatureCheckFormOpts,
     validators: {
-      onSubmit: effectSchemaValidator(TemperatureCheckFormSchema)
+      // Built per-submission from the actually-selected parameter set's own
+      // voting-window minimums, since the contract's minimum durations are
+      // parameter-set- and network-specific rather than a fixed constant.
+      onSubmit: ({ value }) => {
+        const matchedParameterSet = activeParameterSets.find(
+          ({ id }) => id === value.parameterSetId
+        )
+        const minimums =
+          matchedParameterSet?.parameters._tag === 'MajorityJudgment'
+            ? {
+                temperatureCheckVotingUnits:
+                  matchedParameterSet.parameters.temperatureCheck.votingDays,
+                electionVotingUnits:
+                  matchedParameterSet.parameters.election.votingDays
+              }
+            : undefined
+        return effectSchemaValidator(makeTemperatureCheckFormSchema(minimums))({
+          value
+        })
+      }
     },
     onSubmit: ({ value }) => {
       const allLinks = [
         value.radixTalkUrl,
         ...value.links.filter((link) => link.trim() !== '')
       ]
-      makeTemperatureCheck({
+      const common = {
         parameterSetId: value.parameterSetId,
         title: value.title,
         shortDescription: value.shortDescription,
         description: value.description,
-        links: allLinks,
-        followUp:
-          value.processType === 'Standard'
-            ? {
-                _tag: 'StandardProposal',
-                voteOptions: value.voteOptions.map(({ label }) => label),
-                maxSelections: value.maxSelections
-              }
-            : {
-                _tag: 'MajorityJudgmentElection',
-                roleId: value.roleId,
-                seatCount: value.seatCount,
-                candidates: value.candidates.map((candidate) => ({
-                  reference: candidate.reference,
-                  displayName: candidate.displayName,
-                  description: candidate.description,
-                  links: candidate.links.filter(
-                    (link) => link.trim().length > 0
-                  )
-                }))
-              }
+        links: allLinks
+      }
+      if (value.processType === 'Standard') {
+        makeTemperatureCheck({
+          ...common,
+          followUp: {
+            _tag: 'StandardProposal',
+            voteOptions: value.voteOptions.map(({ label }) => label),
+            maxSelections: value.maxSelections
+          }
+        })
+        return
+      }
+
+      const candidates = value.candidates.map((candidate) => ({
+        reference: candidate.reference,
+        displayName: candidate.displayName,
+        description: candidate.description,
+        links: candidate.links.filter((link) => link.trim().length > 0)
+      }))
+      const candidateIds = candidates.map((_, index) =>
+        MajorityJudgmentCandidateIdSchema.make(index)
+      )
+      makeElection({
+        ...common,
+        roleId: value.roleId,
+        seatCount: value.seatCount,
+        candidates,
+        tcVotingStart: new Date(value.tcVotingStart),
+        tcVotingEnd: new Date(value.tcVotingEnd),
+        votingStart: new Date(value.votingStart),
+        votingEnd: new Date(value.votingEnd),
+        candidateOrder: secureShuffleCandidateIds(candidateIds).map(
+          (candidateId) => MajorityJudgmentCandidateIdSchema.make(candidateId)
+        )
       })
     }
   })
@@ -115,6 +163,7 @@ export function TemperatureCheckForm({
     form.store,
     (state) => state.values.parameterSetId
   )
+  const roleId = useStore(form.store, (state) => state.values.roleId)
 
   // Auto-adjust maxSelections if it exceeds option count (useEffect prevents render-during-render)
   useEffect(() => {
@@ -126,23 +175,9 @@ export function TemperatureCheckForm({
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
 
-  const makeError = Result.isFailure(makeResult)
-
-  // Call onSuccess when the atom completes successfully
-  useEffect(() => {
-    if (hasCalledSuccess.current || !onSuccess || !Result.isSuccess(makeResult))
-      return
-
-    hasCalledSuccess.current = true
-    onSuccess(makeResult.value)
-  }, [makeResult, onSuccess])
-
   const hasAccounts =
     Result.isSuccess(accountsResult) && accountsResult.value.length > 0
 
-  const activeParameterSets = Result.isSuccess(parameterSetsResult)
-    ? parameterSetsResult.value.active
-    : []
   const parameterSetsLoading = Result.isInitial(parameterSetsResult)
   const parameterSetsFailed = Result.isFailure(parameterSetsResult)
   const selectedParameterSet = activeParameterSets.find(
@@ -150,6 +185,44 @@ export function TemperatureCheckForm({
   )
   const isMajorityJudgment =
     selectedParameterSet?.parameters._tag === 'MajorityJudgment'
+  const failedSameRoleWithinCooldown =
+    isMajorityJudgment &&
+    Result.isSuccess(electionsResult) &&
+    electionsResult.value.some(
+      (election) =>
+        election.roleId === roleId.trim() &&
+        Option.exists(
+          election.tcOutcome,
+          (outcome) =>
+            !outcome.passed &&
+            Date.now() - outcome.recordedAt.getTime() < 7 * 24 * 60 * 60 * 1000
+        )
+    )
+  const makeError = isMajorityJudgment
+    ? Result.isFailure(makeElectionResult)
+    : Result.isFailure(makeResult)
+  const makeWaiting = isMajorityJudgment
+    ? makeElectionResult.waiting
+    : makeResult.waiting
+  const successfulResult = isMajorityJudgment
+    ? Result.isSuccess(makeElectionResult)
+      ? makeElectionResult.value
+      : undefined
+    : Result.isSuccess(makeResult)
+      ? makeResult.value
+      : undefined
+
+  useEffect(() => {
+    if (
+      hasCalledSuccess.current ||
+      !onSuccess ||
+      successfulResult === undefined
+    )
+      return
+
+    hasCalledSuccess.current = true
+    onSuccess(successfulResult)
+  }, [successfulResult, onSuccess])
 
   useEffect(() => {
     form.setFieldValue(
@@ -416,7 +489,63 @@ export function TemperatureCheckForm({
                   )}
                 </form.Field>
               </div>
+              {failedSameRoleWithinCooldown ? (
+                <p
+                  role="alert"
+                  className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+                >
+                  A Temperature Check for this role failed less than seven days
+                  ago. The cooldown is operator-enforced; confirm the governance
+                  rules before creating another election.
+                </p>
+              ) : null}
               <CandidatesField form={form} />
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Election schedule</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedParameterSet?.parameters._tag ===
+                    'MajorityJudgment'
+                      ? `The Temperature Check lasts at least ${formatGovernanceDuration(
+                          selectedParameterSet.parameters.temperatureCheck
+                            .votingDays
+                        )} and the election at least ${formatGovernanceDuration(
+                          selectedParameterSet.parameters.election.votingDays
+                        )}.`
+                      : 'The Temperature Check schedule length is set by the selected governance rules.'}{' '}
+                    MJ grading opens only after its outcome has been recorded as
+                    passed.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {(
+                    [
+                      ['tcVotingStart', 'TC voting starts'],
+                      ['tcVotingEnd', 'TC voting ends'],
+                      ['votingStart', 'MJ grading starts'],
+                      ['votingEnd', 'MJ grading ends']
+                    ] as const
+                  ).map(([name, label]) => (
+                    <form.Field key={name} name={name}>
+                      {(field) => (
+                        <Field>
+                          <FieldLabel htmlFor={`${formId}-${name}`}>
+                            {label}
+                          </FieldLabel>
+                          <Input
+                            id={`${formId}-${name}`}
+                            type="datetime-local"
+                            value={field.state.value}
+                            onChange={(event) =>
+                              field.handleChange(event.target.value)
+                            }
+                          />
+                        </Field>
+                      )}
+                    </form.Field>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
             <>
@@ -442,19 +571,24 @@ export function TemperatureCheckForm({
           type="submit"
           disabled={
             !canSubmit ||
-            makeResult.waiting ||
+            makeWaiting ||
             !hasAccounts ||
+            (isMajorityJudgment && !isAdmin) ||
             activeParameterSets.length === 0
           }
           className="w-full py-6 text-base"
         >
-          {makeResult.waiting ? (
+          {makeWaiting ? (
             <>
               <LoaderIcon className="size-5 animate-spin" />
               Creating...
             </>
           ) : !hasAccounts ? (
             'Connect Wallet to Create'
+          ) : isMajorityJudgment && !isAdmin ? (
+            'Governance Operator Required'
+          ) : isMajorityJudgment ? (
+            'Create Election'
           ) : (
             'Submit Temperature Check'
           )}

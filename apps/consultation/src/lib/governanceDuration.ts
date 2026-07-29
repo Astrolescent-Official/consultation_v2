@@ -14,3 +14,7 @@ export const governanceDurationUnitPlural = `${governanceDurationUnit}s`
 
 export const formatGovernanceDuration = (duration: number): string =>
   `${duration} ${governanceDurationUnit}${duration === 1 ? '' : 's'}`
+
+/** Milliseconds represented by one governance-duration unit on this network. */
+export const msPerGovernanceDurationUnit =
+  governanceDurationUnit === 'minute' ? 60 * 1000 : 24 * 60 * 60 * 1000

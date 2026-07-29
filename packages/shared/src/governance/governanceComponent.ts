@@ -72,6 +72,8 @@ import {
   ProposalVoteRecord,
   ProposalVoteValueSchema,
   partitionGovernanceParameterSets,
+  type RecordTemperatureCheckOutcomeInput,
+  RecordTemperatureCheckOutcomeInputSchema,
   TemperatureCheckSchema,
   TemperatureCheckVoteRecord,
   TemperatureCheckVoteSchema,
@@ -313,9 +315,14 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
           Effect.flatMap(Effect.all)
         )
 
-      const getTemperatureCheckById = (id: TemperatureCheckId) =>
+      const getTemperatureCheckById = (
+        id: TemperatureCheckId,
+        atLedgerState?: { state_version: number }
+      ) =>
         Effect.gen(function* () {
-          const keyValueStoreAddress = yield* getComponentState().pipe(
+          const keyValueStoreAddress = yield* getComponentState(
+            atLedgerState
+          ).pipe(
             Effect.map((result) =>
               KeyValueStoreAddress.make(result.temperature_checks)
             )
@@ -327,7 +334,10 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
               {
                 key_json: { kind: 'U64' as const, value: id.toString() }
               }
-            ]
+            ],
+            ...(atLedgerState === undefined
+              ? {}
+              : { at_ledger_state: atLedgerState })
           }).pipe(
             Effect.map((result) =>
               pipe(
@@ -1221,15 +1231,54 @@ CALL_METHOD
           const adminBadgeProof = yield* makeAdminBadgeProof(
             parsedInput.accountAddress
           )
+          const draft = renderTemperatureCheckDraft({
+            title: parsedInput.title,
+            shortDescription: parsedInput.shortDescription,
+            description: parsedInput.description,
+            links: parsedInput.links,
+            followUp: {
+              _tag: 'MajorityJudgmentElection',
+              roleId: parsedInput.roleId,
+              seatCount: parsedInput.seatCount,
+              candidates: parsedInput.candidates
+            }
+          })
 
           return TransactionManifestString.make(`
 ${adminBadgeProof}
 CALL_METHOD
   Address(${encodeManifestString(config.componentAddress)})
   "make_majority_judgment_election"
-  ${parsedInput.temperatureCheckId}u64
-  ${renderInstant(parsedInput.reviewStart)}
+  Address(${encodeManifestString(parsedInput.accountAddress)})
+  ${draft}
+  ${encodeManifestString(parsedInput.parameterSetId)}
+  ${renderInstant(parsedInput.tcVotingStart)}
+  ${renderInstant(parsedInput.tcVotingEnd)}
+  ${renderInstant(parsedInput.votingStart)}
+  ${renderInstant(parsedInput.votingEnd)}
   ${renderCandidateOrder(parsedInput.candidateOrder)}
+;
+          `)
+        })
+
+      const recordTemperatureCheckOutcomeManifest = (
+        input: RecordTemperatureCheckOutcomeInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            RecordTemperatureCheckOutcomeInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "record_temperature_check_outcome"
+  ${parsedInput.temperatureCheckId}u64
+  ${parsedInput.passed}
 ;
           `)
         })
@@ -1356,6 +1405,7 @@ CALL_METHOD
         getMajorityJudgmentVotesByIndex,
         getMajorityJudgmentVoterEntriesByAccounts,
         makeMajorityJudgmentElectionManifest,
+        recordTemperatureCheckOutcomeManifest,
         makeMajorityJudgmentVoteManifest,
         startMajorityJudgmentRerunManifest,
         recordMajorityJudgmentTieResolutionManifest,

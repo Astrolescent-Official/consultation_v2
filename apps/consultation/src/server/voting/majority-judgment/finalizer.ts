@@ -4,6 +4,10 @@ import {
   applyMajorityJudgmentTieResolution,
   calculateMajorityJudgment
 } from './calculator'
+import {
+  deriveMajorityJudgmentPhase,
+  deriveMajorityJudgmentRerunPhase
+} from './projection'
 import { isClosedMajorityJudgmentResult, MajorityJudgmentRepo } from './repo'
 
 export class InvalidMajorityJudgmentTieResolutionError extends Data.TaggedError(
@@ -156,36 +160,36 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                 }
 
                 const { election, round } = latest
-                if (now < election.reviewStart) {
-                  yield* repo.setPhaseStatus(
-                    election.id,
-                    round.round,
-                    'PENDING'
-                  )
-                  return
-                }
-                if (now < election.reviewEnd) {
-                  yield* repo.setPhaseStatus(
-                    election.id,
-                    round.round,
-                    'REVIEW_OPEN'
-                  )
-                  return
-                }
-                if (now < round.votingStart) {
-                  yield* repo.setPhaseStatus(
-                    election.id,
-                    round.round,
-                    round.round === 1 ? 'REVIEW_OPEN' : 'RERUN_PENDING'
-                  )
-                  return
-                }
-                if (now < round.votingEnd) {
-                  yield* repo.setPhaseStatus(
-                    election.id,
-                    round.round,
-                    round.round === 1 ? 'LIVE' : 'RERUN_LIVE'
-                  )
+                const isRerun = round.round !== 1
+                const tcOutcome =
+                  election.tcOutcome === 'FAILED'
+                    ? ('FAILED' as const)
+                    : election.tcOutcome === 'PASSED'
+                      ? ('PASSED' as const)
+                      : ('PENDING' as const)
+
+                // Round 1 additionally gates on the temperature check's outcome;
+                // a rerun only ever exists once that outcome is PASSED, so it
+                // only needs to wait out its own voting window.
+                const readyToFinalize = isRerun
+                  ? now >= round.votingEnd
+                  : tcOutcome === 'PASSED' && now >= round.votingEnd
+
+                if (!readyToFinalize) {
+                  const phase = isRerun
+                    ? deriveMajorityJudgmentRerunPhase(
+                        now,
+                        round.votingStart,
+                        round.votingEnd
+                      )
+                    : deriveMajorityJudgmentPhase(now, {
+                        tcVotingStart: election.tcVotingStart,
+                        tcVotingEnd: election.tcVotingEnd,
+                        votingStart: round.votingStart,
+                        votingEnd: round.votingEnd,
+                        tcOutcome
+                      })
+                  yield* repo.setPhaseStatus(election.id, round.round, phase)
                   return
                 }
 

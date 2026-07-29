@@ -31,7 +31,6 @@ export const Grade = s.enum([
 ])
 
 export const MajorityJudgmentParameters = s.struct({
-  review_days: s.number(),
   voting_days: s.number(),
   quorum: s.decimal(),
   minimum_median_grade: Grade,
@@ -127,6 +126,17 @@ export const ConsultationContinuation = s.enum([
   }
 ])
 
+export const TemperatureCheckOutcome = s.enum([
+  {
+    variant: 'Passed',
+    schema: s.struct({ recorded_at: s.instant() })
+  },
+  {
+    variant: 'Failed',
+    schema: s.struct({ recorded_at: s.instant() })
+  }
+])
+
 export const MajorityJudgmentRoundId = s.enum([
   { variant: 'RoundOne', schema: s.tuple([]) },
   { variant: 'Rerun', schema: s.tuple([]) }
@@ -175,8 +185,10 @@ export const TemperatureCheckKeyValueStoreValue = s.struct({
   votes: s.internalAddress(),
   vote_count: s.number(),
   revote_count: s.number(),
+  snapshot: s.instant(),
   start: s.instant(),
   deadline: s.instant(),
+  outcome: s.option(TemperatureCheckOutcome),
   continuation: s.option(ConsultationContinuation),
   author: s.address(),
   hidden: s.bool()
@@ -241,17 +253,6 @@ export const ProposalVotersKeyValueStoreValue = s.struct({
 export const MajorityJudgmentElectionKeyValueStoreKey = s.number()
 export const MajorityJudgmentElectionKeyValueStoreValue = s.struct({
   temperature_check_id: s.number(),
-  title: s.string(),
-  short_description: s.string(),
-  description: s.string(),
-  links: s.array(s.string()),
-  author: s.address(),
-  role_id: s.string(),
-  seat_count: s.number(),
-  candidates: s.array(MajorityJudgmentCandidate),
-  parameter_set: GovernanceParameterSetSnapshot,
-  review_start: s.instant(),
-  review_end: s.instant(),
   round_one: MajorityJudgmentRound,
   rerun: s.option(MajorityJudgmentRound),
   tie_resolution: s.option(MajorityJudgmentTieResolution),
@@ -274,10 +275,17 @@ export const MajorityJudgmentVotersKeyValueStoreValue = s.struct({
 export const TemperatureCheckCreatedEvent = s.struct({
   temperature_check_id: s.number(),
   title: s.string(),
+  snapshot: s.instant(),
   start: s.instant(),
   deadline: s.instant(),
   parameter_set_id: s.string(),
   parameter_set_version: s.number()
+})
+
+export const TemperatureCheckOutcomeRecordedEvent = s.struct({
+  temperature_check_id: s.number(),
+  passed: s.bool(),
+  recorded_at: s.instant()
 })
 
 export const TemperatureCheckVotedEvent = s.struct({
@@ -327,8 +335,6 @@ export const MajorityJudgmentElectionCreatedEvent = s.struct({
   temperature_check_id: s.number(),
   role_id: s.string(),
   seat_count: s.number(),
-  review_start: s.instant(),
-  review_end: s.instant(),
   snapshot: s.instant(),
   voting_start: s.instant(),
   voting_deadline: s.instant(),

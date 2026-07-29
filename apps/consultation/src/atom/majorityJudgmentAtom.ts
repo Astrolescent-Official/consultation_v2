@@ -18,7 +18,51 @@ import { transactionFailureMessage, withToast } from './withToast'
 export const majorityJudgmentElectionsAtom = governanceRuntime.atom(
   Effect.gen(function* () {
     const governance = yield* GovernanceComponent
-    return yield* governance.getMajorityJudgmentElections()
+    // Fetch both KV stores in full rather than one getTemperatureCheckById
+    // call per election, which would issue an extra Gateway round trip for
+    // every election on every load of the public elections list.
+    const [elections, temperatureChecks] = yield* Effect.all(
+      [
+        governance.getMajorityJudgmentElections(),
+        governance.getTemperatureChecks()
+      ],
+      { concurrency: 2 }
+    )
+    const temperatureCheckById = new Map(
+      temperatureChecks.map((temperatureCheck) => [
+        temperatureCheck.id,
+        temperatureCheck
+      ])
+    )
+
+    return elections.flatMap((election) => {
+      const temperatureCheck = temperatureCheckById.get(
+        election.temperatureCheckId
+      )
+      // Every on-chain election is created atomically with its linked MJ
+      // temperature check, so this should be unreachable. Skip the affected
+      // election rather than failing the whole list for every viewer if
+      // that invariant is ever violated.
+      if (
+        temperatureCheck === undefined ||
+        temperatureCheck.followUp._tag !== 'MajorityJudgmentElection'
+      ) {
+        return []
+      }
+      return [
+        {
+          ...election,
+          title: temperatureCheck.title,
+          shortDescription: temperatureCheck.shortDescription,
+          roleId: temperatureCheck.followUp.roleId,
+          seatCount: temperatureCheck.followUp.seatCount,
+          parameterSet: temperatureCheck.parameterSet,
+          tcVotingStart: temperatureCheck.start,
+          tcVotingEnd: temperatureCheck.deadline,
+          tcOutcome: temperatureCheck.outcome
+        }
+      ]
+    })
   })
 )
 

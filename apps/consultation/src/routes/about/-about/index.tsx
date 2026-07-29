@@ -20,8 +20,8 @@ export const Page = () => {
           <div>
             <H1>About Radix DAO Governance</H1>
             <p className="mt-2 text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
-              Radix DAO Governance is a decentralized governance platform for the
-              Radix ecosystem. It enables the community to signal sentiment
+              Radix DAO Governance is a decentralized governance platform for
+              the Radix ecosystem. It enables the community to signal sentiment
               through Temperature Checks (TC) and decide on execution paths
               through Governance Proposals (GP).
             </p>
@@ -127,10 +127,6 @@ const ParameterSetDetails = ({
               Majority Judgment Election
             </h4>
             <ul className="list-inside list-disc space-y-2 pl-2 text-sm text-neutral-500">
-              <li>
-                Candidate review:{' '}
-                {formatGovernanceDuration(parameters.election.reviewDays)}
-              </li>
               <li>
                 Voting:{' '}
                 {formatGovernanceDuration(parameters.election.votingDays)}

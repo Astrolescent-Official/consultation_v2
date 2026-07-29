@@ -107,9 +107,7 @@ describe('runtime app configuration', () => {
   it('uses the documented Stokenet governance component', async () => {
     const layer = GovernanceConfigLayer.pipe(
       Layer.provide(
-        Layer.setConfigProvider(
-          ConfigProvider.fromJson({ NETWORK_ID: 2 })
-        )
+        Layer.setConfigProvider(ConfigProvider.fromJson({ NETWORK_ID: 2 }))
       )
     )
     const config = await Effect.runPromise(
@@ -119,7 +117,7 @@ describe('runtime app configuration', () => {
     )
 
     expect(config.componentAddress).toBe(
-      'component_tdx_2_1cr3t55wx3dnhzgtk2hkn47mmkllr2z79lmwkvw65ltaluzylz4jpsc'
+      'component_tdx_2_1crk7cwsd6xdys73hqx5yqjuky3a02dcklt4s86xmygw62mytae4d3j'
     )
   })
 })

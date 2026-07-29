@@ -158,7 +158,6 @@ export const ScryptoGradeToScoreSchema = Schema.transform(
 )
 
 const MajorityJudgmentParametersEncodedSchema = Schema.Struct({
-  review_days: DurationDays,
   voting_days: DurationDays,
   quorum: PositiveDecimalString,
   minimum_median_grade: ScryptoGradeToScoreSchema,
@@ -171,7 +170,6 @@ const MajorityJudgmentParametersEncodedSchema = Schema.Struct({
 export const MajorityJudgmentParametersSchema = Schema.transform(
   MajorityJudgmentParametersEncodedSchema,
   Schema.Struct({
-    reviewDays: DurationDays,
     votingDays: DurationDays,
     quorum: PositiveDecimalString,
     minimumMedianGrade: GradeSchema,
@@ -183,7 +181,6 @@ export const MajorityJudgmentParametersSchema = Schema.transform(
   {
     strict: true,
     decode: (value) => ({
-      reviewDays: value.review_days,
       votingDays: value.voting_days,
       quorum: value.quorum,
       minimumMedianGrade: value.minimum_median_grade,
@@ -193,7 +190,6 @@ export const MajorityJudgmentParametersSchema = Schema.transform(
       reserveListDays: value.reserve_list_days
     }),
     encode: (value) => ({
-      review_days: value.reviewDays,
       voting_days: value.votingDays,
       quorum: value.quorum,
       minimum_median_grade: value.minimumMedianGrade,
@@ -434,6 +430,14 @@ export const MakeTemperatureCheckInputSchema = Schema.Struct({
 export type MakeTemperatureCheckInput =
   typeof MakeTemperatureCheckInputSchema.Encoded
 
+export const RecordTemperatureCheckOutcomeInputSchema = Schema.Struct({
+  accountAddress: AccountAddress,
+  temperatureCheckId: TemperatureCheckId,
+  passed: Schema.Boolean
+})
+export type RecordTemperatureCheckOutcomeInput =
+  typeof RecordTemperatureCheckOutcomeInputSchema.Type
+
 const CandidateSchema = Schema.Struct({
   id: Schema.Tuple(MajorityJudgmentCandidateIdSchema),
   reference: Schema.String,
@@ -611,6 +615,54 @@ export const ConsultationContinuationSchema = Schema.transform(
   }
 )
 
+const TemperatureCheckOutcomeEncodedSchema = Schema.Union(
+  Schema.Struct({
+    variant: Schema.Literal('Passed'),
+    value: Schema.Struct({ recorded_at: Schema.DateFromSelf })
+  }),
+  Schema.Struct({
+    variant: Schema.Literal('Failed'),
+    value: Schema.Struct({ recorded_at: Schema.DateFromSelf })
+  })
+)
+
+export const TemperatureCheckOutcomeSchema = Schema.transform(
+  Schema.Union(
+    Schema.Struct({ variant: Schema.Literal('None') }),
+    Schema.Struct({
+      variant: Schema.Literal('Some'),
+      value: TemperatureCheckOutcomeEncodedSchema
+    })
+  ),
+  Schema.OptionFromSelf(
+    Schema.Struct({
+      passed: Schema.Boolean,
+      recordedAt: Schema.DateFromSelf
+    })
+  ),
+  {
+    strict: true,
+    decode: (value) =>
+      value.variant === 'None'
+        ? Option.none()
+        : Option.some({
+            passed: value.value.variant === 'Passed',
+            recordedAt: value.value.value.recorded_at
+          }),
+    encode: (value) =>
+      Option.match(value, {
+        onNone: () => ({ variant: 'None' as const }),
+        onSome: (outcome) => ({
+          variant: 'Some' as const,
+          value: {
+            variant: outcome.passed ? ('Passed' as const) : ('Failed' as const),
+            value: { recorded_at: outcome.recordedAt }
+          }
+        })
+      })
+  }
+)
+
 export const TemperatureCheckSchema = Schema.asSchema(
   Schema.transform(
     Schema.Struct({
@@ -625,8 +677,10 @@ export const TemperatureCheckSchema = Schema.asSchema(
       votes: Schema.String,
       vote_count: Schema.Number,
       revote_count: Schema.Number,
+      snapshot: Schema.DateFromSelf,
       start: Schema.DateFromSelf,
       deadline: Schema.DateFromSelf,
+      outcome: TemperatureCheckOutcomeSchema,
       continuation: ConsultationContinuationSchema,
       author: Schema.String,
       hidden: Schema.Boolean
@@ -643,8 +697,10 @@ export const TemperatureCheckSchema = Schema.asSchema(
       votes: KeyValueStoreAddress,
       voteCount: Schema.Number,
       revoteCount: Schema.Number,
+      snapshot: Schema.DateFromSelf,
       start: Schema.DateFromSelf,
       deadline: Schema.DateFromSelf,
+      outcome: Schema.typeSchema(TemperatureCheckOutcomeSchema),
       continuation: Schema.typeSchema(ConsultationContinuationSchema),
       author: AccountAddress,
       hidden: Schema.Boolean
@@ -663,8 +719,10 @@ export const TemperatureCheckSchema = Schema.asSchema(
         votes: KeyValueStoreAddress.make(value.votes),
         voteCount: value.vote_count,
         revoteCount: value.revote_count,
+        snapshot: value.snapshot,
         start: value.start,
         deadline: value.deadline,
+        outcome: value.outcome,
         continuation: value.continuation,
         author: AccountAddress.make(value.author),
         hidden: value.hidden
@@ -681,8 +739,10 @@ export const TemperatureCheckSchema = Schema.asSchema(
         votes: value.votes,
         vote_count: value.voteCount,
         revote_count: value.revoteCount,
+        snapshot: value.snapshot,
         start: value.start,
         deadline: value.deadline,
+        outcome: value.outcome,
         continuation: value.continuation,
         author: value.author,
         hidden: value.hidden
@@ -916,17 +976,6 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
     Schema.Struct({
       id: MajorityJudgmentElectionIdSchema,
       temperature_check_id: Schema.Number,
-      title: Schema.String,
-      short_description: Schema.String,
-      description: Schema.String,
-      links: Schema.Array(Schema.String),
-      author: Schema.String,
-      role_id: Schema.String,
-      seat_count: Schema.Number,
-      candidates: Schema.Array(CandidateSchema),
-      parameter_set: GovernanceParameterSetSnapshotSchema,
-      review_start: Schema.DateFromSelf,
-      review_end: Schema.DateFromSelf,
       round_one: MajorityJudgmentRoundSchema,
       rerun: ScryptoOptionalRoundSchema,
       tie_resolution: ScryptoOptionalTieResolutionSchema,
@@ -935,26 +984,6 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
     Schema.Struct({
       id: MajorityJudgmentElectionIdSchema,
       temperatureCheckId: TemperatureCheckId,
-      title: Schema.String,
-      shortDescription: Schema.String,
-      description: Schema.String,
-      links: Schema.Array(Schema.String),
-      author: AccountAddress,
-      roleId: Schema.String,
-      seatCount: Schema.Number,
-      candidates: Schema.Array(
-        Schema.Struct({
-          id: MajorityJudgmentCandidateIdSchema,
-          reference: Schema.String,
-          displayName: Schema.String,
-          description: Schema.String,
-          links: Schema.Array(Schema.String),
-          displayOrder: Schema.Number
-        })
-      ),
-      parameterSet: Schema.typeSchema(GovernanceParameterSetSnapshotSchema),
-      reviewStart: Schema.DateFromSelf,
-      reviewEnd: Schema.DateFromSelf,
       roundOne: Schema.typeSchema(MajorityJudgmentRoundSchema),
       rerun: Schema.OptionFromSelf(
         Schema.typeSchema(MajorityJudgmentRoundSchema)
@@ -973,24 +1002,6 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
       decode: (value) => ({
         id: value.id,
         temperatureCheckId: TemperatureCheckId.make(value.temperature_check_id),
-        title: value.title,
-        shortDescription: value.short_description,
-        description: value.description,
-        links: value.links,
-        author: AccountAddress.make(value.author),
-        roleId: value.role_id,
-        seatCount: value.seat_count,
-        candidates: value.candidates.map((candidate) => ({
-          id: candidate.id[0],
-          reference: candidate.reference,
-          displayName: candidate.display_name,
-          description: candidate.description,
-          links: candidate.links,
-          displayOrder: candidate.display_order
-        })),
-        parameterSet: value.parameter_set,
-        reviewStart: value.review_start,
-        reviewEnd: value.review_end,
         roundOne: value.round_one,
         rerun:
           value.rerun.variant === 'Some'
@@ -1012,24 +1023,6 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
       encode: (value) => ({
         id: MajorityJudgmentElectionIdSchema.make(value.id),
         temperature_check_id: value.temperatureCheckId,
-        title: value.title,
-        short_description: value.shortDescription,
-        description: value.description,
-        links: value.links,
-        author: value.author,
-        role_id: value.roleId,
-        seat_count: value.seatCount,
-        candidates: value.candidates.map((candidate) => ({
-          id: candidateIdTuple(candidate.id),
-          reference: candidate.reference,
-          display_name: candidate.displayName,
-          description: candidate.description,
-          links: candidate.links,
-          display_order: candidate.displayOrder
-        })),
-        parameter_set: value.parameterSet,
-        review_start: value.reviewStart,
-        review_end: value.reviewEnd,
         round_one: value.roundOne,
         rerun: Option.match(value.rerun, {
           onNone: () => ({ variant: 'None' as const }),

@@ -101,10 +101,11 @@ describe('majority judgment collector preparation', () => {
 
 describe('majority judgment projected phase', () => {
   const boundaries = {
-    reviewStart: new Date('2026-07-01T00:00:00.000Z'),
-    reviewEnd: new Date('2026-07-08T00:00:00.000Z'),
+    tcVotingStart: new Date('2026-07-01T00:00:00.000Z'),
+    tcVotingEnd: new Date('2026-07-08T00:00:00.000Z'),
     votingStart: new Date('2026-07-08T00:00:00.000Z'),
-    votingEnd: new Date('2026-07-15T00:00:00.000Z')
+    votingEnd: new Date('2026-07-15T00:00:00.000Z'),
+    tcOutcome: 'PENDING' as const
   }
 
   it('derives pre-vote phases and treats the voting deadline as closed', () => {
@@ -120,20 +121,20 @@ describe('majority judgment projected phase', () => {
         new Date('2026-07-01T00:00:00.000Z'),
         boundaries
       ),
-      'REVIEW_OPEN'
+      'TC_LIVE'
     )
     assert.strictEqual(
-      deriveMajorityJudgmentPhase(
-        new Date('2026-07-08T00:00:00.000Z'),
-        boundaries
-      ),
+      deriveMajorityJudgmentPhase(new Date('2026-07-08T00:00:00.000Z'), {
+        ...boundaries,
+        tcOutcome: 'PASSED'
+      }),
       'LIVE'
     )
     assert.strictEqual(
-      deriveMajorityJudgmentPhase(
-        new Date('2026-07-15T00:00:00.000Z'),
-        boundaries
-      ),
+      deriveMajorityJudgmentPhase(new Date('2026-07-15T00:00:00.000Z'), {
+        ...boundaries,
+        tcOutcome: 'PASSED'
+      }),
       'RERUN_PENDING'
     )
   })

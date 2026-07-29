@@ -101,7 +101,6 @@ impl Grade {
 
 #[derive(ScryptoSbor, ManifestSbor, Clone, Debug, PartialEq)]
 pub struct MajorityJudgmentParameters {
-    pub review_days: u32,
     pub voting_days: u32,
     pub quorum: Decimal,
     pub minimum_median_grade: Grade,
@@ -236,6 +235,24 @@ pub enum ConsultationContinuation {
     MajorityJudgmentElection(u64),
 }
 
+#[derive(ScryptoSbor, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TemperatureCheckOutcome {
+    Passed { recorded_at: Instant },
+    Failed { recorded_at: Instant },
+}
+
+impl TemperatureCheckOutcome {
+    pub fn passed(self) -> bool {
+        matches!(self, Self::Passed { .. })
+    }
+
+    pub fn recorded_at(self) -> Instant {
+        match self {
+            Self::Passed { recorded_at } | Self::Failed { recorded_at } => recorded_at,
+        }
+    }
+}
+
 #[derive(ScryptoSbor)]
 pub struct TemperatureCheck {
     pub title: String,
@@ -248,8 +265,10 @@ pub struct TemperatureCheck {
     pub votes: KeyValueStore<u64, TemperatureCheckVoteRecord>,
     pub vote_count: u64,
     pub revote_count: u64,
+    pub snapshot: Instant,
     pub start: Instant,
     pub deadline: Instant,
+    pub outcome: Option<TemperatureCheckOutcome>,
     pub continuation: Option<ConsultationContinuation>,
     pub author: Global<Account>,
     pub hidden: bool,
@@ -327,17 +346,6 @@ pub struct MajorityJudgmentTieResolution {
 #[derive(ScryptoSbor)]
 pub struct MajorityJudgmentElection {
     pub temperature_check_id: u64,
-    pub title: String,
-    pub short_description: String,
-    pub description: String,
-    pub links: Vec<Url>,
-    pub author: Global<Account>,
-    pub role_id: String,
-    pub seat_count: u32,
-    pub candidates: Vec<MajorityJudgmentCandidate>,
-    pub parameter_set: GovernanceParameterSetSnapshot,
-    pub review_start: Instant,
-    pub review_end: Instant,
     pub round_one: MajorityJudgmentRound,
     pub rerun: Option<MajorityJudgmentRound>,
     pub tie_resolution: Option<MajorityJudgmentTieResolution>,
@@ -366,10 +374,18 @@ pub struct Delegation {
 pub struct TemperatureCheckCreatedEvent {
     pub temperature_check_id: u64,
     pub title: String,
+    pub snapshot: Instant,
     pub start: Instant,
     pub deadline: Instant,
     pub parameter_set_id: String,
     pub parameter_set_version: u32,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
+pub struct TemperatureCheckOutcomeRecordedEvent {
+    pub temperature_check_id: u64,
+    pub passed: bool,
+    pub recorded_at: Instant,
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
@@ -426,8 +442,6 @@ pub struct MajorityJudgmentElectionCreatedEvent {
     pub temperature_check_id: u64,
     pub role_id: String,
     pub seat_count: u32,
-    pub review_start: Instant,
-    pub review_end: Instant,
     pub snapshot: Instant,
     pub voting_start: Instant,
     pub voting_deadline: Instant,

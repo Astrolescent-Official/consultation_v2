@@ -11,6 +11,11 @@ Radix governance consultation dApp running entirely on Cloudflare Workers and D1
 - Cloudflare D1 stores the cursor, lease, exact vote totals, and account votes.
 - production and preview use separate Workers, D1 databases, Radix networks, variables, and schedules.
 
+Governance quorums for Temperature Checks, Governance Proposals, and Majority
+Judgment elections are fixed XRD amounts. Circulating supply cannot be calculated
+reliably on-chain, so administrators are responsible for keeping the quorum
+amounts in governance parameter sets up to date over time.
+
 The current component schema uses named governance parameter sets and is not
 compatible with the earlier singleton-parameter development component. For a
 launch or Stokenet rollout, publish a fresh package, instantiate a fresh

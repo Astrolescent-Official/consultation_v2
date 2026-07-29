@@ -109,8 +109,17 @@ export const mjElection = sqliteTable(
     shortDescription: text('short_description').notNull(),
     description: text('description').notNull(),
     seatCount: integer('seat_count').notNull(),
-    reviewStart: integer('review_start', { mode: 'timestamp_ms' }).notNull(),
-    reviewEnd: integer('review_end', { mode: 'timestamp_ms' }).notNull(),
+    snapshotAt: integer('snapshot_at', { mode: 'timestamp_ms' }).notNull(),
+    tcVotingStart: integer('tc_voting_start', {
+      mode: 'timestamp_ms'
+    }).notNull(),
+    tcVotingEnd: integer('tc_voting_end', { mode: 'timestamp_ms' }).notNull(),
+    tcQuorumXrd: text('tc_quorum_xrd').notNull(),
+    tcApprovalThreshold: text('tc_approval_threshold').notNull(),
+    tcOutcome: text('tc_outcome'),
+    tcOutcomeRecordedAt: integer('tc_outcome_recorded_at', {
+      mode: 'timestamp_ms'
+    }),
     parameterSetId: text('parameter_set_id').notNull(),
     parameterSetVersion: integer('parameter_set_version').notNull(),
     reserveListDays: integer('reserve_list_days').notNull(),

@@ -15,6 +15,7 @@ import {
   MajorityJudgmentRerunStartedEvent,
   MajorityJudgmentTieResolutionRecordedEvent,
   ProposalVotedEvent,
+  TemperatureCheckOutcomeRecordedEvent,
   TemperatureCheckVotedEvent
 } from 'shared/schemas'
 import type { VoteCalculationPayload } from './vote-calculation/types'
@@ -149,8 +150,31 @@ export class GovernanceEventProcessor extends Effect.Service<GovernanceEventProc
                   entityId: id,
                   keyValueStoreAddress: temperatureCheck.votes,
                   voteCount: temperatureCheck.voteCount,
-                  start: temperatureCheck.start.getTime()
+                  start: temperatureCheck.snapshot.getTime()
                 }
+              })
+            }
+            case 'TemperatureCheckOutcomeRecordedEvent': {
+              const payload = yield* decodePayload(
+                event,
+                TemperatureCheckOutcomeRecordedEvent
+              )
+              const temperatureCheck =
+                yield* governance.getTemperatureCheckById(
+                  TemperatureCheckId.make(payload.temperature_check_id),
+                  { state_version: stateVersion }
+                )
+              return Option.match(temperatureCheck.continuation, {
+                onNone: () => Option.none<GovernanceAction>(),
+                onSome: (continuation) =>
+                  continuation._tag === 'MajorityJudgmentElection'
+                    ? Option.some<GovernanceAction>({
+                        _tag: 'MajorityJudgmentCreated',
+                        electionId: Number(continuation.id),
+                        observedAt,
+                        stateVersion
+                      })
+                    : Option.none<GovernanceAction>()
               })
             }
             case 'ProposalVotedEvent': {

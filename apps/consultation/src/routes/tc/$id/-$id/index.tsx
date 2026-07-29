@@ -20,6 +20,7 @@ import { TC_VOTE_OPTIONS } from '@/lib/voting'
 import { getItemStatus } from '@/routes/-index/components/StatusBadge'
 import { PromoteToProposal } from './components/PromoteToProposal'
 import { SidebarContent } from './components/SidebarContent'
+import { TemperatureCheckOutcomeControls } from './components/TemperatureCheckOutcomeControls'
 import { VotingSection } from './components/VotingSection'
 
 type TemperatureCheck = typeof TemperatureCheckSchema.Type
@@ -151,7 +152,7 @@ function PageContentInner({
             temperatureCheckId={id}
             followUp={tc.followUp}
             continuation={tc.continuation}
-            deadline={tc.deadline}
+            outcome={tc.outcome}
           />
           <HideToggle type="temperature_check" id={id} hidden={tc.hidden} />
         </div>
@@ -167,6 +168,12 @@ function PageContentInner({
         </div>
       )}
       <ParameterSetSnapshotDetails parameterSet={tc.parameterSet} />
+      <TemperatureCheckOutcomeControls
+        temperatureCheckId={id}
+        deadline={tc.deadline}
+        outcome={tc.outcome}
+        isAdmin={isAdmin}
+      />
       <DetailPageDetails
         shortDescription={tc.shortDescription}
         description={tc.description}

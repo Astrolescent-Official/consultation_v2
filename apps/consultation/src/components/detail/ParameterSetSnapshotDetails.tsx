@@ -38,9 +38,7 @@ export const ParameterSetSnapshotDetails = ({
           <dl className="space-y-2">
             <dt className="font-medium">Majority Judgment Election</dt>
             <dd className="text-muted-foreground">
-              Review: {formatGovernanceDuration(parameters.election.reviewDays)}{' '}
-              · Voting:{' '}
-              {formatGovernanceDuration(parameters.election.votingDays)}
+              Voting: {formatGovernanceDuration(parameters.election.votingDays)}
             </dd>
             <dd className="text-muted-foreground">
               {formatQuorum(parameters.election.quorum)} fixed quorum · minimum{' '}

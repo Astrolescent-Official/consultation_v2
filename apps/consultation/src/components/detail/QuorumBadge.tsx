@@ -1,6 +1,8 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
+import BigNumber from 'bignumber.js'
 import type { EntityId, EntityType } from 'shared/governance/brandedTypes'
 import { voteResultsAtom } from '@/atom/voteResultsAtom'
+import { meetsQuorum } from '@/lib/quorum'
 
 type QuorumBadgeProps = {
   entityType: EntityType
@@ -8,24 +10,35 @@ type QuorumBadgeProps = {
   quorum: number
 }
 
-export function QuorumBadge({ entityType, entityId, quorum }: QuorumBadgeProps) {
-  const voteResultsResult = useAtomValue(
-    voteResultsAtom(entityType)(entityId)
-  )
+export function QuorumBadge({
+  entityType,
+  entityId,
+  quorum
+}: QuorumBadgeProps) {
+  const voteResultsResult = useAtomValue(voteResultsAtom(entityType)(entityId))
 
   return Result.builder(voteResultsResult)
     .onInitial(() => null)
     .onFailure(() => null)
     .onSuccess((results) => {
       const totalVotePower = results.reduce(
-        (sum, r) => sum + Number(r.votePower),
-        0
+        (sum, r) => sum.plus(r.votePower),
+        new BigNumber(0)
       )
-      const rawPercentage = !Number.isFinite(quorum) || quorum <= 0
-        ? 0
-        : (totalVotePower / quorum) * 100
-      const quorumMet = Number.isFinite(quorum) && quorum > 0 && totalVotePower >= quorum
-      const displayPercent = quorumMet ? 100 : Math.min(Math.floor(rawPercentage), 99)
+      const quorumMet =
+        Number.isFinite(quorum) &&
+        quorum > 0 &&
+        meetsQuorum(totalVotePower, quorum)
+      const rawPercentage =
+        !Number.isFinite(quorum) || quorum <= 0
+          ? new BigNumber(0)
+          : totalVotePower.dividedBy(quorum).multipliedBy(100)
+      const displayPercent = quorumMet
+        ? 100
+        : Math.min(
+            rawPercentage.integerValue(BigNumber.ROUND_FLOOR).toNumber(),
+            99
+          )
 
       return (
         <span

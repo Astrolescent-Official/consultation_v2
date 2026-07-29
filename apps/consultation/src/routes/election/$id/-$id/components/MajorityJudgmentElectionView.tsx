@@ -40,8 +40,8 @@ type MajorityJudgmentElectionViewProps = {
   readonly temperatureCheckId?: number
   readonly parameterSetId?: string
   readonly parameterSetVersion?: number
-  readonly reviewStart?: Date
-  readonly reviewEnd?: Date
+  readonly tcVotingStart?: Date
+  readonly tcVotingEnd?: Date
   readonly votingStart?: Date
   readonly votingEnd?: Date
   readonly quorumXrd: string
@@ -71,8 +71,12 @@ const statusCopy = (status: MajorityJudgmentElectionStatus) => {
   switch (status) {
     case 'PENDING':
       return 'Election scheduled'
-    case 'REVIEW_OPEN':
-      return 'Candidate review'
+    case 'TC_LIVE':
+      return 'Candidate list review — vote For or Against'
+    case 'TC_FAILED':
+      return 'Candidate list not approved — this election will not proceed'
+    case 'MJ_PENDING':
+      return 'Candidate list approved — grading has not opened'
     case 'LIVE':
       return 'Round one voting'
     case 'RERUN_PENDING':
@@ -145,8 +149,8 @@ export function MajorityJudgmentElectionView({
   temperatureCheckId,
   parameterSetId,
   parameterSetVersion,
-  reviewStart,
-  reviewEnd,
+  tcVotingStart,
+  tcVotingEnd,
   votingStart,
   votingEnd,
   quorumXrd,
@@ -238,22 +242,28 @@ export function MajorityJudgmentElectionView({
         <div className="rounded-md border px-4 py-3 text-sm font-medium">
           {currentStatusCopy}
         </div>
-        {reviewStart !== undefined &&
-        reviewEnd !== undefined &&
+        {tcVotingStart !== undefined &&
+        tcVotingEnd !== undefined &&
         votingStart !== undefined &&
         votingEnd !== undefined ? (
           <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
             <span>
-              Review: {dateTime(reviewStart)}–{dateTime(reviewEnd)}
+              TC: {dateTime(tcVotingStart)}–{dateTime(tcVotingEnd)}
             </span>
             <span>
               Voting: {dateTime(votingStart)}–{dateTime(votingEnd)}
             </span>
             {status === 'PENDING' ? (
-              <Countdown label="Candidate review opens" target={reviewStart} />
+              <Countdown
+                label="Candidate-list voting opens"
+                target={tcVotingStart}
+              />
             ) : null}
-            {status === 'REVIEW_OPEN' ? (
-              <Countdown label="Voting opens" target={votingStart} />
+            {status === 'TC_LIVE' ? (
+              <Countdown label="TC voting closes" target={tcVotingEnd} />
+            ) : null}
+            {status === 'MJ_PENDING' ? (
+              <Countdown label="MJ grading opens" target={votingStart} />
             ) : null}
             {votingOpen ? (
               <Countdown label="Voting closes" target={votingEnd} />
@@ -272,7 +282,9 @@ export function MajorityJudgmentElectionView({
         <div>
           <h2 className="text-xl font-medium">Candidates</h2>
           <p className="text-sm text-muted-foreground">
-            Grade every candidate. The recorded display order is immutable.
+            {liveStatus
+              ? 'Grade every candidate. The recorded display order is immutable.'
+              : 'This is the immutable candidate list committed when the election and its Temperature Check were created.'}
           </p>
         </div>
         {candidates.map((candidate) => {

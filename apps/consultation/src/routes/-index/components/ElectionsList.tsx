@@ -1,7 +1,6 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Link } from '@tanstack/react-router'
 import { Cause, Option } from 'effect'
-import type { MajorityJudgmentElection } from 'shared/governance/schemas'
 import { majorityJudgmentElectionsAtom } from '@/atom/majorityJudgmentAtom'
 import type { SortOrder } from '@/atom/proposalsAtom'
 import { Card } from '@/components/ui/card'
@@ -26,10 +25,14 @@ export const selectVisibleElections = <T extends VisibleElection>(
       sortOrder === 'asc' ? left.id - right.id : right.id - left.id
     )
 
-const electionDates = (election: MajorityJudgmentElection) => {
+const electionDates = (election: {
+  readonly tcVotingStart: Date
+  readonly roundOne: { readonly deadline: Date }
+  readonly rerun: Option.Option<{ readonly deadline: Date }>
+}) => {
   const round = Option.getOrElse(election.rerun, () => election.roundOne)
   return {
-    start: election.reviewStart,
+    start: election.tcVotingStart,
     deadline: round.deadline
   }
 }
@@ -53,8 +56,8 @@ export function ElectionsList({
           <div className="border border-dashed py-12 text-center">
             <h3 className="text-lg font-medium">No elections yet</h3>
             <p className="text-sm text-muted-foreground">
-              Majority Judgment elections appear here after an eligible election
-              temperature check is elevated.
+              Majority Judgment elections appear here as soon as their
+              candidate-list Temperature Check is created.
             </p>
           </div>
         )

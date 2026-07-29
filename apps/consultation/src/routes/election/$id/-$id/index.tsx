@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { InlineCode } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
+import { ElectionTemperatureCheckStage } from './components/ElectionTemperatureCheckStage'
 import { MajorityJudgmentElectionView } from './components/MajorityJudgmentElectionView'
 import { MajorityJudgmentOwnerControls } from './components/MajorityJudgmentOwnerControls'
 
@@ -115,23 +116,37 @@ export function Page({
       )
       const mixedBallots =
         voteAllAccounts && voterEntries.length > 1 && serializedBallots.size > 1
+      const majorityJudgmentVoting =
+        response.election.status === 'LIVE' ||
+        response.election.status === 'RERUN_LIVE'
 
       return (
         <div className="space-y-4">
-          {connectedAccountCount > 1 ? (
-            <label className="flex items-center gap-2 text-sm">
+          <ElectionTemperatureCheckStage
+            temperatureCheckId={response.election.temperatureCheckId}
+            status={response.election.status}
+            tcVotingEnd={response.election.tcVotingEnd}
+            tcOutcome={response.election.tcOutcome}
+            tcOutcomeRecordedAt={response.election.tcOutcomeRecordedAt}
+            result={response.temperatureCheckResult}
+          />
+          {majorityJudgmentVoting && connectedAccountCount > 1 ? (
+            <div className="flex items-center gap-2 text-sm">
               <Checkbox
+                id="mj-vote-all-accounts"
                 checked={voteAllAccounts}
                 onCheckedChange={(checked) =>
                   setVoteAllAccounts(checked === true)
                 }
                 disabled={voteResult.waiting}
               />
-              Submit this complete ballot from all connected accounts (
-              {connectedAccountCount})
-            </label>
+              <label htmlFor="mj-vote-all-accounts">
+                Submit this complete ballot from all connected accounts (
+                {connectedAccountCount})
+              </label>
+            </div>
           ) : null}
-          {mixedBallots ? (
+          {majorityJudgmentVoting && mixedBallots ? (
             <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
               Connected accounts currently have mixed ballots. Choose grades
               explicitly before replacing them together.
@@ -146,8 +161,8 @@ export function Page({
             temperatureCheckId={response.election.temperatureCheckId}
             parameterSetId={response.election.parameterSetId}
             parameterSetVersion={response.election.parameterSetVersion}
-            reviewStart={response.election.reviewStart}
-            reviewEnd={response.election.reviewEnd}
+            tcVotingStart={response.election.tcVotingStart}
+            tcVotingEnd={response.election.tcVotingEnd}
             votingStart={response.currentRound.votingStart}
             votingEnd={response.currentRound.votingEnd}
             quorumXrd={response.currentRound.quorumXrd}
