@@ -3,6 +3,7 @@
 import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import * as D1Client from '@effect/sql-d1/D1Client'
 import { Effect, Layer } from 'effect'
+import { GovernanceConfig } from 'shared/governance/config'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { VoteDatabaseLive } from './server/voting/db/d1'
 import { ORM } from './server/voting/db/orm'
@@ -25,7 +26,8 @@ const repositoryLayer = () =>
   MajorityJudgmentRepo.Default.pipe(
     Layer.provide(ORM.Default),
     Layer.provideMerge(VoteDatabaseLive(env.DB)),
-    Layer.provide(D1Client.layer({ db: env.DB }))
+    Layer.provide(D1Client.layer({ db: env.DB })),
+    Layer.provide(GovernanceConfig.MainnetLive)
   )
 
 const lease: PollLeaseIdentity = {
@@ -113,8 +115,17 @@ beforeEach(async () => {
 describe('D1 majority judgment persistence', () => {
   it('projects idempotently and preserves revotes, decimals, JSON, and dates', async () => {
     const tcState = await env.DB.prepare(
-      `INSERT INTO vote_calculation_state (type, entity_id, last_vote_count)
-       VALUES ('temperature_check', 3, 2)
+      `INSERT INTO vote_calculation_state (
+         governance_component_address,
+         type,
+         entity_id,
+         last_vote_count
+       ) VALUES (
+         'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y',
+         'temperature_check',
+         3,
+         2
+       )
        RETURNING id`
     ).first<{ id: number }>()
     await env.DB.batch([

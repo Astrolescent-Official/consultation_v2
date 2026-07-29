@@ -35,12 +35,18 @@ export const voteCalculationState = sqliteTable(
   'vote_calculation_state',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    // Consultation IDs restart when a governance component is redeployed, so
+    // they are only unique within that component.
+    governanceComponentAddress: text('governance_component_address')
+      .notNull()
+      .default(''),
     type: text('type').notNull(),
     entityId: integer('entity_id').notNull(),
     lastVoteCount: integer('last_vote_count').notNull().default(0)
   },
   (table) => [
-    uniqueIndex('vote_calculation_state_type_entity_id_unique').on(
+    uniqueIndex('vote_calculation_state_component_type_entity_id_unique').on(
+      table.governanceComponentAddress,
       table.type,
       table.entityId
     )

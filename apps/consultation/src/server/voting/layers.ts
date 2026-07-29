@@ -44,6 +44,7 @@ const HttpHandlerLayer = (env: VotingWorkerEnv) => {
   ).pipe(
     Layer.provide(ORM.Default),
     Layer.provideMerge(database),
+    Layer.provideMerge(GovernanceConfigLayer),
     Layer.provideMerge(Logger.json),
     Layer.provide(configLayer(env))
   )
