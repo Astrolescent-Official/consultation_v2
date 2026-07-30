@@ -51,12 +51,44 @@ export const createCandidate = (): CandidateFormValue => ({
 
 const defaultProcessType = (): 'Standard' | 'MajorityJudgment' => 'Standard'
 
-const localDateTime = (offsetMs: number) => {
-  const date = new Date(Date.now() + offsetMs)
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+const formatLocalDateTime = (date: Date) =>
+  new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
     .toISOString()
     .slice(0, 16)
+
+export const makeMajorityJudgmentSchedule = (
+  minimums: {
+    readonly temperatureCheckVotingUnits: number
+    readonly electionVotingUnits: number
+  },
+  now = new Date()
+) => {
+  // Leave one full unit before the TC starts. A datetime-local input omits
+  // seconds, so this avoids a schedule becoming invalid while the user fills
+  // in the form.
+  const tcStart = new Date(now.getTime() + 2 * msPerGovernanceDurationUnit)
+  const tcEnd = new Date(
+    tcStart.getTime() +
+      minimums.temperatureCheckVotingUnits * msPerGovernanceDurationUnit
+  )
+  const votingStart = new Date(tcEnd)
+  const votingEnd = new Date(
+    votingStart.getTime() +
+      minimums.electionVotingUnits * msPerGovernanceDurationUnit
+  )
+
+  return {
+    tcVotingStart: formatLocalDateTime(tcStart),
+    tcVotingEnd: formatLocalDateTime(tcEnd),
+    votingStart: formatLocalDateTime(votingStart),
+    votingEnd: formatLocalDateTime(votingEnd)
+  }
 }
+
+const defaultMajorityJudgmentSchedule = makeMajorityJudgmentSchedule({
+  temperatureCheckVotingUnits: 1,
+  electionVotingUnits: 1
+})
 
 export const temperatureCheckFormOpts = formOptions({
   defaultValues: {
@@ -73,12 +105,6 @@ export const temperatureCheckFormOpts = formOptions({
     roleId: '',
     seatCount: 1,
     candidates: [createCandidate(), createCandidate()],
-    // Scaled in governance-duration units (minutes on stokenet, days
-    // elsewhere) so the seeded schedule stays realistic relative to the
-    // network's actual minimums instead of always assuming day-scale voting.
-    tcVotingStart: localDateTime(1 * msPerGovernanceDurationUnit),
-    tcVotingEnd: localDateTime(2 * msPerGovernanceDurationUnit),
-    votingStart: localDateTime(3 * msPerGovernanceDurationUnit),
-    votingEnd: localDateTime(7 * msPerGovernanceDurationUnit)
+    ...defaultMajorityJudgmentSchedule
   }
 })
