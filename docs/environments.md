@@ -8,7 +8,7 @@
 | D1 | `consultation-votes-production` | `consultation-votes-preview` |
 | Radix network | Mainnet (`1`) | Stokenet (`2`) |
 | Governance config | `GovernanceConfig.MainnetLive` | `GovernanceConfig.StokenetLive` |
-| Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cz...7vjyu4` |
+| Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cr...e4d3j` |
 | Poll schedule | Every 5 minutes | Every 10 minutes |
 | Initial cursor | Current ledger state | Current ledger state |
 

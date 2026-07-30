@@ -25,19 +25,19 @@ afterEach(() => {
 })
 
 describe('majority judgment election view', () => {
-  it('shows candidate review, disables grades, and hides tallies', () => {
+  it('shows the TC stage, disables grades, and hides MJ tallies', () => {
     render(
       <MajorityJudgmentElectionView
         title="RAC election"
-        status="REVIEW_OPEN"
+        status="TC_LIVE"
         candidates={candidates}
         seatCount={1}
         roleId="rac"
         temperatureCheckId={42}
         parameterSetId="rac-election"
         parameterSetVersion={3}
-        reviewStart={new Date('2026-07-21T10:00:00.000Z')}
-        reviewEnd={new Date('2026-07-22T10:00:00.000Z')}
+        tcVotingStart={new Date('2026-07-21T10:00:00.000Z')}
+        tcVotingEnd={new Date('2026-07-22T10:00:00.000Z')}
         votingStart={new Date('2026-07-22T10:00:00.000Z')}
         votingEnd={new Date('2026-07-29T10:00:00.000Z')}
         quorumXrd="1000000"
@@ -45,7 +45,9 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(screen.getByText('Candidate review'))
+    assert.isNotNull(
+      screen.getByText('Candidate list review — vote For or Against')
+    )
     assert.strictEqual(screen.getAllByRole('radio').length, 10)
     assert.isTrue(
       screen
@@ -57,7 +59,7 @@ describe('majority judgment election view', () => {
     assert.isNotNull(screen.getByText('Role rac'))
     assert.isNotNull(screen.getByText('TC #42'))
     assert.isNotNull(screen.getByText('rac-election v3'))
-    assert.isNotNull(screen.getByText(/voting opens/i))
+    assert.isNotNull(screen.getByText(/TC voting closes/i))
     assert.isNull(screen.queryByText(/XRD$/))
     assert.isNull(screen.queryByText(/participation/i))
   })
@@ -83,7 +85,7 @@ describe('majority judgment election view', () => {
     assert.isNotNull(screen.getByText('500000 / 1000000 XRD'))
   })
 
-  it('labels live results provisional and discloses reruns and raised grades', () => {
+  it('labels live results provisional and discloses the rerun grade floor', () => {
     render(
       <MajorityJudgmentElectionView
         title="RAC election"
@@ -109,6 +111,7 @@ describe('majority judgment election view', () => {
   it('renders unresolved, failed, and final terminal explanations', () => {
     const statuses = [
       ['TIE_UNRESOLVED', 'Governance tie resolution required'],
+      ['ROUND_1_FAILED', 'Turnout below quorum — awaiting a rerun decision'],
       ['FAILED', 'The rerun did not meet quorum'],
       ['FINAL', 'Official result']
     ] as const

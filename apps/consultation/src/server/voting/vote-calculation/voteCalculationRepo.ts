@@ -2,6 +2,7 @@ import type { AccountAddress } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
 import { Effect } from 'effect'
 import type { EntityId, EntityType } from 'shared/governance/brandedTypes'
+import { GovernanceConfig } from 'shared/governance/config'
 import { all, first, VoteDatabase } from '../db/d1'
 import { canonicalDecimal, decimalSortKey } from '../db/exactDecimal'
 import { guardedBatch } from '../pollLease'
@@ -29,6 +30,7 @@ type AccountVoteRow = VoteRow & {
 const PARAMETER_CHUNK_SIZE = 90
 const ACCOUNT_INSERT_CHUNK_SIZE = 20
 const RESULT_INSERT_CHUNK_SIZE = 30
+const COMPONENT_CACHE_BACKFILL_KEY = 'vote_cache_component_backfill_required'
 
 const chunksOf = <A>(values: ReadonlyArray<A>, size: number) => {
   const chunks: Array<ReadonlyArray<A>> = []
@@ -45,6 +47,8 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
   {
     effect: Effect.gen(function* () {
       const database = yield* VoteDatabase
+      const governanceConfig = yield* GovernanceConfig
+      const governanceComponentAddress = governanceConfig.componentAddress
 
       const getOrCreateState = (
         type: 'temperature_check' | 'proposal',
@@ -54,11 +58,15 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
           yield* guardedBatch(database, 'create vote calculation state', [
             database
               .prepare(
-                `INSERT INTO vote_calculation_state (type, entity_id, last_vote_count)
-                 VALUES (?, ?, 0)
-                 ON CONFLICT(type, entity_id) DO NOTHING`
+                `INSERT INTO vote_calculation_state (
+                   governance_component_address,
+                   type,
+                   entity_id,
+                   last_vote_count
+                 ) VALUES (?, ?, ?, 0)
+                 ON CONFLICT(governance_component_address, type, entity_id) DO NOTHING`
               )
-              .bind(type, entityId)
+              .bind(governanceComponentAddress, type, entityId)
           ]).pipe(Effect.orDie)
 
           const row = yield* first<StateRow>(
@@ -67,9 +75,11 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
               .prepare(
                 `SELECT id, last_vote_count AS lastVoteCount
                  FROM vote_calculation_state
-                 WHERE type = ? AND entity_id = ?`
+                 WHERE governance_component_address = ?
+                   AND type = ?
+                   AND entity_id = ?`
               )
-              .bind(type, entityId)
+              .bind(governanceComponentAddress, type, entityId)
           ).pipe(Effect.orDie)
 
           if (row === null) {
@@ -79,6 +89,28 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
           }
           return row
         })
+
+      const isComponentCacheBackfillRequired = () =>
+        first<{ value: string }>(
+          'read component cache backfill configuration',
+          database
+            .prepare(`SELECT value FROM config WHERE key = ?`)
+            .bind(COMPONENT_CACHE_BACKFILL_KEY)
+        ).pipe(
+          Effect.map((row) => row?.value === '1'),
+          Effect.orDie
+        )
+
+      const completeComponentCacheBackfill = () =>
+        guardedBatch(database, 'complete component cache backfill', [
+          database
+            .prepare(
+              `UPDATE config
+               SET value = '0'
+               WHERE key = ?`
+            )
+            .bind(COMPONENT_CACHE_BACKFILL_KEY)
+        ]).pipe(Effect.orDie)
 
       const getAccountVotesByAddresses = (
         stateId: number,
@@ -121,10 +153,12 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
                  r.vote_power AS votePower
                FROM vote_calculation_state s
                INNER JOIN vote_calculation_results r ON r.state_id = s.id
-               WHERE s.type = ? AND s.entity_id = ?
+               WHERE s.governance_component_address = ?
+                 AND s.type = ?
+                 AND s.entity_id = ?
                ORDER BY r.vote ASC`
             )
-            .bind(type, entityId)
+            .bind(governanceComponentAddress, type, entityId)
         ).pipe(
           Effect.map((results) => ({ results })),
           Effect.orDie
@@ -263,11 +297,15 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
               .prepare(
                 `UPDATE vote_calculation_state
                  SET last_vote_count = ?
-                 WHERE id = ? AND type = ? AND entity_id = ?`
+                 WHERE id = ?
+                   AND governance_component_address = ?
+                   AND type = ?
+                   AND entity_id = ?`
               )
               .bind(
                 params.lastVoteCount,
                 params.stateId,
+                governanceComponentAddress,
                 params.type,
                 params.entityId
               )
@@ -296,19 +334,23 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
                  av.vote_power AS votePower
                FROM vote_calculation_account_votes av
                INNER JOIN vote_calculation_state s ON av.state_id = s.id
-               WHERE s.type = ? AND s.entity_id = ?
+               WHERE s.governance_component_address = ?
+                 AND s.type = ?
+                 AND s.entity_id = ?
                ORDER BY
                  av.vote_power_sort_key DESC,
                  av.account_address ASC,
                  av.vote ASC
                LIMIT ? OFFSET ?`
             )
-            .bind(type, entityId, limit, offset)
+            .bind(governanceComponentAddress, type, entityId, limit, offset)
         ).pipe(Effect.orDie)
       }
 
       return {
         getOrCreateState,
+        isComponentCacheBackfillRequired,
+        completeComponentCacheBackfill,
         commitVoteResults,
         getResultsByEntity,
         getAccountVotesByEntity,

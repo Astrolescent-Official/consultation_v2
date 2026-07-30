@@ -23,9 +23,9 @@ struct Owner {
     account: TestAccount,
 }
 
-fn create_account(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
-) -> TestAccount {
+type TestLedger = LedgerSimulator<NoExtension, InMemorySubstateDatabase>;
+
+fn create_account(ledger: &mut TestLedger) -> TestAccount {
     let (public_key, _private_key, address) = ledger.new_allocated_account();
     TestAccount {
         address,
@@ -33,7 +33,7 @@ fn create_account(
     }
 }
 
-fn create_owner(ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>) -> Owner {
+fn create_owner(ledger: &mut TestLedger) -> Owner {
     let account = create_account(ledger);
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
@@ -53,6 +53,18 @@ fn create_owner(ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDataba
     );
     let badge = receipt.expect_commit(true).new_resource_addresses()[0];
     Owner { badge, account }
+}
+
+fn owner_builder(owner: &Owner) -> ManifestBuilder {
+    ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner.account.address, owner.badge, dec!(1))
+}
+
+fn owner_signers(owner: &Owner) -> Vec<NonFungibleGlobalId> {
+    vec![NonFungibleGlobalId::from_public_key(
+        &owner.account.public_key,
+    )]
 }
 
 fn standard_parameters() -> GovernanceProcessParameters {
@@ -78,7 +90,6 @@ fn majority_judgment_parameters() -> GovernanceProcessParameters {
             approval_threshold: dec!("0.6"),
         },
         election: MajorityJudgmentParameters {
-            review_days: 1,
             voting_days: 1,
             quorum: dec!(5000),
             minimum_median_grade: Grade::Good,
@@ -90,82 +101,7 @@ fn majority_judgment_parameters() -> GovernanceProcessParameters {
     }
 }
 
-fn default_parameter_set() -> GovernanceParameterSetInput {
-    GovernanceParameterSetInput {
-        label: "Default".to_string(),
-        parameters: standard_parameters(),
-    }
-}
-
-fn majority_judgment_parameter_set(label: &str) -> GovernanceParameterSetInput {
-    GovernanceParameterSetInput {
-        label: label.to_string(),
-        parameters: majority_judgment_parameters(),
-    }
-}
-
-fn standard_draft() -> TemperatureCheckDraft {
-    TemperatureCheckDraft {
-        title: "Standard proposal".to_string(),
-        short_description: "A standard consultation".to_string(),
-        description: "Standard proposal body".to_string(),
-        links: vec![Url::of("https://example.com/standard")],
-        follow_up: TemperatureCheckFollowUpDraft::StandardProposal {
-            vote_options: vec![
-                ProposalVoteOptionInput {
-                    label: "For".to_string(),
-                },
-                ProposalVoteOptionInput {
-                    label: "Against".to_string(),
-                },
-            ],
-            max_selections: None,
-        },
-    }
-}
-
-fn candidates() -> Vec<MajorityJudgmentCandidateInput> {
-    vec![
-        MajorityJudgmentCandidateInput {
-            reference: "alice".to_string(),
-            display_name: "Alice".to_string(),
-            description: "Alice profile".to_string(),
-            links: vec![Url::of("https://example.com/alice")],
-        },
-        MajorityJudgmentCandidateInput {
-            reference: "bob".to_string(),
-            display_name: "Bob".to_string(),
-            description: "Bob profile".to_string(),
-            links: vec![Url::of("https://example.com/bob")],
-        },
-        MajorityJudgmentCandidateInput {
-            reference: "carol".to_string(),
-            display_name: "Carol".to_string(),
-            description: "Carol profile".to_string(),
-            links: vec![Url::of("https://example.com/carol")],
-        },
-    ]
-}
-
-fn majority_judgment_draft() -> TemperatureCheckDraft {
-    TemperatureCheckDraft {
-        title: "Permanent RAC election".to_string(),
-        short_description: "Elect two RAC members".to_string(),
-        description: "Candidate commitment for the Permanent RAC".to_string(),
-        links: vec![Url::of("https://example.com/election")],
-        follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
-            role_id: "permanent-rac".to_string(),
-            seat_count: 2,
-            candidates: candidates(),
-        },
-    }
-}
-
-fn instantiate(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
-    owner: &Owner,
-    default: GovernanceParameterSetInput,
-) -> ComponentAddress {
+fn instantiate(ledger: &mut TestLedger, owner: &Owner) -> ComponentAddress {
     let package = ledger.compile_and_publish(this_package!());
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
@@ -173,29 +109,23 @@ fn instantiate(
             package,
             "Governance",
             "instantiate",
-            manifest_args!(owner.badge, default),
+            manifest_args!(
+                owner.badge,
+                GovernanceParameterSetInput {
+                    label: "Default".to_string(),
+                    parameters: standard_parameters(),
+                }
+            ),
         )
         .build();
     ledger
         .execute_manifest(manifest, vec![])
-        .expect_commit(true)
+        .expect_commit_success()
         .new_component_addresses()[0]
 }
 
-fn owner_builder(owner: &Owner) -> ManifestBuilder {
-    ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .create_proof_from_account_of_amount(owner.account.address, owner.badge, dec!(1))
-}
-
-fn owner_signers(owner: &Owner) -> Vec<NonFungibleGlobalId> {
-    vec![NonFungibleGlobalId::from_public_key(
-        &owner.account.public_key,
-    )]
-}
-
 fn add_parameter_set(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    ledger: &mut TestLedger,
     component: ComponentAddress,
     owner: &Owner,
     id: &str,
@@ -217,26 +147,22 @@ fn add_parameter_set(
     }
 }
 
-fn create_temperature_check(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+fn update_parameter_set(
+    ledger: &mut TestLedger,
     component: ComponentAddress,
-    author: &TestAccount,
-    draft: TemperatureCheckDraft,
-    parameter_set_id: &str,
+    owner: &Owner,
+    id: &str,
+    input: GovernanceParameterSetInput,
     should_succeed: bool,
 ) {
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
+    let manifest = owner_builder(owner)
         .call_method(
             component,
-            "make_temperature_check",
-            manifest_args!(author.address, draft, Some(parameter_set_id.to_string())),
+            "update_governance_parameter_set",
+            manifest_args!(id.to_string(), input),
         )
         .build();
-    let receipt = ledger.execute_manifest(
-        manifest,
-        vec![NonFungibleGlobalId::from_public_key(&author.public_key)],
-    );
+    let receipt = ledger.execute_manifest(manifest, owner_signers(owner));
     if should_succeed {
         receipt.expect_commit_success();
     } else {
@@ -244,23 +170,87 @@ fn create_temperature_check(
     }
 }
 
-fn advance_to(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
-    seconds_since_unix_epoch: i64,
-) {
-    let next_round = ledger.get_consensus_manager_state().round.number() + 1;
-    ledger
-        .advance_to_round_at_timestamp(Round::of(next_round), seconds_since_unix_epoch * 1000)
-        .expect_commit_success();
+fn add_mj_parameters(ledger: &mut TestLedger, component: ComponentAddress, owner: &Owner) {
+    add_parameter_set(
+        ledger,
+        component,
+        owner,
+        "election",
+        GovernanceParameterSetInput {
+            label: "Permanent RAC".to_string(),
+            parameters: majority_judgment_parameters(),
+        },
+        true,
+    );
 }
 
+fn mj_parameters_with(
+    mutate: impl FnOnce(&mut MajorityJudgmentParameters),
+) -> GovernanceProcessParameters {
+    let mut parameters = majority_judgment_parameters();
+    if let GovernanceProcessParameters::MajorityJudgment { election, .. } = &mut parameters {
+        mutate(election);
+    }
+    parameters
+}
+
+fn candidates() -> Vec<MajorityJudgmentCandidateInput> {
+    ["alice", "bob", "carol"]
+        .into_iter()
+        .map(|reference| MajorityJudgmentCandidateInput {
+            reference: reference.to_string(),
+            display_name: reference.to_uppercase(),
+            description: format!("{reference} profile"),
+            links: vec![Url::of(format!("https://example.com/{reference}"))],
+        })
+        .collect()
+}
+
+fn mj_draft() -> TemperatureCheckDraft {
+    TemperatureCheckDraft {
+        title: "Permanent RAC election".to_string(),
+        short_description: "Elect two RAC members".to_string(),
+        description: "Candidate commitment for the Permanent RAC".to_string(),
+        links: vec![Url::of("https://example.com/election")],
+        follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
+            role_id: "permanent-rac".to_string(),
+            seat_count: 2,
+            candidates: candidates(),
+        },
+    }
+}
+
+fn standard_draft(title: &str) -> TemperatureCheckDraft {
+    TemperatureCheckDraft {
+        title: title.to_string(),
+        short_description: "A standard consultation".to_string(),
+        description: "Standard proposal body".to_string(),
+        links: vec![Url::of("https://example.com/standard")],
+        follow_up: TemperatureCheckFollowUpDraft::StandardProposal {
+            vote_options: vec![
+                ProposalVoteOptionInput {
+                    label: "For".to_string(),
+                },
+                ProposalVoteOptionInput {
+                    label: "Against".to_string(),
+                },
+            ],
+            max_selections: None,
+        },
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn create_election(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    ledger: &mut TestLedger,
     component: ComponentAddress,
     owner: &Owner,
-    temperature_check_id: u64,
-    review_start: Instant,
-    candidate_order: Vec<MajorityJudgmentCandidateId>,
+    draft: TemperatureCheckDraft,
+    tc_start: i64,
+    tc_end: i64,
+    voting_start: i64,
+    voting_end: i64,
+    order: Vec<MajorityJudgmentCandidateId>,
     authorized: bool,
     should_succeed: bool,
 ) -> TransactionReceipt {
@@ -273,15 +263,26 @@ fn create_election(
         .call_method(
             component,
             "make_majority_judgment_election",
-            manifest_args!(temperature_check_id, review_start, candidate_order),
+            manifest_args!(
+                owner.account.address,
+                draft,
+                "election".to_string(),
+                Instant::new(tc_start),
+                Instant::new(tc_end),
+                Instant::new(voting_start),
+                Instant::new(voting_end),
+                order
+            ),
         )
         .build();
-    let signers = if authorized {
-        owner_signers(owner)
-    } else {
-        vec![]
-    };
-    let receipt = ledger.execute_manifest(manifest, signers);
+    let receipt = ledger.execute_manifest(
+        manifest,
+        if authorized {
+            owner_signers(owner)
+        } else {
+            vec![]
+        },
+    );
     if should_succeed {
         receipt.expect_commit_success();
     } else {
@@ -290,35 +291,56 @@ fn create_election(
     receipt
 }
 
-fn vote(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+fn record_outcome(
+    ledger: &mut TestLedger,
     component: ComponentAddress,
-    voter: &TestAccount,
-    round: MajorityJudgmentRoundId,
-    grades: Vec<CandidateGrade>,
-    signed: bool,
+    owner: &Owner,
+    temperature_check_id: u64,
+    passed: bool,
     should_succeed: bool,
-) -> TransactionReceipt {
-    let manifest = ManifestBuilder::new()
-        .lock_fee_from_faucet()
+) {
+    let manifest = owner_builder(owner)
         .call_method(
             component,
-            "vote_on_majority_judgment_election",
-            manifest_args!(voter.address, 0u64, round, grades),
+            "record_temperature_check_outcome",
+            manifest_args!(temperature_check_id, passed),
         )
         .build();
-    let signers = if signed {
-        vec![NonFungibleGlobalId::from_public_key(&voter.public_key)]
-    } else {
-        vec![]
-    };
-    let receipt = ledger.execute_manifest(manifest, signers);
+    let receipt = ledger.execute_manifest(manifest, owner_signers(owner));
     if should_succeed {
         receipt.expect_commit_success();
     } else {
         receipt.expect_commit_failure();
     }
-    receipt
+}
+
+fn advance_to(ledger: &mut TestLedger, seconds_since_epoch: i64) {
+    let next_round = ledger.get_consensus_manager_state().round.number() + 1;
+    ledger
+        .advance_to_round_at_timestamp(Round::of(next_round), seconds_since_epoch * 1000)
+        .expect_commit_success();
+}
+
+fn read_temperature_check(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    id: u64,
+) -> TemperatureCheck {
+    let state: GovernanceState = ledger.component_state(component);
+    ledger
+        .get_kv_store_entry(state.temperature_checks, &id)
+        .expect("temperature check should exist")
+}
+
+fn read_election(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    id: u64,
+) -> MajorityJudgmentElection {
+    let state: GovernanceState = ledger.component_state(component);
+    ledger
+        .get_kv_store_entry(state.majority_judgment_elections, &id)
+        .expect("election should exist")
 }
 
 fn complete_ballot() -> Vec<CandidateGrade> {
@@ -338,149 +360,551 @@ fn complete_ballot() -> Vec<CandidateGrade> {
     ]
 }
 
-fn election_from_ledger(
-    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+fn alternate_ballot() -> Vec<CandidateGrade> {
+    vec![
+        CandidateGrade {
+            candidate_id: MajorityJudgmentCandidateId(0),
+            grade: Grade::Poor,
+        },
+        CandidateGrade {
+            candidate_id: MajorityJudgmentCandidateId(1),
+            grade: Grade::Excellent,
+        },
+        CandidateGrade {
+            candidate_id: MajorityJudgmentCandidateId(2),
+            grade: Grade::Acceptable,
+        },
+    ]
+}
+
+fn vote_mj_round(
+    ledger: &mut TestLedger,
     component: ComponentAddress,
-) -> MajorityJudgmentElection {
-    let state: GovernanceState = ledger.component_state(component);
-    ledger
-        .get_kv_store_entry(state.majority_judgment_elections, &0u64)
-        .expect("election should exist")
+    voter: &TestAccount,
+    election_id: u64,
+    round: MajorityJudgmentRoundId,
+    grades: Vec<CandidateGrade>,
+    should_succeed: bool,
+) -> TransactionReceipt {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "vote_on_majority_judgment_election",
+            manifest_args!(voter.address, election_id, round, grades),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        vec![NonFungibleGlobalId::from_public_key(&voter.public_key)],
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+    receipt
+}
+
+fn vote_mj(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    voter: &TestAccount,
+    election_id: u64,
+    should_succeed: bool,
+) {
+    vote_mj_round(
+        ledger,
+        component,
+        voter,
+        election_id,
+        MajorityJudgmentRoundId::RoundOne,
+        complete_ballot(),
+        should_succeed,
+    );
+}
+
+fn start_rerun(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    owner: &Owner,
+    election_id: u64,
+    voting_start: Instant,
+    authorized: bool,
+    should_succeed: bool,
+) {
+    let builder = if authorized {
+        owner_builder(owner)
+    } else {
+        ManifestBuilder::new().lock_fee_from_faucet()
+    };
+    let manifest = builder
+        .call_method(
+            component,
+            "start_majority_judgment_rerun",
+            manifest_args!(election_id, voting_start),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        if authorized {
+            owner_signers(owner)
+        } else {
+            vec![]
+        },
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+fn record_tie_resolution(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    owner: &Owner,
+    election_id: u64,
+    round: MajorityJudgmentRoundId,
+    ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
+    authorized: bool,
+    should_succeed: bool,
+) {
+    let builder = if authorized {
+        owner_builder(owner)
+    } else {
+        ManifestBuilder::new().lock_fee_from_faucet()
+    };
+    let manifest = builder
+        .call_method(
+            component,
+            "record_majority_judgment_tie_resolution",
+            manifest_args!(election_id, round, ordered_candidate_ids),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        if authorized {
+            owner_signers(owner)
+        } else {
+            vec![]
+        },
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+}
+
+fn toggle_hidden(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    owner: &Owner,
+    election_id: u64,
+    authorized: bool,
+    should_succeed: bool,
+) -> TransactionReceipt {
+    let builder = if authorized {
+        owner_builder(owner)
+    } else {
+        ManifestBuilder::new().lock_fee_from_faucet()
+    };
+    let manifest = builder
+        .call_method(
+            component,
+            "toggle_majority_judgment_election_hidden",
+            manifest_args!(election_id),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        if authorized {
+            owner_signers(owner)
+        } else {
+            vec![]
+        },
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+    receipt
 }
 
 #[test]
-#[should_panic]
-fn default_parameter_set_must_remain_standard() {
+fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
-    instantiate(
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
+    let order = vec![
+        MajorityJudgmentCandidateId(2),
+        MajorityJudgmentCandidateId(0),
+        MajorityJudgmentCandidateId(1),
+    ];
+
+    create_election(
         &mut ledger,
+        component,
         &owner,
-        majority_judgment_parameter_set("Invalid default"),
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order.clone(),
+        false,
+        false,
     );
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        86_400,
+        86_401,
+        259_200,
+        345_600,
+        order.clone(),
+        true,
+        false,
+    );
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
+        true,
+        false,
+    );
+    let receipt = create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order,
+        true,
+        true,
+    );
+
+    let events = &receipt.expect_commit_success().application_events;
+    assert!(events
+        .iter()
+        .any(|(identifier, _)| identifier.1 == "TemperatureCheckCreatedEvent"));
+    assert!(events
+        .iter()
+        .any(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionCreatedEvent"));
+
+    let state: GovernanceState = ledger.component_state(component);
+    assert_eq!(state.temperature_check_count, 1);
+    assert_eq!(state.majority_judgment_election_count, 1);
+    let tc = read_temperature_check(&mut ledger, component, 0);
+    let election = read_election(&mut ledger, component, 0);
+
+    assert_eq!(tc.snapshot, Instant::new(0));
+    assert_eq!(tc.start, Instant::new(86_400));
+    assert_eq!(tc.deadline, Instant::new(172_800));
+    assert_eq!(
+        tc.continuation,
+        Some(ConsultationContinuation::MajorityJudgmentElection(0))
+    );
+    assert!(tc.outcome.is_none());
+    match tc.follow_up {
+        TemperatureCheckFollowUp::MajorityJudgmentElection {
+            role_id,
+            seat_count,
+            candidates,
+        } => {
+            assert_eq!(role_id, "permanent-rac");
+            assert_eq!(seat_count, 2);
+            assert_eq!(candidates[0].display_order, 1);
+            assert_eq!(candidates[1].display_order, 2);
+            assert_eq!(candidates[2].display_order, 0);
+        }
+        TemperatureCheckFollowUp::StandardProposal { .. } => panic!("expected MJ follow-up"),
+    }
+    assert_eq!(election.temperature_check_id, 0);
+    assert_eq!(election.round_one.snapshot, tc.snapshot);
+    assert_eq!(election.round_one.start, Instant::new(259_200));
+    assert_eq!(election.round_one.deadline, Instant::new(345_600));
+}
+
+#[test]
+fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let owner = create_owner(&mut ledger);
+    let voter = create_account(&mut ledger);
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
+    let order = vec![
+        MajorityJudgmentCandidateId(0),
+        MajorityJudgmentCandidateId(1),
+        MajorityJudgmentCandidateId(2),
+    ];
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order.clone(),
+        true,
+        true,
+    );
+
+    vote_mj(&mut ledger, component, &voter, 0, false);
+    record_outcome(&mut ledger, component, &owner, 0, false, false);
+    advance_to(&mut ledger, 172_800);
+    record_outcome(&mut ledger, component, &owner, 0, false, true);
+    record_outcome(&mut ledger, component, &owner, 0, true, false);
+    advance_to(&mut ledger, 259_200);
+    vote_mj(&mut ledger, component, &voter, 0, false);
+
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        345_600,
+        432_000,
+        518_400,
+        604_800,
+        order,
+        true,
+        true,
+    );
+    advance_to(&mut ledger, 432_000);
+    record_outcome(&mut ledger, component, &owner, 1, true, true);
+    vote_mj(&mut ledger, component, &voter, 1, false);
+    advance_to(&mut ledger, 518_400);
+    vote_mj(&mut ledger, component, &voter, 1, true);
+
+    let tc = read_temperature_check(&mut ledger, component, 1);
+    assert!(tc.outcome.is_some_and(TemperatureCheckOutcome::passed));
+    let election = read_election(&mut ledger, component, 1);
+    assert_eq!(election.round_one.vote_count, 1);
+
+    advance_to(&mut ledger, 604_800);
+    let rerun_manifest = owner_builder(&owner)
+        .call_method(
+            component,
+            "start_majority_judgment_rerun",
+            manifest_args!(1u64, Instant::new(604_800)),
+        )
+        .build();
+    ledger
+        .execute_manifest(rerun_manifest, owner_signers(&owner))
+        .expect_commit_success();
+    let election = read_election(&mut ledger, component, 1);
+    assert_eq!(
+        election.rerun.expect("rerun should exist").snapshot,
+        tc.snapshot
+    );
+}
+
+#[test]
+fn standard_proposal_creation_requires_a_recorded_passed_tc() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let owner = create_owner(&mut ledger);
+    let component = instantiate(&mut ledger, &owner);
+
+    let make_tc = |ledger: &mut TestLedger, title: &str| {
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .call_method(
+                component,
+                "make_temperature_check",
+                manifest_args!(owner.account.address, standard_draft(title), None::<String>),
+            )
+            .build();
+        ledger
+            .execute_manifest(manifest, owner_signers(&owner))
+            .expect_commit_success();
+    };
+    let make_proposal = |ledger: &mut TestLedger, id: u64, should_succeed: bool| {
+        let manifest = owner_builder(&owner)
+            .call_method(component, "make_proposal", manifest_args!(id))
+            .build();
+        let receipt = ledger.execute_manifest(manifest, owner_signers(&owner));
+        if should_succeed {
+            receipt.expect_commit_success();
+        } else {
+            receipt.expect_commit_failure();
+        }
+    };
+
+    make_tc(&mut ledger, "Failed standard TC");
+    advance_to(&mut ledger, 86_400);
+    make_proposal(&mut ledger, 0, false);
+    record_outcome(&mut ledger, component, &owner, 0, false, true);
+    make_proposal(&mut ledger, 0, false);
+
+    make_tc(&mut ledger, "Passed standard TC");
+    advance_to(&mut ledger, 172_800);
+    record_outcome(&mut ledger, component, &owner, 1, true, true);
+    make_proposal(&mut ledger, 1, true);
+
+    let state: GovernanceState = ledger.component_state(component);
+    assert_eq!(state.proposal_count, 1);
 }
 
 #[test]
 fn majority_judgment_parameter_boundaries_are_enforced() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
-    let component = instantiate(&mut ledger, &owner, default_parameter_set());
+    let component = instantiate(&mut ledger, &owner);
 
-    let mut expect_invalid = |id: &str, mutation: fn(&mut MajorityJudgmentParameters)| {
-        let mut input = majority_judgment_parameter_set("Invalid");
-        let GovernanceProcessParameters::MajorityJudgment { election, .. } = &mut input.parameters
-        else {
-            panic!("expected MJ parameters");
-        };
-        mutation(election);
-        add_parameter_set(&mut ledger, component, &owner, id, input, false);
-    };
+    let invalid_cases = vec![
+        mj_parameters_with(|election| election.voting_days = 0),
+        mj_parameters_with(|election| election.rerun_voting_days = 0),
+        mj_parameters_with(|election| election.reserve_list_days = 0),
+        mj_parameters_with(|election| election.quorum = Decimal::ZERO),
+        mj_parameters_with(|election| election.rerun_quorum = Decimal::ZERO),
+    ];
 
-    expect_invalid("zero-review", |parameters| parameters.review_days = 0);
-    expect_invalid("zero-voting", |parameters| parameters.voting_days = 0);
-    expect_invalid("zero-rerun-voting", |parameters| {
-        parameters.rerun_voting_days = 0;
-    });
-    expect_invalid("zero-reserve", |parameters| {
-        parameters.reserve_list_days = 0;
-    });
-    expect_invalid("zero-quorum", |parameters| {
-        parameters.quorum = Decimal::ZERO
-    });
-    expect_invalid("zero-rerun-quorum", |parameters| {
-        parameters.rerun_quorum = Decimal::ZERO;
-    });
-    expect_invalid("equal-rerun-quorum", |parameters| {
-        parameters.rerun_quorum = parameters.quorum;
-    });
-    expect_invalid("lower-rerun-grade", |parameters| {
-        parameters.rerun_minimum_median_grade = parameters.minimum_median_grade;
-    });
+    for parameters in invalid_cases {
+        add_parameter_set(
+            &mut ledger,
+            component,
+            &owner,
+            "invalid",
+            GovernanceParameterSetInput {
+                label: "Invalid".to_string(),
+                parameters,
+            },
+            false,
+        );
+    }
+
+    // A rerun may use the same quorum and grade floor as Round 1.
+    add_parameter_set(
+        &mut ledger,
+        component,
+        &owner,
+        "equal-rerun",
+        GovernanceParameterSetInput {
+            label: "Equal rerun".to_string(),
+            parameters: mj_parameters_with(|election| {
+                election.rerun_quorum = election.quorum;
+                election.rerun_minimum_median_grade = election.minimum_median_grade;
+            }),
+        },
+        true,
+    );
+
+    // A well-formed Majority Judgment parameter set is still accepted.
+    add_mj_parameters(&mut ledger, component, &owner);
 }
 
 #[test]
 fn majority_judgment_candidate_count_boundaries_are_enforced() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
-    let component = instantiate(&mut ledger, &owner, default_parameter_set());
-    let author = create_account(&mut ledger);
-    add_parameter_set(
-        &mut ledger,
-        component,
-        &owner,
-        "election",
-        majority_judgment_parameter_set("Permanent RAC"),
-        true,
-    );
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
 
-    let make_candidates = |count: usize| {
+    let candidates_of = |count: usize| -> Vec<MajorityJudgmentCandidateInput> {
         (0..count)
             .map(|index| MajorityJudgmentCandidateInput {
                 reference: format!("candidate-{index}"),
                 display_name: format!("Candidate {index}"),
-                description: format!("Profile for candidate {index}"),
-                links: vec![Url::of(format!("https://example.com/candidates/{index}"))],
+                description: "profile".to_string(),
+                links: vec![],
             })
-            .collect::<Vec<_>>()
+            .collect()
     };
-    let make_draft = |count: usize, seat_count: u32| TemperatureCheckDraft {
-        title: format!("{count}-candidate election"),
-        short_description: "Candidate boundary test".to_string(),
-        description: "Candidate boundary test election".to_string(),
-        links: vec![Url::of("https://example.com/election")],
-        follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
-            role_id: "permanent-rac".to_string(),
-            seat_count,
-            candidates: make_candidates(count),
-        },
+    let order_of = |count: usize| -> Vec<MajorityJudgmentCandidateId> {
+        (0..count)
+            .map(|index| MajorityJudgmentCandidateId(u32::try_from(index).unwrap()))
+            .collect()
     };
+    let draft_with =
+        |candidates: Vec<MajorityJudgmentCandidateInput>, seat_count: u32| TemperatureCheckDraft {
+            follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
+                role_id: "permanent-rac".to_string(),
+                seat_count,
+                candidates,
+            },
+            ..mj_draft()
+        };
 
-    create_temperature_check(
+    // One-candidate quality ratification is valid.
+    create_election(
         &mut ledger,
         component,
-        &author,
-        make_draft(1, 1),
-        "election",
-        false,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        make_draft(21, 2),
-        "election",
-        false,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        make_draft(2, 0),
-        "election",
-        false,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        make_draft(2, 2),
-        "election",
-        false,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        make_draft(2, 1),
-        "election",
+        &owner,
+        draft_with(candidates_of(1), 1),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order_of(1),
+        true,
         true,
     );
-    create_temperature_check(
+
+    // More than the maximum candidate count.
+    create_election(
         &mut ledger,
         component,
-        &author,
-        make_draft(20, 2),
-        "election",
+        &owner,
+        draft_with(candidates_of(21), 1),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order_of(21),
+        true,
+        false,
+    );
+
+    // Seats may equal the number of candidates; the quality floor remains the
+    // operative filter.
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        draft_with(candidates_of(3), 3),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order_of(3),
+        true,
+        true,
+    );
+
+    // Seats may also exceed the candidate count; unfilled seats are handled
+    // off-chain as vacancies.
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        draft_with(candidates_of(3), 4),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order_of(3),
+        true,
         true,
     );
 }
@@ -489,289 +913,126 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
 fn parameter_variants_candidate_rules_and_snapshots_are_enforced() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
-    let component = instantiate(&mut ledger, &owner, default_parameter_set());
-    let author = create_account(&mut ledger);
-
-    add_parameter_set(
-        &mut ledger,
-        component,
-        &owner,
-        "election",
-        majority_judgment_parameter_set("Permanent RAC"),
-        true,
-    );
-
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        majority_judgment_draft(),
-        "default",
-        false,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        standard_draft(),
-        "election",
-        false,
-    );
-
-    let mut duplicate = majority_judgment_draft();
-    if let TemperatureCheckFollowUpDraft::MajorityJudgmentElection { candidates, .. } =
-        &mut duplicate.follow_up
-    {
-        candidates[2].reference = candidates[0].reference.clone();
-    }
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        duplicate,
-        "election",
-        false,
-    );
-
-    let mut invalid_seats = majority_judgment_draft();
-    if let TemperatureCheckFollowUpDraft::MajorityJudgmentElection { seat_count, .. } =
-        &mut invalid_seats.follow_up
-    {
-        *seat_count = 3;
-    }
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        invalid_seats,
-        "election",
-        false,
-    );
-
-    let mut invalid_candidate_url = majority_judgment_draft();
-    if let TemperatureCheckFollowUpDraft::MajorityJudgmentElection { candidates, .. } =
-        &mut invalid_candidate_url.follow_up
-    {
-        candidates[0].links = vec![Url::of("not a URL")];
-    }
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        invalid_candidate_url,
-        "election",
-        false,
-    );
-
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        majority_judgment_draft(),
-        "election",
-        true,
-    );
-
-    let update_variant_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "update_governance_parameter_set",
-            manifest_args!(
-                "election".to_string(),
-                GovernanceParameterSetInput {
-                    label: "Wrong variant".to_string(),
-                    parameters: standard_parameters(),
-                }
-            ),
-        )
-        .build();
-    ledger
-        .execute_manifest(update_variant_manifest, owner_signers(&owner))
-        .expect_commit_failure();
-
-    let update_default_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "update_governance_parameter_set",
-            manifest_args!(
-                "default".to_string(),
-                majority_judgment_parameter_set("Wrong default")
-            ),
-        )
-        .build();
-    ledger
-        .execute_manifest(update_default_manifest, owner_signers(&owner))
-        .expect_commit_failure();
-
-    let retirement_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "retire_governance_parameter_set",
-            manifest_args!("election".to_string()),
-        )
-        .build();
-    ledger
-        .execute_manifest(retirement_manifest, owner_signers(&owner))
-        .expect_commit_success();
-
-    let state: GovernanceState = ledger.component_state(component);
-    let temperature_check: TemperatureCheck = ledger
-        .get_kv_store_entry(state.temperature_checks, &0u64)
-        .expect("MJ temperature check should exist");
-    assert_eq!(temperature_check.parameter_set.id, "election");
-    assert_eq!(temperature_check.parameter_set.version, 1);
-    match temperature_check.follow_up {
-        TemperatureCheckFollowUp::MajorityJudgmentElection {
-            role_id,
-            seat_count,
-            candidates,
-        } => {
-            assert_eq!(role_id, "permanent-rac");
-            assert_eq!(seat_count, 2);
-            assert_eq!(candidates.len(), 3);
-            assert_eq!(candidates[0].id, MajorityJudgmentCandidateId(0));
-            assert_eq!(candidates[2].reference, "carol");
-        }
-        TemperatureCheckFollowUp::StandardProposal { .. } => {
-            panic!("expected an MJ continuation")
-        }
-    }
-}
-
-#[test]
-fn election_creation_copies_commitment_and_enforces_owner_time_and_permutation() {
-    let mut ledger = LedgerSimulatorBuilder::new().build();
-    let owner = create_owner(&mut ledger);
-    let component = instantiate(&mut ledger, &owner, default_parameter_set());
-    let author = create_account(&mut ledger);
-    add_parameter_set(
-        &mut ledger,
-        component,
-        &owner,
-        "election",
-        majority_judgment_parameter_set("Permanent RAC"),
-        true,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        majority_judgment_draft(),
-        "election",
-        true,
-    );
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
 
     let order = vec![
-        MajorityJudgmentCandidateId(2),
         MajorityJudgmentCandidateId(0),
         MajorityJudgmentCandidateId(1),
+        MajorityJudgmentCandidateId(2),
     ];
+
+    // A Majority Judgment draft cannot use the default Standard parameter set.
+    let manifest = owner_builder(&owner)
+        .call_method(
+            component,
+            "make_majority_judgment_election",
+            manifest_args!(
+                owner.account.address,
+                mj_draft(),
+                DEFAULT_PARAMETER_SET_ID.to_string(),
+                Instant::new(86_400),
+                Instant::new(172_800),
+                Instant::new(259_200),
+                Instant::new(345_600),
+                order.clone()
+            ),
+        )
+        .build();
+    ledger
+        .execute_manifest(manifest, owner_signers(&owner))
+        .expect_commit_failure();
+
+    // A Standard draft cannot use a Majority Judgment parameter set.
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .call_method(
+            component,
+            "make_temperature_check",
+            manifest_args!(
+                owner.account.address,
+                standard_draft("Mismatched"),
+                Some("election".to_string())
+            ),
+        )
+        .build();
+    ledger
+        .execute_manifest(manifest, owner_signers(&owner))
+        .expect_commit_failure();
+
+    // Duplicate candidate references are rejected.
+    let mut duplicate_candidates = candidates();
+    duplicate_candidates[1].reference = duplicate_candidates[0].reference.clone();
+    let duplicate_draft = TemperatureCheckDraft {
+        follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
+            role_id: "permanent-rac".to_string(),
+            seat_count: 2,
+            candidates: duplicate_candidates,
+        },
+        ..mj_draft()
+    };
     create_election(
         &mut ledger,
         component,
         &owner,
-        0,
-        Instant::new(86_400),
+        duplicate_draft,
+        86_400,
+        172_800,
+        259_200,
+        345_600,
         order.clone(),
         true,
         false,
     );
-    advance_to(&mut ledger, 86_400);
+
+    // Invalid candidate URLs are rejected.
+    let mut invalid_url_candidates = candidates();
+    invalid_url_candidates[0].links = vec![Url::of("not-a-url")];
+    let invalid_url_draft = TemperatureCheckDraft {
+        follow_up: TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
+            role_id: "permanent-rac".to_string(),
+            seat_count: 2,
+            candidates: invalid_url_candidates,
+        },
+        ..mj_draft()
+    };
     create_election(
         &mut ledger,
         component,
         &owner,
-        0,
-        Instant::new(86_400),
-        order.clone(),
-        false,
-        false,
-    );
-    create_election(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(86_400),
-        vec![
-            MajorityJudgmentCandidateId(0),
-            MajorityJudgmentCandidateId(0),
-            MajorityJudgmentCandidateId(1),
-        ],
-        true,
-        false,
-    );
-    let creation_receipt = create_election(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(86_400),
+        invalid_url_draft,
+        86_400,
+        172_800,
+        259_200,
+        345_600,
         order,
         true,
-        true,
-    );
-    let (creation_identifier, creation_event_data) = creation_receipt
-        .expect_commit_success()
-        .application_events
-        .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionCreatedEvent")
-        .expect("MJ creation event should be emitted");
-    assert!(matches!(
-        &creation_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let creation_event: MajorityJudgmentElectionCreatedEvent =
-        scrypto_decode(creation_event_data).expect("MJ creation event should decode");
-    assert_eq!(creation_event.election_id, 0);
-    assert_eq!(creation_event.temperature_check_id, 0);
-    assert_eq!(creation_event.role_id, "permanent-rac");
-    assert_eq!(creation_event.seat_count, 2);
-    assert_eq!(creation_event.snapshot, Instant::new(0));
-    assert_eq!(creation_event.voting_start, Instant::new(172_800));
-    assert_eq!(creation_event.voting_deadline, Instant::new(259_200));
-    assert_eq!(creation_event.parameter_set_id, "election");
-    assert_eq!(creation_event.parameter_set_version, 1);
-
-    let state: GovernanceState = ledger.component_state(component);
-    assert_eq!(state.majority_judgment_election_count, 1);
-    let temperature_check: TemperatureCheck = ledger
-        .get_kv_store_entry(state.temperature_checks, &0u64)
-        .expect("temperature check should exist");
-    assert_eq!(
-        temperature_check.continuation,
-        Some(ConsultationContinuation::MajorityJudgmentElection(0))
+        false,
     );
 
-    let election = election_from_ledger(&mut ledger, component);
-    assert_eq!(election.temperature_check_id, 0);
-    assert_eq!(election.author.address(), author.address);
-    assert_eq!(election.role_id, "permanent-rac");
-    assert_eq!(election.seat_count, 2);
-    assert_eq!(election.parameter_set.id, "election");
-    assert_eq!(election.parameter_set.version, 1);
-    assert_eq!(election.round_one.snapshot, temperature_check.start);
-    assert_eq!(election.review_start, Instant::new(86_400));
-    assert_eq!(election.review_end, Instant::new(172_800));
-    assert_eq!(election.round_one.start, election.review_end);
-    assert_eq!(election.round_one.deadline, Instant::new(259_200));
-    assert_eq!(election.candidates[0].display_order, 1);
-    assert_eq!(election.candidates[1].display_order, 2);
-    assert_eq!(election.candidates[2].display_order, 0);
-    assert!(election.rerun.is_none());
-
-    create_election(
+    // The default governance parameter set must remain Standard.
+    update_parameter_set(
         &mut ledger,
         component,
         &owner,
-        0,
-        Instant::new(86_400),
-        vec![
-            MajorityJudgmentCandidateId(0),
-            MajorityJudgmentCandidateId(1),
-            MajorityJudgmentCandidateId(2),
-        ],
-        true,
+        DEFAULT_PARAMETER_SET_ID,
+        GovernanceParameterSetInput {
+            label: "Default".to_string(),
+            parameters: majority_judgment_parameters(),
+        },
+        false,
+    );
+
+    // A parameter set's variant cannot change once created.
+    update_parameter_set(
+        &mut ledger,
+        component,
+        &owner,
+        "election",
+        GovernanceParameterSetInput {
+            label: "Permanent RAC".to_string(),
+            parameters: standard_parameters(),
+        },
         false,
     );
 }
@@ -780,96 +1041,64 @@ fn election_creation_copies_commitment_and_enforces_owner_time_and_permutation()
 fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
-    let component = instantiate(&mut ledger, &owner, default_parameter_set());
-    let author = create_account(&mut ledger);
-    let voter = create_account(&mut ledger);
-    add_parameter_set(
-        &mut ledger,
-        component,
-        &owner,
-        "election",
-        majority_judgment_parameter_set("Permanent RAC"),
-        true,
-    );
-    create_temperature_check(
-        &mut ledger,
-        component,
-        &author,
-        majority_judgment_draft(),
-        "election",
-        true,
-    );
-    advance_to(&mut ledger, 86_400);
+    let voter_one = create_account(&mut ledger);
+    let voter_two = create_account(&mut ledger);
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
+
+    let order = vec![
+        MajorityJudgmentCandidateId(0),
+        MajorityJudgmentCandidateId(1),
+        MajorityJudgmentCandidateId(2),
+    ];
     create_election(
         &mut ledger,
         component,
         &owner,
-        0,
-        Instant::new(86_400),
-        vec![
-            MajorityJudgmentCandidateId(0),
-            MajorityJudgmentCandidateId(1),
-            MajorityJudgmentCandidateId(2),
-        ],
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        order,
         true,
         true,
     );
 
-    vote(
-        &mut ledger,
-        component,
-        &voter,
-        MajorityJudgmentRoundId::RoundOne,
-        complete_ballot(),
-        true,
-        false,
-    );
-    vote(
-        &mut ledger,
-        component,
-        &voter,
-        MajorityJudgmentRoundId::Rerun,
-        complete_ballot(),
-        true,
-        false,
-    );
     advance_to(&mut ledger, 172_800);
+    record_outcome(&mut ledger, component, &owner, 0, true, true);
 
-    vote(
+    // Voting has not started yet, even with a well-formed ballot.
+    vote_mj_round(
         &mut ledger,
         component,
-        &voter,
+        &voter_one,
+        0,
         MajorityJudgmentRoundId::RoundOne,
-        complete_ballot()[..2].to_vec(),
-        true,
+        complete_ballot(),
         false,
     );
-    vote(
+
+    // An incomplete ballot is rejected.
+    vote_mj_round(
         &mut ledger,
         component,
-        &voter,
+        &voter_one,
+        0,
         MajorityJudgmentRoundId::RoundOne,
-        vec![
-            CandidateGrade {
-                candidate_id: MajorityJudgmentCandidateId(0),
-                grade: Grade::Good,
-            },
-            CandidateGrade {
-                candidate_id: MajorityJudgmentCandidateId(0),
-                grade: Grade::Excellent,
-            },
-            CandidateGrade {
-                candidate_id: MajorityJudgmentCandidateId(1),
-                grade: Grade::Acceptable,
-            },
-        ],
-        true,
+        vec![CandidateGrade {
+            candidate_id: MajorityJudgmentCandidateId(0),
+            grade: Grade::Good,
+        }],
         false,
     );
-    vote(
+
+    // A ballot referencing an unknown candidate is rejected.
+    vote_mj_round(
         &mut ledger,
         component,
-        &voter,
+        &voter_one,
+        0,
         MajorityJudgmentRoundId::RoundOne,
         vec![
             CandidateGrade {
@@ -878,295 +1107,246 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
             },
             CandidateGrade {
                 candidate_id: MajorityJudgmentCandidateId(1),
-                grade: Grade::Acceptable,
+                grade: Grade::Good,
             },
             CandidateGrade {
                 candidate_id: MajorityJudgmentCandidateId(99),
-                grade: Grade::Excellent,
+                grade: Grade::Good,
             },
         ],
-        true,
-        false,
-    );
-    vote(
-        &mut ledger,
-        component,
-        &voter,
-        MajorityJudgmentRoundId::RoundOne,
-        complete_ballot(),
-        false,
         false,
     );
 
-    let first_vote_receipt = vote(
+    // Starting a rerun before Round 1 has ended is rejected.
+    start_rerun(
         &mut ledger,
         component,
-        &voter,
-        MajorityJudgmentRoundId::RoundOne,
-        complete_ballot(),
+        &owner,
+        0,
+        Instant::new(345_600),
         true,
-        true,
+        false,
     );
-    let (first_vote_identifier, first_vote_event_data) = first_vote_receipt
-        .expect_commit_success()
-        .application_events
-        .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionVotedEvent")
-        .expect("MJ vote event should be emitted");
-    assert!(matches!(
-        &first_vote_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let first_vote_event: MajorityJudgmentElectionVotedEvent =
-        scrypto_decode(first_vote_event_data).expect("MJ vote event should decode");
-    assert_eq!(first_vote_event.round, MajorityJudgmentRoundId::RoundOne);
-    assert_eq!(first_vote_event.vote_id, 0);
-    assert_eq!(first_vote_event.grades[0].candidate_id.0, 0);
-    assert_eq!(first_vote_event.grades[1].candidate_id.0, 1);
-    assert_eq!(first_vote_event.grades[2].candidate_id.0, 2);
-    assert_eq!(first_vote_event.replacing_vote_id, None);
-
-    let replacement = vec![
-        CandidateGrade {
-            candidate_id: MajorityJudgmentCandidateId(1),
-            grade: Grade::Good,
-        },
-        CandidateGrade {
-            candidate_id: MajorityJudgmentCandidateId(2),
-            grade: Grade::Poor,
-        },
-        CandidateGrade {
-            candidate_id: MajorityJudgmentCandidateId(0),
-            grade: Grade::VeryGood,
-        },
-    ];
-    let replacement_receipt = vote(
-        &mut ledger,
-        component,
-        &voter,
-        MajorityJudgmentRoundId::RoundOne,
-        replacement,
-        true,
-        true,
-    );
-    let (replacement_identifier, replacement_event_data) = replacement_receipt
-        .expect_commit_success()
-        .application_events
-        .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionVotedEvent")
-        .expect("replacement event should be emitted");
-    assert!(matches!(
-        &replacement_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let replacement_event: MajorityJudgmentElectionVotedEvent =
-        scrypto_decode(replacement_event_data).expect("replacement event should decode");
-    assert_eq!(replacement_event.vote_id, 1);
-    assert_eq!(replacement_event.replacing_vote_id, Some(0));
-
-    let election = election_from_ledger(&mut ledger, component);
-    assert_eq!(election.round_one.vote_count, 2);
-    assert_eq!(election.round_one.revote_count, 1);
-    let current_entry: MajorityJudgmentVoterEntry = ledger
-        .get_kv_store_entry(election.round_one.voters.id, &voter.address)
-        .expect("current round-one voter entry should exist");
-    assert_eq!(current_entry.vote_id, 1);
-    assert_eq!(current_entry.grades[0].candidate_id.0, 0);
-    let first_record: MajorityJudgmentVoteRecord = ledger
-        .get_kv_store_entry(election.round_one.votes.id, &0u64)
-        .expect("first ballot record should remain auditable");
-    assert_eq!(first_record.replacing_vote_id, None);
-
-    let premature_rerun = owner_builder(&owner)
-        .call_method(
-            component,
-            "start_majority_judgment_rerun",
-            manifest_args!(0u64, Instant::new(172_800)),
-        )
-        .build();
-    ledger
-        .execute_manifest(premature_rerun, owner_signers(&owner))
-        .expect_commit_failure();
 
     advance_to(&mut ledger, 259_200);
-    vote(
+
+    vote_mj_round(
         &mut ledger,
         component,
-        &voter,
+        &voter_one,
+        0,
         MajorityJudgmentRoundId::RoundOne,
         complete_ballot(),
+        true,
+    );
+    // Revoting replaces the voter's prior ballot rather than adding a new voter.
+    vote_mj_round(
+        &mut ledger,
+        component,
+        &voter_one,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        alternate_ballot(),
+        true,
+    );
+    vote_mj_round(
+        &mut ledger,
+        component,
+        &voter_two,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        complete_ballot(),
+        true,
+    );
+
+    let election = read_election(&mut ledger, component, 0);
+    assert_eq!(election.round_one.vote_count, 3);
+    assert_eq!(election.round_one.revote_count, 1);
+
+    // A tie resolution cannot be recorded before the round has ended.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
         true,
         false,
     );
 
-    let unauthorized_rerun = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .call_method(
-            component,
-            "start_majority_judgment_rerun",
-            manifest_args!(0u64, Instant::new(259_200)),
-        )
-        .build();
-    ledger
-        .execute_manifest(unauthorized_rerun, vec![])
-        .expect_commit_failure();
+    advance_to(&mut ledger, 345_600);
 
-    let rerun_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "start_majority_judgment_rerun",
-            manifest_args!(0u64, Instant::new(259_200)),
-        )
-        .build();
-    let rerun_receipt = ledger.execute_manifest(rerun_manifest, owner_signers(&owner));
-    let (rerun_identifier, rerun_event_data) = rerun_receipt
-        .expect_commit_success()
-        .application_events
-        .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentRerunStartedEvent")
-        .expect("rerun event should be emitted");
-    assert!(matches!(
-        &rerun_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let rerun_event: MajorityJudgmentRerunStartedEvent =
-        scrypto_decode(rerun_event_data).expect("rerun event should decode");
-    assert_eq!(rerun_event.snapshot, Instant::new(259_200));
-    assert_eq!(rerun_event.quorum, dec!(2500));
-    assert_eq!(rerun_event.minimum_median_grade, Grade::VeryGood);
-
-    let duplicate_rerun = owner_builder(&owner)
-        .call_method(
-            component,
-            "start_majority_judgment_rerun",
-            manifest_args!(0u64, Instant::new(259_200)),
-        )
-        .build();
-    ledger
-        .execute_manifest(duplicate_rerun, owner_signers(&owner))
-        .expect_commit_failure();
-
-    vote(
+    // Voting after the round deadline is rejected.
+    vote_mj_round(
         &mut ledger,
         component,
-        &voter,
+        &voter_two,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        complete_ballot(),
+        false,
+    );
+
+    // A tie resolution must contain at least two candidates.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0)],
+        true,
+        false,
+    );
+    // A tie resolution's candidates must be unique.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(0)],
+        true,
+        false,
+    );
+    // A tie resolution cannot reference an unknown candidate.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(99)],
+        true,
+        false,
+    );
+
+    // Only the owner may start a rerun.
+    start_rerun(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        Instant::new(345_600),
+        false,
+        false,
+    );
+    // A rerun cannot be scheduled to start in the past.
+    start_rerun(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        Instant::new(300_000),
+        true,
+        false,
+    );
+
+    // The valid tie resolution for Round 1 succeeds.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
+        true,
+        true,
+    );
+    // A tie resolution can only be recorded once per election.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
+        true,
+        false,
+    );
+
+    start_rerun(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        Instant::new(345_600),
+        true,
+        true,
+    );
+    // A rerun can only be started once.
+    start_rerun(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        Instant::new(345_600),
+        true,
+        false,
+    );
+
+    let election = read_election(&mut ledger, component, 0);
+    let rerun = election.rerun.expect("rerun should exist");
+    assert_eq!(rerun.start, Instant::new(345_600));
+    assert_eq!(rerun.deadline, Instant::new(432_000));
+    assert_eq!(rerun.quorum, dec!(2500));
+    assert_eq!(rerun.minimum_median_grade, Grade::VeryGood);
+
+    // The rerun round is independent of Round 1: voting is immediately open.
+    vote_mj_round(
+        &mut ledger,
+        component,
+        &voter_one,
+        0,
         MajorityJudgmentRoundId::Rerun,
         complete_ballot(),
         true,
+    );
+
+    // A tie resolution for the rerun cannot be recorded before it ends, and Round 1
+    // already has a tie resolution recorded for the election.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::Rerun,
+        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
         true,
+        false,
     );
-    let election = election_from_ledger(&mut ledger, component);
-    let rerun = election.rerun.expect("rerun should exist");
-    assert_eq!(rerun.snapshot, Instant::new(259_200));
+
+    advance_to(&mut ledger, 432_000);
+
+    // Voting after the rerun deadline is rejected.
+    vote_mj_round(
+        &mut ledger,
+        component,
+        &voter_two,
+        0,
+        MajorityJudgmentRoundId::Rerun,
+        complete_ballot(),
+        false,
+    );
+
+    let rerun = read_election(&mut ledger, component, 0)
+        .rerun
+        .expect("rerun should exist");
     assert_eq!(rerun.vote_count, 1);
-    assert_eq!(election.round_one.vote_count, 2);
+    assert_eq!(rerun.revote_count, 0);
 
-    advance_to(&mut ledger, 345_600);
-    let invalid_tie_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "record_majority_judgment_tie_resolution",
-            manifest_args!(
-                0u64,
-                MajorityJudgmentRoundId::Rerun,
-                vec![
-                    MajorityJudgmentCandidateId(0),
-                    MajorityJudgmentCandidateId(0)
-                ]
-            ),
-        )
-        .build();
-    ledger
-        .execute_manifest(invalid_tie_manifest, owner_signers(&owner))
-        .expect_commit_failure();
+    // Only the owner may toggle visibility.
+    toggle_hidden(&mut ledger, component, &owner, 0, false, false);
 
-    let tie_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "record_majority_judgment_tie_resolution",
-            manifest_args!(
-                0u64,
-                MajorityJudgmentRoundId::Rerun,
-                vec![
-                    MajorityJudgmentCandidateId(2),
-                    MajorityJudgmentCandidateId(0)
-                ]
-            ),
-        )
-        .build();
-    let tie_receipt = ledger.execute_manifest(tie_manifest, owner_signers(&owner));
-    let (tie_identifier, tie_event_data) = tie_receipt
+    let receipt = toggle_hidden(&mut ledger, component, &owner, 0, true, true);
+    assert!(receipt
         .expect_commit_success()
         .application_events
         .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentTieResolutionRecordedEvent")
-        .expect("tie event should be emitted");
-    assert!(matches!(
-        &tie_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let tie_event: MajorityJudgmentTieResolutionRecordedEvent =
-        scrypto_decode(tie_event_data).expect("tie event should decode");
-    assert_eq!(tie_event.round, MajorityJudgmentRoundId::Rerun);
-    assert_eq!(
-        tie_event.ordered_candidate_ids,
-        vec![
-            MajorityJudgmentCandidateId(2),
-            MajorityJudgmentCandidateId(0)
-        ]
-    );
+        .any(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionHiddenToggledEvent"));
+    assert!(read_election(&mut ledger, component, 0).hidden);
 
-    let second_tie_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "record_majority_judgment_tie_resolution",
-            manifest_args!(
-                0u64,
-                MajorityJudgmentRoundId::Rerun,
-                vec![
-                    MajorityJudgmentCandidateId(0),
-                    MajorityJudgmentCandidateId(2)
-                ]
-            ),
-        )
-        .build();
-    ledger
-        .execute_manifest(second_tie_manifest, owner_signers(&owner))
-        .expect_commit_failure();
-
-    let unauthorized_toggle = ManifestBuilder::new()
-        .lock_fee_from_faucet()
-        .call_method(
-            component,
-            "toggle_majority_judgment_election_hidden",
-            manifest_args!(0u64),
-        )
-        .build();
-    ledger
-        .execute_manifest(unauthorized_toggle, vec![])
-        .expect_commit_failure();
-
-    let toggle_manifest = owner_builder(&owner)
-        .call_method(
-            component,
-            "toggle_majority_judgment_election_hidden",
-            manifest_args!(0u64),
-        )
-        .build();
-    let toggle_receipt = ledger.execute_manifest(toggle_manifest, owner_signers(&owner));
-    let (toggle_identifier, toggle_event_data) = toggle_receipt
-        .expect_commit_success()
-        .application_events
-        .iter()
-        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentElectionHiddenToggledEvent")
-        .expect("visibility event should be emitted");
-    assert!(matches!(
-        &toggle_identifier.0,
-        Emitter::Method(node_id, ModuleId::Main) if *node_id == component.into_node_id()
-    ));
-    let toggle_event: MajorityJudgmentElectionHiddenToggledEvent =
-        scrypto_decode(toggle_event_data).expect("visibility event should decode");
-    assert_eq!(toggle_event.election_id, 0);
-    assert!(toggle_event.hidden);
-    assert!(election_from_ledger(&mut ledger, component).hidden);
+    toggle_hidden(&mut ledger, component, &owner, 0, true, true);
+    assert!(!read_election(&mut ledger, component, 0).hidden);
 }

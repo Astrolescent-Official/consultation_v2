@@ -52,8 +52,13 @@ const lease: PollLeaseIdentity = {
   durationMs: 60_000
 }
 
-const repositoryLayer = () =>
-  VoteCalculationRepo.Default.pipe(Layer.provide(VoteDatabaseLive(env.DB)))
+const repositoryLayer = (
+  governanceConfigLayer: Layer.Layer<GovernanceConfig> = GovernanceConfig.MainnetLive
+) =>
+  VoteCalculationRepo.Default.pipe(
+    Layer.provide(VoteDatabaseLive(env.DB)),
+    Layer.provide(governanceConfigLayer)
+  )
 
 const seedLease = async (owner = lease.owner) => {
   await env.DB.prepare(
@@ -66,10 +71,13 @@ const seedLease = async (owner = lease.owner) => {
 }
 
 const runWithRepository = <A>(
-  effect: Effect.Effect<A, never, VoteCalculationRepo>
+  effect: Effect.Effect<A, never, VoteCalculationRepo>,
+  governanceConfigLayer: Layer.Layer<GovernanceConfig> = GovernanceConfig.MainnetLive
 ) =>
   Effect.runPromise(
-    withPollLease(lease, effect).pipe(Effect.provide(repositoryLayer()))
+    withPollLease(lease, effect).pipe(
+      Effect.provide(repositoryLayer(governanceConfigLayer))
+    )
   )
 
 beforeEach(async () => {
@@ -107,9 +115,7 @@ describe('runtime app configuration', () => {
   it('uses the documented Stokenet governance component', async () => {
     const layer = GovernanceConfigLayer.pipe(
       Layer.provide(
-        Layer.setConfigProvider(
-          ConfigProvider.fromJson({ NETWORK_ID: 2 })
-        )
+        Layer.setConfigProvider(ConfigProvider.fromJson({ NETWORK_ID: 2 }))
       )
     )
     const config = await Effect.runPromise(
@@ -119,12 +125,55 @@ describe('runtime app configuration', () => {
     )
 
     expect(config.componentAddress).toBe(
-      'component_tdx_2_1cr3t55wx3dnhzgtk2hkn47mmkllr2z79lmwkvw65ltaluzylz4jpsc'
+      'component_tdx_2_1crk7cwsd6xdys73hqx5yqjuky3a02dcklt4s86xmygw62mytae4d3j'
     )
   })
 })
 
 describe('D1 vote persistence', () => {
+  it('isolates same-ID vote states from different governance components', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        const state = yield* repo.getOrCreateState(
+          'temperature_check',
+          entityId
+        )
+        yield* repo.commitVoteResults({
+          stateId: state.id,
+          type: 'temperature_check',
+          entityId,
+          lastVoteCount: 1,
+          results: [{ vote: 'For', votePower: '100' }],
+          accountVotes: [
+            { accountAddress: account, vote: 'For', votePower: '100' }
+          ],
+          revoteRemovals: []
+        })
+      }),
+      GovernanceConfig.StokenetLive
+    )
+
+    const mainnetResults = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getResultsByEntity('temperature_check', entityId)
+      })
+    )
+    expect(mainnetResults).toEqual({ results: [] })
+
+    const stokenetResults = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getResultsByEntity('temperature_check', entityId)
+      }),
+      GovernanceConfig.StokenetLive
+    )
+    expect(stokenetResults).toEqual({
+      results: [{ vote: 'For', votePower: '100' }]
+    })
+  })
+
   it('commits a revote exactly once and preserves decimal precision', async () => {
     const votePower = '9007199254740993.000000000000000001'
 

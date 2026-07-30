@@ -34,6 +34,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { H1 } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+import {
+  formatGovernanceDuration,
+  governanceDurationUnitPlural
+} from '@/lib/governanceDuration'
 import { formatQuorum } from '@/lib/utils'
 
 type ParameterSetForm = {
@@ -45,7 +49,6 @@ type ParameterSetForm = {
   proposalLengthDays: string
   proposalQuorum: string
   proposalApprovalThreshold: string
-  reviewDays: string
   votingDays: string
   electionQuorum: string
   minimumMedianGrade: string
@@ -58,11 +61,18 @@ type ParameterSetForm = {
 const majorityJudgmentFields: ReadonlyArray<
   readonly [keyof ParameterSetForm, string, 'number' | 'text']
 > = [
-  ['reviewDays', 'Candidate review (days)', 'number'],
-  ['votingDays', 'Round one voting (days)', 'number'],
+  [
+    'votingDays',
+    `Round one voting (${governanceDurationUnitPlural})`,
+    'number'
+  ],
   ['electionQuorum', 'Round one quorum (XRD)', 'text'],
   ['minimumMedianGrade', 'Round one minimum grade (0–4)', 'number'],
-  ['rerunVotingDays', 'Rerun voting (days)', 'number'],
+  [
+    'rerunVotingDays',
+    `Rerun voting (${governanceDurationUnitPlural})`,
+    'number'
+  ],
   ['rerunQuorum', 'Rerun quorum (XRD)', 'text'],
   ['rerunMinimumMedianGrade', 'Rerun minimum grade (0–4)', 'number'],
   ['reserveListDays', 'Reserve list (days)', 'number']
@@ -77,13 +87,12 @@ const emptyParameterSetForm: ParameterSetForm = {
   proposalLengthDays: '7',
   proposalQuorum: '1000000',
   proposalApprovalThreshold: '0.5',
-  reviewDays: '7',
   votingDays: '7',
   electionQuorum: '1000000',
   minimumMedianGrade: '2',
   rerunVotingDays: '5',
-  rerunQuorum: '500000',
-  rerunMinimumMedianGrade: '3',
+  rerunQuorum: '1000000',
+  rerunMinimumMedianGrade: '2',
   reserveListDays: '90'
 }
 
@@ -111,7 +120,6 @@ const toFormValues = (
       }
     : {
         ...common,
-        reviewDays: parameterSet.parameters.election.reviewDays.toString(),
         votingDays: parameterSet.parameters.election.votingDays.toString(),
         electionQuorum: parameterSet.parameters.election.quorum,
         minimumMedianGrade:
@@ -153,7 +161,6 @@ const toParameterSetInput = (
           approvalThreshold: form.temperatureCheckApprovalThreshold
         },
         election: {
-          reviewDays: Number(form.reviewDays),
           votingDays: Number(form.votingDays),
           quorum: form.electionQuorum,
           minimumMedianGrade:
@@ -531,7 +538,7 @@ const ParameterGroup = ({
     <legend className="font-medium">{title}</legend>
     <ParameterInput
       id={`${idPrefix}-days`}
-      label="Voting period (days)"
+      label={`Voting period (${governanceDurationUnitPlural})`}
       type="number"
       min="1"
       max="65535"
@@ -593,14 +600,17 @@ const RetiredParameterSet = ({
     </CardHeader>
     <CardContent className="grid gap-4 text-sm md:grid-cols-2">
       <p className="text-muted-foreground">
-        TC: {parameterSet.parameters.temperatureCheck.votingDays} days ·{' '}
-        {formatQuorum(parameterSet.parameters.temperatureCheck.quorum)} quorum ·{' '}
-        {parameterSet.parameters.temperatureCheck.approvalThreshold} approval
+        TC:{' '}
+        {formatGovernanceDuration(
+          parameterSet.parameters.temperatureCheck.votingDays
+        )}{' '}
+        · {formatQuorum(parameterSet.parameters.temperatureCheck.quorum)} quorum
+        · {parameterSet.parameters.temperatureCheck.approvalThreshold} approval
       </p>
       <p className="text-muted-foreground">
         {parameterSet.parameters._tag === 'Standard'
-          ? `GP: ${parameterSet.parameters.proposal.votingDays} days · ${formatQuorum(parameterSet.parameters.proposal.quorum)} quorum · ${parameterSet.parameters.proposal.approvalThreshold} approval`
-          : `MJ: ${parameterSet.parameters.election.reviewDays} review days · ${parameterSet.parameters.election.votingDays} voting days · ${formatQuorum(parameterSet.parameters.election.quorum)} quorum`}
+          ? `GP: ${formatGovernanceDuration(parameterSet.parameters.proposal.votingDays)} · ${formatQuorum(parameterSet.parameters.proposal.quorum)} quorum · ${parameterSet.parameters.proposal.approvalThreshold} approval`
+          : `MJ: ${formatGovernanceDuration(parameterSet.parameters.election.votingDays)} voting · ${formatQuorum(parameterSet.parameters.election.quorum)} quorum`}
       </p>
     </CardContent>
   </Card>

@@ -1,8 +1,27 @@
 use crate::*;
 
+const STOKENET_PACKAGE_ADDRESS_PREFIX: &str = "package_tdx_2_";
+
+fn uses_minute_governance_durations(encoded_package_address: &str) -> bool {
+    encoded_package_address.starts_with(STOKENET_PACKAGE_ADDRESS_PREFIX)
+}
+
+fn add_governance_duration(
+    instant: Instant,
+    duration: u32,
+    encoded_package_address: &str,
+) -> Option<Instant> {
+    if uses_minute_governance_durations(encoded_package_address) {
+        instant.add_minutes(i64::from(duration))
+    } else {
+        instant.add_days(i64::from(duration))
+    }
+}
+
 #[blueprint]
 #[events(
     TemperatureCheckCreatedEvent,
+    TemperatureCheckOutcomeRecordedEvent,
     TemperatureCheckVotedEvent,
     ProposalCreatedEvent,
     ProposalVotedEvent,
@@ -33,6 +52,7 @@ mod governance {
 
             make_proposal => restrict_to: [owner];
             make_majority_judgment_election => restrict_to: [owner];
+            record_temperature_check_outcome => restrict_to: [owner];
             start_majority_judgment_rerun => restrict_to: [owner];
             record_majority_judgment_tie_resolution => restrict_to: [owner];
             add_governance_parameter_set => restrict_to: [owner];
@@ -104,6 +124,7 @@ mod governance {
                     get_majority_judgment_election_count => Free, updatable;
                     make_proposal => Free, updatable;
                     make_majority_judgment_election => Free, updatable;
+                    record_temperature_check_outcome => Free, updatable;
                     start_majority_judgment_rerun => Free, updatable;
                     record_majority_judgment_tie_resolution => Free, updatable;
                     add_governance_parameter_set => Free, updatable;
@@ -197,10 +218,6 @@ mod governance {
                 }
                 GovernanceProcessParameters::MajorityJudgment { election, .. } => {
                     assert!(
-                        election.review_days > 0,
-                        "Election review duration must be greater than zero"
-                    );
-                    assert!(
                         election.voting_days > 0,
                         "Election voting duration must be greater than zero"
                     );
@@ -217,14 +234,8 @@ mod governance {
                         "Election quorum must be greater than zero"
                     );
                     assert!(
-                        election.rerun_quorum > Decimal::ZERO
-                            && election.rerun_quorum < election.quorum,
-                        "Rerun quorum must be greater than zero and lower than Round 1 quorum"
-                    );
-                    assert!(
-                        election.rerun_minimum_median_grade.score()
-                            > election.minimum_median_grade.score(),
-                        "Rerun minimum median grade must be higher than the Round 1 grade"
+                        election.rerun_quorum > Decimal::ZERO,
+                        "Rerun quorum must be greater than zero"
                     );
                 }
             }
@@ -249,9 +260,10 @@ mod governance {
             }
         }
 
-        fn checked_add_days(instant: Instant, days: u32, name: &str) -> Instant {
-            instant
-                .add_days(i64::from(days))
+        fn checked_add_governance_duration(instant: Instant, duration: u32, name: &str) -> Instant {
+            let encoded_package_address =
+                Runtime::bech32_encode_address(Runtime::package_address());
+            add_governance_duration(instant, duration, &encoded_package_address)
                 .unwrap_or_else(|| panic!("{} timestamp overflow", name))
         }
 
@@ -313,13 +325,9 @@ mod governance {
             assert!(
                 candidates.len() >= MIN_MAJORITY_JUDGMENT_CANDIDATES
                     && candidates.len() <= MAX_MAJORITY_JUDGMENT_CANDIDATES,
-                "Election must contain 2-20 candidates"
+                "Election must contain 1-20 candidates"
             );
             assert!(seat_count >= 1, "Election must contain at least one seat");
-            assert!(
-                usize::try_from(seat_count).unwrap() < candidates.len(),
-                "Seat count must be lower than candidate count"
-            );
 
             let mut references: Vec<String> = Vec::new();
             for candidate in &candidates {
@@ -460,13 +468,7 @@ mod governance {
             }
         }
 
-        pub fn make_temperature_check(
-            &mut self,
-            author: Global<Account>,
-            draft: TemperatureCheckDraft,
-            parameter_set_id: Option<String>,
-        ) -> u64 {
-            Runtime::assert_access_rule(author.get_owner_role().rule);
+        fn validate_temperature_check_draft(draft: &TemperatureCheckDraft) {
             assert!(
                 !draft.title.trim().is_empty(),
                 "Temperature check title cannot be empty"
@@ -484,38 +486,49 @@ mod governance {
                 "Too many links (max {})",
                 MAX_LINKS
             );
+        }
 
-            let parameter_set = self.resolve_parameter_set(parameter_set_id);
-            let follow_up = match (draft.follow_up, &parameter_set.parameters) {
-                (
-                    TemperatureCheckFollowUpDraft::StandardProposal {
-                        vote_options,
-                        max_selections,
-                    },
-                    GovernanceProcessParameters::Standard { .. },
-                ) => Self::validate_standard_follow_up(vote_options, max_selections),
-                (
-                    TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
-                        role_id,
-                        seat_count,
-                        candidates,
-                    },
-                    GovernanceProcessParameters::MajorityJudgment { .. },
-                ) => Self::validate_majority_judgment_follow_up(role_id, seat_count, candidates),
-                _ => panic!("Parameter set variant does not match the consultation follow-up"),
-            };
+        fn apply_candidate_order(
+            candidates: &mut [MajorityJudgmentCandidate],
+            candidate_order: Vec<MajorityJudgmentCandidateId>,
+        ) {
+            assert!(
+                candidate_order.len() == candidates.len(),
+                "Candidate order must contain every candidate exactly once"
+            );
+            let mut sorted_order = candidate_order.clone();
+            sorted_order.sort();
+            for (index, candidate_id) in sorted_order.iter().enumerate() {
+                assert!(
+                    candidate_id.0 == u32::try_from(index).unwrap(),
+                    "Candidate order must contain every candidate exactly once"
+                );
+            }
+            for (display_order, candidate_id) in candidate_order.iter().enumerate() {
+                let candidate = candidates
+                    .iter_mut()
+                    .find(|candidate| candidate.id == *candidate_id)
+                    .expect("Candidate order contains an unknown candidate");
+                candidate.display_order = u32::try_from(display_order).unwrap();
+            }
+        }
 
+        fn insert_temperature_check(
+            &mut self,
+            author: Global<Account>,
+            draft: TemperatureCheckDraft,
+            follow_up: TemperatureCheckFollowUp,
+            parameter_set: GovernanceParameterSetSnapshot,
+            snapshot: Instant,
+            start: Instant,
+            deadline: Instant,
+            continuation: Option<ConsultationContinuation>,
+        ) -> u64 {
             let id = self.temperature_check_count;
             self.temperature_check_count = self
                 .temperature_check_count
                 .checked_add(1)
                 .expect("Temperature check identifier exhausted");
-            let now = Clock::current_time_rounded_to_seconds();
-            let deadline = Self::checked_add_days(
-                now,
-                parameter_set.parameters.temperature_check().voting_days,
-                "Temperature check deadline",
-            );
             let parameter_set_id = parameter_set.id.clone();
             let parameter_set_version = parameter_set.version;
             let title = draft.title.clone();
@@ -533,9 +546,11 @@ mod governance {
                     votes: KeyValueStore::new(),
                     vote_count: 0,
                     revote_count: 0,
-                    start: now,
+                    snapshot,
+                    start,
                     deadline,
-                    continuation: None,
+                    outcome: None,
+                    continuation,
                     author,
                     hidden: false,
                 },
@@ -544,12 +559,87 @@ mod governance {
             Runtime::emit_event(TemperatureCheckCreatedEvent {
                 temperature_check_id: id,
                 title,
-                start: now,
+                snapshot,
+                start,
                 deadline,
                 parameter_set_id,
                 parameter_set_version,
             });
             id
+        }
+
+        pub fn make_temperature_check(
+            &mut self,
+            author: Global<Account>,
+            draft: TemperatureCheckDraft,
+            parameter_set_id: Option<String>,
+        ) -> u64 {
+            Runtime::assert_access_rule(author.get_owner_role().rule);
+            Self::validate_temperature_check_draft(&draft);
+
+            let parameter_set = self.resolve_parameter_set(parameter_set_id);
+            let follow_up = match (draft.follow_up.clone(), &parameter_set.parameters) {
+                (
+                    TemperatureCheckFollowUpDraft::StandardProposal {
+                        vote_options,
+                        max_selections,
+                    },
+                    GovernanceProcessParameters::Standard { .. },
+                ) => Self::validate_standard_follow_up(vote_options, max_selections),
+                (TemperatureCheckFollowUpDraft::MajorityJudgmentElection { .. }, _) => {
+                    panic!(
+                        "Majority Judgment temperature checks must be created atomically with their election"
+                    )
+                }
+                _ => panic!("A Standard parameter set is required for a standard consultation"),
+            };
+
+            let now = Clock::current_time_rounded_to_seconds();
+            let deadline = Self::checked_add_governance_duration(
+                now,
+                parameter_set.parameters.temperature_check().voting_days,
+                "Temperature check deadline",
+            );
+            self.insert_temperature_check(
+                author,
+                draft,
+                follow_up,
+                parameter_set,
+                now,
+                now,
+                deadline,
+                None,
+            )
+        }
+
+        pub fn record_temperature_check_outcome(
+            &mut self,
+            temperature_check_id: u64,
+            passed: bool,
+        ) {
+            let now = Clock::current_time_rounded_to_seconds();
+            let mut temperature_check = self
+                .temperature_checks
+                .get_mut(&temperature_check_id)
+                .expect("Temperature check not found");
+            assert!(
+                now.compare(temperature_check.deadline, TimeComparisonOperator::Gte),
+                "Temperature check has not ended"
+            );
+            assert!(
+                temperature_check.outcome.is_none(),
+                "Temperature check outcome has already been recorded"
+            );
+            temperature_check.outcome = Some(if passed {
+                TemperatureCheckOutcome::Passed { recorded_at: now }
+            } else {
+                TemperatureCheckOutcome::Failed { recorded_at: now }
+            });
+            Runtime::emit_event(TemperatureCheckOutcomeRecordedEvent {
+                temperature_check_id,
+                passed,
+                recorded_at: now,
+            });
         }
 
         pub fn make_proposal(&mut self, temperature_check_id: u64) -> u64 {
@@ -561,6 +651,12 @@ mod governance {
             assert!(
                 now.compare(temperature_check.deadline, TimeComparisonOperator::Gte),
                 "Temperature check has not ended"
+            );
+            assert!(
+                temperature_check
+                    .outcome
+                    .is_some_and(TemperatureCheckOutcome::passed),
+                "Temperature check has not passed"
             );
             assert!(
                 temperature_check.continuation.is_none(),
@@ -588,8 +684,11 @@ mod governance {
                 .proposal_count
                 .checked_add(1)
                 .expect("Proposal identifier exhausted");
-            let deadline =
-                Self::checked_add_days(now, proposal_parameters.voting_days, "Proposal deadline");
+            let deadline = Self::checked_add_governance_duration(
+                now,
+                proposal_parameters.voting_days,
+                "Proposal deadline",
+            );
             let proposal = Proposal {
                 title: temperature_check.title.clone(),
                 short_description: temperature_check.short_description.clone(),
@@ -629,102 +728,104 @@ mod governance {
 
         pub fn make_majority_judgment_election(
             &mut self,
-            temperature_check_id: u64,
-            review_start: Instant,
+            author: Global<Account>,
+            draft: TemperatureCheckDraft,
+            parameter_set_id: String,
+            temperature_check_start: Instant,
+            temperature_check_deadline: Instant,
+            voting_start: Instant,
+            voting_deadline: Instant,
             candidate_order: Vec<MajorityJudgmentCandidateId>,
         ) -> u64 {
+            Runtime::assert_access_rule(author.get_owner_role().rule);
+            Self::validate_temperature_check_draft(&draft);
             let now = Clock::current_time_rounded_to_seconds();
             assert!(
-                review_start.compare(now, TimeComparisonOperator::Gte),
-                "Election review cannot start in the past"
+                temperature_check_start.compare(now, TimeComparisonOperator::Gt),
+                "Temperature check voting must start in the future"
             );
-            let mut temperature_check = self
-                .temperature_checks
-                .get_mut(&temperature_check_id)
-                .expect("Temperature check not found");
-            assert!(
-                now.compare(temperature_check.deadline, TimeComparisonOperator::Gte),
-                "Temperature check has not ended"
+            let parameter_set = self.resolve_parameter_set(Some(parameter_set_id));
+            let election_parameters = match &parameter_set.parameters {
+                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
+                GovernanceProcessParameters::Standard { .. } => {
+                    panic!("A Majority Judgment parameter set is required for an election")
+                }
+            };
+            let minimum_temperature_check_deadline = Self::checked_add_governance_duration(
+                temperature_check_start,
+                parameter_set.parameters.temperature_check().voting_days,
+                "Minimum temperature check deadline",
             );
             assert!(
-                temperature_check.continuation.is_none(),
-                "Temperature check already has a continuation"
+                temperature_check_deadline.compare(
+                    minimum_temperature_check_deadline,
+                    TimeComparisonOperator::Gte
+                ),
+                "Temperature check voting period is shorter than the configured minimum"
+            );
+            assert!(
+                voting_start.compare(temperature_check_deadline, TimeComparisonOperator::Gte),
+                "Election voting cannot start before the temperature check ends"
+            );
+            let minimum_voting_deadline = Self::checked_add_governance_duration(
+                voting_start,
+                election_parameters.voting_days,
+                "Minimum election voting deadline",
+            );
+            assert!(
+                voting_deadline.compare(minimum_voting_deadline, TimeComparisonOperator::Gte),
+                "Election voting period is shorter than the configured minimum"
             );
 
-            let (role_id, seat_count, mut candidates) = match &temperature_check.follow_up {
-                TemperatureCheckFollowUp::MajorityJudgmentElection {
+            let (role_id, seat_count, mut candidates) = match draft.follow_up.clone() {
+                TemperatureCheckFollowUpDraft::MajorityJudgmentElection {
                     role_id,
                     seat_count,
                     candidates,
-                } => (role_id.clone(), *seat_count, candidates.clone()),
-                TemperatureCheckFollowUp::StandardProposal { .. } => {
-                    panic!("Standard temperature checks cannot create MJ elections")
+                } => match Self::validate_majority_judgment_follow_up(
+                    role_id, seat_count, candidates,
+                ) {
+                    TemperatureCheckFollowUp::MajorityJudgmentElection {
+                        role_id,
+                        seat_count,
+                        candidates,
+                    } => (role_id, seat_count, candidates),
+                    TemperatureCheckFollowUp::StandardProposal { .. } => unreachable!(),
+                },
+                TemperatureCheckFollowUpDraft::StandardProposal { .. } => {
+                    panic!("A Majority Judgment election draft is required")
                 }
             };
-            let election_parameters = match &temperature_check.parameter_set.parameters {
-                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
-                GovernanceProcessParameters::Standard { .. } => {
-                    panic!("Standard parameter sets cannot create MJ elections")
-                }
-            };
+            Self::apply_candidate_order(&mut candidates, candidate_order);
 
-            assert!(
-                candidate_order.len() == candidates.len(),
-                "Candidate order must contain every candidate exactly once"
-            );
-            for (display_order, candidate_id) in candidate_order.iter().enumerate() {
-                let candidate = candidates
-                    .iter_mut()
-                    .find(|candidate| candidate.id == *candidate_id)
-                    .expect("Candidate order contains an unknown candidate");
-                assert!(
-                    candidate.display_order == candidate.id.0,
-                    "Candidate order contains a duplicate candidate"
-                );
-                candidate.display_order = u32::try_from(display_order).unwrap();
-            }
-            let mut sorted_order = candidate_order.clone();
-            sorted_order.sort();
-            for (index, candidate_id) in sorted_order.iter().enumerate() {
-                assert!(
-                    candidate_id.0 == u32::try_from(index).unwrap(),
-                    "Candidate order must contain every candidate exactly once"
-                );
-            }
-
-            let review_end = Self::checked_add_days(
-                review_start,
-                election_parameters.review_days,
-                "Election review deadline",
-            );
-            let voting_deadline = Self::checked_add_days(
-                review_end,
-                election_parameters.voting_days,
-                "Election voting deadline",
-            );
             let election_id = self.majority_judgment_election_count;
             self.majority_judgment_election_count = self
                 .majority_judgment_election_count
                 .checked_add(1)
                 .expect("Majority Judgment election identifier exhausted");
-            let snapshot = temperature_check.start;
-            let parameter_set = temperature_check.parameter_set.clone();
-            let election = MajorityJudgmentElection {
-                temperature_check_id,
-                title: temperature_check.title.clone(),
-                short_description: temperature_check.short_description.clone(),
-                description: temperature_check.description.clone(),
-                links: temperature_check.links.clone(),
-                author: temperature_check.author,
+            let snapshot = now;
+            let follow_up = TemperatureCheckFollowUp::MajorityJudgmentElection {
                 role_id: role_id.clone(),
                 seat_count,
                 candidates,
-                parameter_set: parameter_set.clone(),
-                review_start,
-                review_end,
+            };
+            let temperature_check_id = self.insert_temperature_check(
+                author,
+                draft,
+                follow_up,
+                parameter_set.clone(),
+                snapshot,
+                temperature_check_start,
+                temperature_check_deadline,
+                Some(ConsultationContinuation::MajorityJudgmentElection(
+                    election_id,
+                )),
+            );
+            let election = MajorityJudgmentElection {
+                temperature_check_id,
                 round_one: Self::new_round(
                     snapshot,
-                    review_end,
+                    voting_start,
                     voting_deadline,
                     election_parameters.quorum,
                     election_parameters.minimum_median_grade,
@@ -733,11 +834,6 @@ mod governance {
                 tie_resolution: None,
                 hidden: false,
             };
-            temperature_check.continuation = Some(
-                ConsultationContinuation::MajorityJudgmentElection(election_id),
-            );
-            drop(temperature_check);
-
             self.majority_judgment_elections
                 .insert(election_id, election);
             Runtime::emit_event(MajorityJudgmentElectionCreatedEvent {
@@ -745,10 +841,8 @@ mod governance {
                 temperature_check_id,
                 role_id,
                 seat_count,
-                review_start,
-                review_end,
                 snapshot,
-                voting_start: review_end,
+                voting_start,
                 voting_deadline,
                 parameter_set_id: parameter_set.id,
                 parameter_set_version: parameter_set.version,
@@ -897,6 +991,28 @@ mod governance {
             });
         }
 
+        fn passed_temperature_check_for_election(
+            &self,
+            election_id: u64,
+        ) -> (u64, KeyValueEntryRef<'_, TemperatureCheck>) {
+            let temperature_check_id = self
+                .majority_judgment_elections
+                .get(&election_id)
+                .expect("Majority Judgment election not found")
+                .temperature_check_id;
+            let temperature_check = self
+                .temperature_checks
+                .get(&temperature_check_id)
+                .expect("Election temperature check not found");
+            assert!(
+                temperature_check
+                    .outcome
+                    .is_some_and(TemperatureCheckOutcome::passed),
+                "Election temperature check has not passed"
+            );
+            (temperature_check_id, temperature_check)
+        }
+
         pub fn vote_on_majority_judgment_election(
             &mut self,
             account: Global<Account>,
@@ -905,11 +1021,22 @@ mod governance {
             grades: Vec<CandidateGrade>,
         ) {
             Runtime::assert_access_rule(account.get_owner_role().rule);
+            let (_, temperature_check) =
+                self.passed_temperature_check_for_election(election_id);
+            let candidates = match &temperature_check.follow_up {
+                TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
+                    candidates.clone()
+                }
+                TemperatureCheckFollowUp::StandardProposal { .. } => {
+                    panic!("Election is linked to a Standard temperature check")
+                }
+            };
+            drop(temperature_check);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
                 .expect("Majority Judgment election not found");
-            let normalized = Self::validate_and_normalize_ballot(&election.candidates, grades);
+            let normalized = Self::validate_and_normalize_ballot(&candidates, grades);
             let round = match round_id {
                 MajorityJudgmentRoundId::RoundOne => &mut election.round_one,
                 MajorityJudgmentRoundId::Rerun => election
@@ -966,6 +1093,16 @@ mod governance {
 
         pub fn start_majority_judgment_rerun(&mut self, election_id: u64, voting_start: Instant) {
             let now = Clock::current_time_rounded_to_seconds();
+            let (_, temperature_check) =
+                self.passed_temperature_check_for_election(election_id);
+            let parameters = match &temperature_check.parameter_set.parameters {
+                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
+                GovernanceProcessParameters::Standard { .. } => {
+                    panic!("Election does not contain Majority Judgment parameters")
+                }
+            };
+            let snapshot = temperature_check.snapshot;
+            drop(temperature_check);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
@@ -979,13 +1116,7 @@ mod governance {
                 voting_start.compare(now, TimeComparisonOperator::Gte),
                 "Rerun voting cannot start in the past"
             );
-            let parameters = match &election.parameter_set.parameters {
-                GovernanceProcessParameters::MajorityJudgment { election, .. } => election,
-                GovernanceProcessParameters::Standard { .. } => {
-                    panic!("Election does not contain Majority Judgment parameters")
-                }
-            };
-            let deadline = Self::checked_add_days(
+            let deadline = Self::checked_add_governance_duration(
                 voting_start,
                 parameters.rerun_voting_days,
                 "Rerun voting deadline",
@@ -993,7 +1124,7 @@ mod governance {
             let quorum = parameters.rerun_quorum;
             let minimum_median_grade = parameters.rerun_minimum_median_grade;
             election.rerun = Some(Self::new_round(
-                now,
+                snapshot,
                 voting_start,
                 deadline,
                 quorum,
@@ -1001,7 +1132,7 @@ mod governance {
             ));
             Runtime::emit_event(MajorityJudgmentRerunStartedEvent {
                 election_id,
-                snapshot: now,
+                snapshot,
                 start: voting_start,
                 deadline,
                 quorum,
@@ -1016,6 +1147,17 @@ mod governance {
             ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
         ) {
             let now = Clock::current_time_rounded_to_seconds();
+            let (_, temperature_check) =
+                self.passed_temperature_check_for_election(election_id);
+            let candidates = match &temperature_check.follow_up {
+                TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
+                    candidates.clone()
+                }
+                TemperatureCheckFollowUp::StandardProposal { .. } => {
+                    panic!("Election is linked to a Standard temperature check")
+                }
+            };
+            drop(temperature_check);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
@@ -1051,8 +1193,7 @@ mod governance {
             );
             for candidate_id in &ordered_candidate_ids {
                 assert!(
-                    election
-                        .candidates
+                    candidates
                         .iter()
                         .any(|candidate| candidate.id == *candidate_id),
                     "Tie resolution contains an unknown candidate"
@@ -1204,5 +1345,33 @@ mod governance {
                 hidden,
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{add_governance_duration, uses_minute_governance_durations};
+    use scrypto::prelude::Instant;
+
+    #[test]
+    fn only_stokenet_package_addresses_use_minute_durations() {
+        assert!(uses_minute_governance_durations("package_tdx_2_1test"));
+        assert!(!uses_minute_governance_durations("package_rdx1test"));
+        assert!(!uses_minute_governance_durations("package_sim1test"));
+        assert!(!uses_minute_governance_durations("component_tdx_2_1test"));
+    }
+
+    #[test]
+    fn stokenet_adds_minutes_and_other_networks_add_days() {
+        let start = Instant::new(0);
+
+        assert_eq!(
+            add_governance_duration(start, 2, "package_tdx_2_1test"),
+            Some(Instant::new(120))
+        );
+        assert_eq!(
+            add_governance_duration(start, 2, "package_rdx1test"),
+            Some(Instant::new(172_800))
+        );
     }
 }

@@ -108,6 +108,31 @@ fn advance_by_days(ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDat
         .expect_commit_success();
 }
 
+fn record_passed_temperature_check(
+    ledger: &mut LedgerSimulator<NoExtension, InMemorySubstateDatabase>,
+    component: ComponentAddress,
+    owner_account: ComponentAddress,
+    owner_badge: ResourceAddress,
+    owner_pk: &Secp256k1PublicKey,
+    temperature_check_id: u64,
+) {
+    let manifest = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
+        .call_method(
+            component,
+            "record_temperature_check_outcome",
+            manifest_args!(temperature_check_id, true),
+        )
+        .build();
+    ledger
+        .execute_manifest(
+            manifest,
+            vec![NonFungibleGlobalId::from_public_key(owner_pk)],
+        )
+        .expect_commit_success();
+}
+
 // =============================================================================
 // Governance Blueprint Tests
 // =============================================================================
@@ -384,6 +409,14 @@ fn test_make_proposal_from_temperature_check() {
 
     // Elevate to proposal after the temperature check closes.
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        governance_component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1179,6 +1212,14 @@ fn test_parameter_set_snapshot_is_immutable_through_edit_retirement_and_elevatio
     );
 
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1299,6 +1340,14 @@ fn test_parameter_set_and_consultation_events_include_identity_and_version() {
     assert_eq!(tc_event.parameter_set_version, 1);
 
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let proposal_manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1709,6 +1758,14 @@ fn test_multi_choice_proposal_voting() {
 
     // Elevate to proposal after the temperature check closes.
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        governance_component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1787,6 +1844,14 @@ fn test_multi_choice_exceeds_max_selections() {
 
     // Elevate to proposal after the temperature check closes.
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        governance_component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))
@@ -1869,6 +1934,14 @@ fn test_single_choice_requires_exactly_one_vote() {
 
     // Elevate to proposal after the temperature check closes.
     advance_by_days(&mut ledger, 30);
+    record_passed_temperature_check(
+        &mut ledger,
+        governance_component,
+        owner_account,
+        owner_badge,
+        &owner_pk,
+        0,
+    );
     let manifest = ManifestBuilder::new()
         .lock_fee_from_faucet()
         .create_proof_from_account_of_amount(owner_account, owner_badge, dec!(1))

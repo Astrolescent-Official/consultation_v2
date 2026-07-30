@@ -1,7 +1,6 @@
 import { AccountAddress } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
 import { Schema } from 'effect'
-import { TemperatureCheckId } from './brandedTypes'
 
 export const DecimalStringSchema = Schema.String.pipe(
   Schema.filter(
@@ -106,8 +105,11 @@ export type MajorityJudgmentRoundId = typeof MajorityJudgmentRoundIdSchema.Type
 
 export const MajorityJudgmentElectionStatusSchema = Schema.Literal(
   'PENDING',
-  'REVIEW_OPEN',
+  'TC_LIVE',
+  'TC_FAILED',
+  'MJ_PENDING',
   'LIVE',
+  'ROUND_1_FAILED',
   'RERUN_PENDING',
   'RERUN_LIVE',
   'FINAL',
@@ -116,6 +118,14 @@ export const MajorityJudgmentElectionStatusSchema = Schema.Literal(
 )
 export type MajorityJudgmentElectionStatus =
   typeof MajorityJudgmentElectionStatusSchema.Type
+
+export const canTransitionFromRoundOneFailure = (
+  nextStatus: MajorityJudgmentElectionStatus
+) => nextStatus === 'RERUN_PENDING' || nextStatus === 'RERUN_LIVE'
+
+export const canStartMajorityJudgmentRerun = (
+  status: MajorityJudgmentElectionStatus
+) => status === 'ROUND_1_FAILED'
 
 export const MajorityJudgmentCandidateOutcomeSchema = Schema.Literal(
   'SEATED',
@@ -139,7 +149,7 @@ export class MajorityJudgmentCandidateInput extends Schema.Class<MajorityJudgmen
 }) {}
 
 const CandidateIdsSchema = Schema.Array(MajorityJudgmentCandidateIdSchema).pipe(
-  Schema.minItems(2),
+  Schema.minItems(1),
   Schema.maxItems(20),
   Schema.filter(
     (candidateIds) =>
@@ -155,7 +165,7 @@ const RawMakeMajorityJudgmentVoteInputSchema = Schema.Struct({
   round: MajorityJudgmentRoundIdSchema,
   candidateIds: CandidateIdsSchema,
   grades: Schema.Array(CandidateGradeSchema).pipe(
-    Schema.minItems(2),
+    Schema.minItems(1),
     Schema.maxItems(20)
   )
 }).pipe(
@@ -212,7 +222,7 @@ export type MakeMajorityJudgmentVoteInput =
 const CandidateOrderSchema = Schema.Array(
   MajorityJudgmentCandidateIdSchema
 ).pipe(
-  Schema.minItems(2),
+  Schema.minItems(1),
   Schema.maxItems(20),
   Schema.filter(
     (candidateIds) =>
@@ -223,25 +233,43 @@ const CandidateOrderSchema = Schema.Array(
 
 export const MakeMajorityJudgmentElectionInputSchema = Schema.Struct({
   accountAddress: AccountAddress,
-  temperatureCheckId: TemperatureCheckId,
-  reviewStart: Schema.DateFromSelf,
-  candidateIds: CandidateIdsSchema,
+  title: Schema.String.pipe(Schema.minLength(1)),
+  shortDescription: Schema.String.pipe(Schema.minLength(1)),
+  description: Schema.String.pipe(Schema.minLength(1)),
+  links: Schema.Array(Schema.String).pipe(Schema.maxItems(10)),
+  roleId: Schema.String.pipe(Schema.minLength(1)),
+  seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
+  candidates: Schema.Array(MajorityJudgmentCandidateInput).pipe(
+    Schema.minItems(1),
+    Schema.maxItems(20)
+  ),
+  parameterSetId: Schema.String.pipe(Schema.minLength(1)),
+  tcVotingStart: Schema.DateFromSelf,
+  tcVotingEnd: Schema.DateFromSelf,
+  votingStart: Schema.DateFromSelf,
+  votingEnd: Schema.DateFromSelf,
   candidateOrder: CandidateOrderSchema
 }).pipe(
   Schema.filter(
-    ({ candidateIds, candidateOrder }) => {
-      const expected = [...candidateIds].map(Number).sort((a, b) => a - b)
+    ({ candidates, candidateOrder }) => {
       const actual = [...candidateOrder].map(Number).sort((a, b) => a - b)
       return (
-        actual.length === expected.length &&
-        actual.every((candidateId, index) => candidateId === expected[index])
+        actual.length === candidates.length &&
+        actual.every((candidateId, index) => candidateId === index)
       )
     },
     { message: () => 'Candidate order must be a complete permutation' }
+  ),
+  Schema.filter(
+    ({ tcVotingStart, tcVotingEnd, votingStart, votingEnd }) =>
+      tcVotingStart < tcVotingEnd &&
+      tcVotingEnd <= votingStart &&
+      votingStart < votingEnd,
+    { message: () => 'Election voting timestamps must be ordered' }
   )
 )
 export type MakeMajorityJudgmentElectionInput =
-  typeof MakeMajorityJudgmentElectionInputSchema.Encoded
+  typeof MakeMajorityJudgmentElectionInputSchema.Type
 
 export const StartMajorityJudgmentRerunInputSchema = Schema.Struct({
   accountAddress: AccountAddress,
@@ -277,8 +305,13 @@ export class MajorityJudgmentElectionProjection extends Schema.Class<MajorityJud
   shortDescription: Schema.String,
   description: Schema.String,
   seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
-  reviewStart: Schema.Date,
-  reviewEnd: Schema.Date,
+  snapshotAt: Schema.Date,
+  tcVotingStart: Schema.Date,
+  tcVotingEnd: Schema.Date,
+  tcQuorumXrd: PositiveDecimalStringSchema,
+  tcApprovalThreshold: PositiveDecimalStringSchema,
+  tcOutcome: Schema.Literal('PENDING', 'PASSED', 'FAILED'),
+  tcOutcomeRecordedAt: Schema.NullOr(Schema.Date),
   parameterSetId: Schema.String.pipe(Schema.minLength(1)),
   parameterSetVersion: Schema.Number.pipe(Schema.int(), Schema.positive()),
   reserveListDays: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
@@ -345,12 +378,28 @@ export class MajorityJudgmentResultResponse extends Schema.Class<MajorityJudgmen
   unresolvedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema)
 }) {}
 
+export class TemperatureCheckResultResponse extends Schema.Class<TemperatureCheckResultResponse>(
+  'TemperatureCheckResultResponse'
+)({
+  forVotingPower: DecimalStringSchema,
+  againstVotingPower: DecimalStringSchema,
+  participationXrd: DecimalStringSchema,
+  quorumXrd: PositiveDecimalStringSchema,
+  quorumMet: Schema.Boolean,
+  approvalThreshold: PositiveDecimalStringSchema,
+  forShare: DecimalStringSchema,
+  approvalMet: Schema.Boolean,
+  passed: Schema.NullOr(Schema.Boolean),
+  recordedAt: Schema.NullOr(Schema.Date)
+}) {}
+
 export class MajorityJudgmentElectionResponse extends Schema.Class<MajorityJudgmentElectionResponse>(
   'MajorityJudgmentElectionResponse'
 )({
   election: MajorityJudgmentElectionProjection,
   candidates: Schema.Array(MajorityJudgmentCandidateProjection),
   currentRound: MajorityJudgmentRoundProjection,
+  temperatureCheckResult: TemperatureCheckResultResponse,
   result: Schema.optional(MajorityJudgmentResultResponse)
 }) {}
 

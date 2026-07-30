@@ -10,7 +10,9 @@ import {
   Schedule,
   Schema
 } from 'effect'
+import { EntityId } from 'shared/governance/brandedTypes'
 import { GovernanceConfig } from 'shared/governance/config'
+import { GovernanceComponent } from 'shared/governance/index'
 import { GovernanceEventProcessor } from './governanceEvents'
 import { LedgerCursor } from './ledgerCursor'
 import { MajorityJudgmentCalculation } from './majority-judgment/calculation'
@@ -20,6 +22,7 @@ import {
 } from './majority-judgment/finalizer'
 import { MajorityJudgmentProjection } from './majority-judgment/projection'
 import { VoteCalculation } from './vote-calculation/voteCalculation'
+import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 
 const PAGE_SIZE = 100
 
@@ -41,8 +44,10 @@ export const decodeLedgerDrainWatermark = Effect.fn(
 export class PollService extends Effect.Service<PollService>()('PollService', {
   dependencies: [
     LedgerCursor.Default,
+    GovernanceComponent.Default,
     GovernanceEventProcessor.Default,
     VoteCalculation.Default,
+    VoteCalculationRepo.Default,
     MajorityJudgmentProjection.Default,
     MajorityJudgmentCalculation.Default,
     MajorityJudgmentFinalizer.Default
@@ -50,8 +55,10 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
   effect: Effect.gen(function* () {
     const cursor = yield* LedgerCursor
     const gateway = yield* GatewayApiClient
+    const governance = yield* GovernanceComponent
     const { processBatch } = yield* GovernanceEventProcessor
     const calculateVotes = yield* VoteCalculation
+    const voteCalculationRepo = yield* VoteCalculationRepo
     const projectMajorityJudgment = yield* MajorityJudgmentProjection
     const calculateMajorityJudgment = yield* MajorityJudgmentCalculation
     const majorityJudgmentFinalizer = yield* MajorityJudgmentFinalizer
@@ -180,6 +187,49 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
         }
       })
 
+    const backfillComponentCache = Effect.fn(
+      '@Consultation/PollService.backfillComponentCache'
+    )(function* () {
+      const required =
+        yield* voteCalculationRepo.isComponentCacheBackfillRequired()
+      if (!required) return
+
+      const [temperatureChecks, proposalPage] = yield* Effect.all(
+        [
+          governance.getTemperatureChecks(),
+          governance.getPaginatedProposals({
+            page: 1,
+            pageSize: 10_000,
+            sortOrder: 'asc'
+          })
+        ],
+        { concurrency: 2 }
+      )
+      const proposals = proposalPage.items
+      const payloads = [
+        ...temperatureChecks.map((temperatureCheck) => ({
+          type: 'temperature_check' as const,
+          entityId: EntityId.make(temperatureCheck.id),
+          keyValueStoreAddress: temperatureCheck.votes,
+          voteCount: temperatureCheck.voteCount,
+          start: temperatureCheck.snapshot.getTime()
+        })),
+        ...proposals.map((proposal) => ({
+          type: 'proposal' as const,
+          entityId: EntityId.make(proposal.id),
+          keyValueStoreAddress: proposal.votes,
+          voteCount: proposal.voteCount,
+          start: proposal.start.getTime()
+        }))
+      ].filter((payload) => payload.voteCount > 0)
+
+      yield* Effect.logInfo('Backfilling component-scoped vote cache', {
+        entityCount: payloads.length
+      })
+      yield* Effect.forEach(payloads, calculateVotes, { concurrency: 1 })
+      yield* voteCalculationRepo.completeComponentCacheBackfill()
+    })
+
     return Effect.fn('@Consultation/PollService')(function* () {
       const sv = yield* cursor.getOrBootstrap()
       const startedAt = Date.now()
@@ -212,6 +262,7 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
         onNone: () => Effect.void,
         onSome: majorityJudgmentFinalizer.finalize
       })
+      yield* backfillComponentCache()
 
       yield* Effect.logInfo('Poll completed', {
         fromStateVersion: sv,

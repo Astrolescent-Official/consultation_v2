@@ -20,6 +20,9 @@
     }
   ],
   "triggers": {
+    // Mainnet governance durations stay day-scale, so production doesn't need
+    // the minute-level cadence stokenet's minute-scale durations require —
+    // see the "preview" env below.
     "crons": ["*/5 * * * *"]
   },
   "observability": {
@@ -49,7 +52,9 @@
         }
       ],
       "triggers": {
-        "crons": ["*/10 * * * *"]
+        // Stokenet (NETWORK_ID 2) uses minute-scale governance durations, so
+        // this env polls every minute rather than production's */5.
+        "crons": ["* * * * *"]
       },
       // Public app and collector configuration share these runtime bindings.
       "vars": {

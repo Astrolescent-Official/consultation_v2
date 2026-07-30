@@ -1,3 +1,4 @@
+import BigNumber from 'bignumber.js'
 import {
   type MajorityJudgmentCandidateGradeJson,
   type MajorityJudgmentCandidateResultJson,
@@ -12,15 +13,19 @@ import { and, asc, eq, notInArray } from 'drizzle-orm'
 import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import {
   CandidateHttpUrlStringSchema,
+  canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
   MajorityJudgmentCandidateResult,
   MajorityJudgmentElectionResponseSchema,
+  type MajorityJudgmentElectionStatus,
   MajorityJudgmentElectionStatusSchema
 } from 'shared/governance/index'
+import { meetsQuorum } from '../../../lib/quorum'
 import { VoteDatabase } from '../db/d1'
 import { ORM } from '../db/orm'
 import { guardedBatch } from '../pollLease'
+import { VoteCalculationRepo } from '../vote-calculation/voteCalculationRepo'
 
 type ElectionProjection = typeof mjElection.$inferInsert
 type CandidateProjection = typeof mjCandidate.$inferInsert
@@ -114,22 +119,34 @@ export class TerminalMajorityJudgmentResultError extends Data.TaggedError(
   readonly status: string
 }> {}
 
-const isTerminal = (status: string) => status === 'FINAL' || status === 'FAILED'
+const isTerminal = (status: string) =>
+  status === 'FINAL' || status === 'FAILED' || status === 'TC_FAILED'
 
 export const isClosedMajorityJudgmentResult = (status: string) =>
   isTerminal(status) ||
+  status === 'ROUND_1_FAILED' ||
   status === 'RERUN_PENDING' ||
   status === 'TIE_UNRESOLVED'
 
 const isPhaseLocked = (status: string) =>
   isTerminal(status) || status === 'TIE_UNRESOLVED'
 
+const isPhaseTransitionBlocked = (
+  currentStatus: string,
+  nextStatus: MajorityJudgmentElectionStatus
+) =>
+  isPhaseLocked(currentStatus) ||
+  (currentStatus === 'ROUND_1_FAILED' &&
+    !canTransitionFromRoundOneFailure(nextStatus))
+
 export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()(
   'MajorityJudgmentRepo',
   {
+    dependencies: [VoteCalculationRepo.Default],
     effect: Effect.gen(function* () {
       const db = yield* ORM
       const database = yield* VoteDatabase
+      const voteCalculationRepo = yield* VoteCalculationRepo
 
       const projectElection = Effect.fn('MajorityJudgmentRepo.projectElection')(
         function* (input: MajorityJudgmentProjectionInput) {
@@ -145,8 +162,13 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
                 shortDescription: input.election.shortDescription,
                 description: input.election.description,
                 seatCount: input.election.seatCount,
-                reviewStart: input.election.reviewStart,
-                reviewEnd: input.election.reviewEnd,
+                snapshotAt: input.election.snapshotAt,
+                tcVotingStart: input.election.tcVotingStart,
+                tcVotingEnd: input.election.tcVotingEnd,
+                tcQuorumXrd: input.election.tcQuorumXrd,
+                tcApprovalThreshold: input.election.tcApprovalThreshold,
+                tcOutcome: input.election.tcOutcome,
+                tcOutcomeRecordedAt: input.election.tcOutcomeRecordedAt,
                 parameterSetId: input.election.parameterSetId,
                 parameterSetVersion: input.election.parameterSetVersion,
                 reserveListDays: input.election.reserveListDays,
@@ -338,14 +360,21 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
       })
 
       const setPhaseStatus = Effect.fn('MajorityJudgmentRepo.setPhaseStatus')(
-        function* (electionId: number, round: number, status: string) {
+        function* (
+          electionId: number,
+          round: number,
+          status: MajorityJudgmentElectionStatus
+        ) {
           const rows = yield* db
             .select({ status: mjElection.status })
             .from(mjElection)
             .where(eq(mjElection.id, electionId))
             .limit(1)
           const currentStatus = rows[0]?.status
-          if (currentStatus === undefined || isPhaseLocked(currentStatus)) {
+          if (
+            currentStatus === undefined ||
+            isPhaseTransitionBlocked(currentStatus, status)
+          ) {
             return
           }
           yield* Effect.all([
@@ -377,7 +406,12 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           .from(mjElection)
           .innerJoin(mjRound, eq(mjRound.electionId, mjElection.id))
           .where(
-            notInArray(mjElection.status, ['FINAL', 'FAILED', 'TIE_UNRESOLVED'])
+            notInArray(mjElection.status, [
+              'FINAL',
+              'FAILED',
+              'TC_FAILED',
+              'TIE_UNRESOLVED'
+            ])
           )
           .orderBy(asc(mjElection.id), asc(mjRound.round))
       })
@@ -615,7 +649,26 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             onSome: Effect.succeed
           })
         )
+        const tcResults = yield* voteCalculationRepo.getResultsByEntity(
+          'temperature_check',
+          election.temperatureCheckId
+        )
         const result = results.find(({ round }) => round === currentRound.round)
+        const forVotingPower = new BigNumber(
+          tcResults.results.find(({ vote }) => vote === 'For')?.votePower ?? '0'
+        )
+        const againstVotingPower = new BigNumber(
+          tcResults.results.find(({ vote }) => vote === 'Against')?.votePower ??
+            '0'
+        )
+        const participation = forVotingPower.plus(againstVotingPower)
+        const forShare = participation.isZero()
+          ? new BigNumber(0)
+          : forVotingPower.dividedBy(participation)
+        const quorumMet = meetsQuorum(participation, election.tcQuorumXrd)
+        const approvalMet = forShare.isGreaterThanOrEqualTo(
+          election.tcApprovalThreshold
+        )
 
         const response = {
           election: {
@@ -626,8 +679,14 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             shortDescription: election.shortDescription,
             description: election.description,
             seatCount: election.seatCount,
-            reviewStart: election.reviewStart.toISOString(),
-            reviewEnd: election.reviewEnd.toISOString(),
+            snapshotAt: election.snapshotAt.toISOString(),
+            tcVotingStart: election.tcVotingStart.toISOString(),
+            tcVotingEnd: election.tcVotingEnd.toISOString(),
+            tcQuorumXrd: election.tcQuorumXrd,
+            tcApprovalThreshold: election.tcApprovalThreshold,
+            tcOutcome: election.tcOutcome ?? 'PENDING',
+            tcOutcomeRecordedAt:
+              election.tcOutcomeRecordedAt?.toISOString() ?? null,
             parameterSetId: election.parameterSetId,
             parameterSetVersion: election.parameterSetVersion,
             reserveListDays: election.reserveListDays,
@@ -650,9 +709,26 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             quorumXrd: currentRound.quorumXrd,
             minimumMedianGrade: currentRound.minimumMedianGrade
           },
+          temperatureCheckResult: {
+            forVotingPower: forVotingPower.toFixed(),
+            againstVotingPower: againstVotingPower.toFixed(),
+            participationXrd: participation.toFixed(),
+            quorumXrd: election.tcQuorumXrd,
+            quorumMet,
+            approvalThreshold: election.tcApprovalThreshold,
+            forShare: forShare.toFixed(),
+            approvalMet,
+            passed:
+              election.tcOutcome === null
+                ? null
+                : election.tcOutcome === 'PASSED',
+            recordedAt: election.tcOutcomeRecordedAt?.toISOString() ?? null
+          },
           ...(result === undefined ||
           election.status === 'PENDING' ||
-          election.status === 'REVIEW_OPEN' ||
+          election.status === 'TC_LIVE' ||
+          election.status === 'TC_FAILED' ||
+          election.status === 'MJ_PENDING' ||
           election.status === 'RERUN_PENDING'
             ? {}
             : {

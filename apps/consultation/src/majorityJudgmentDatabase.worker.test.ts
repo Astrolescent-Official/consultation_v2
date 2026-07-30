@@ -3,6 +3,7 @@
 import { applyD1Migrations, env, SELF } from 'cloudflare:test'
 import * as D1Client from '@effect/sql-d1/D1Client'
 import { Effect, Layer } from 'effect'
+import { GovernanceConfig } from 'shared/governance/config'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { VoteDatabaseLive } from './server/voting/db/d1'
 import { ORM } from './server/voting/db/orm'
@@ -25,7 +26,8 @@ const repositoryLayer = () =>
   MajorityJudgmentRepo.Default.pipe(
     Layer.provide(ORM.Default),
     Layer.provideMerge(VoteDatabaseLive(env.DB)),
-    Layer.provide(D1Client.layer({ db: env.DB }))
+    Layer.provide(D1Client.layer({ db: env.DB })),
+    Layer.provide(GovernanceConfig.MainnetLive)
   )
 
 const lease: PollLeaseIdentity = {
@@ -49,8 +51,13 @@ const projection = {
     shortDescription: 'Elect one member',
     description: 'Candidate profiles',
     seatCount: 1,
-    reviewStart: new Date('2026-07-01T00:00:00.000Z'),
-    reviewEnd: new Date('2026-07-08T00:00:00.000Z'),
+    snapshotAt: new Date('2026-06-01T00:00:00.000Z'),
+    tcVotingStart: new Date('2026-07-01T00:00:00.000Z'),
+    tcVotingEnd: new Date('2026-07-08T00:00:00.000Z'),
+    tcQuorumXrd: '50',
+    tcApprovalThreshold: '0.5',
+    tcOutcome: 'PASSED',
+    tcOutcomeRecordedAt: new Date('2026-07-08T00:00:00.000Z'),
     parameterSetId: 'mj-rac',
     parameterSetVersion: 1,
     reserveListDays: 90,
@@ -107,6 +114,31 @@ beforeEach(async () => {
 
 describe('D1 majority judgment persistence', () => {
   it('projects idempotently and preserves revotes, decimals, JSON, and dates', async () => {
+    const tcState = await env.DB.prepare(
+      `INSERT INTO vote_calculation_state (
+         governance_component_address,
+         type,
+         entity_id,
+         last_vote_count
+       ) VALUES (
+         'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y',
+         'temperature_check',
+         3,
+         2
+       )
+       RETURNING id`
+    ).first<{ id: number }>()
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO vote_calculation_results (state_id, vote, vote_power)
+           VALUES (?, 'For', '60')`
+      ).bind(tcState?.id),
+      env.DB.prepare(
+        `INSERT INTO vote_calculation_results (state_id, vote, vote_power)
+           VALUES (?, 'Against', '40')`
+      ).bind(tcState?.id)
+    ])
+
     const response = await runWithRepository(
       Effect.gen(function* () {
         const repo = yield* MajorityJudgmentRepo
@@ -215,6 +247,17 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
+    expect(response.election.temperatureCheckResult).toMatchObject({
+      forVotingPower: '60',
+      againstVotingPower: '40',
+      participationXrd: '100',
+      quorumXrd: '50',
+      quorumMet: true,
+      approvalThreshold: '0.5',
+      forShare: '0.6',
+      approvalMet: true,
+      passed: true
+    })
 
     await expect(
       runWithRepository(

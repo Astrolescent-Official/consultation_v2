@@ -17,9 +17,7 @@ export function VoteResultsSection({
   entityId,
   voteOptions
 }: VoteResultsSectionProps) {
-  const voteResultsResult = useAtomValue(
-    voteResultsAtom(entityType)(entityId)
-  )
+  const voteResultsResult = useAtomValue(voteResultsAtom(entityType)(entityId))
 
   return Result.builder(voteResultsResult)
     .onInitial(() => (
@@ -72,9 +70,7 @@ export function VoteResultsSection({
           <div className="space-y-4">
             {allOptions.map((option) => {
               const percentage =
-                totalVotePower > 0
-                  ? (option.power / totalVotePower) * 100
-                  : 0
+                totalVotePower > 0 ? (option.power / totalVotePower) * 100 : 0
 
               return (
                 <div key={option.key}>

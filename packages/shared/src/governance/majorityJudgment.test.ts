@@ -7,6 +7,8 @@ import {
 } from './governanceComponent'
 import {
   CandidateHttpUrlStringSchema,
+  canStartMajorityJudgmentRerun,
+  canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentElectionResponseSchema,
   MakeMajorityJudgmentElectionInputSchema,
@@ -18,6 +20,20 @@ const accountAddress =
   'account_tdx_2_1287t0ndg56s9zyxm8jg73fe42ash8enjjdm4hazxefenhexm0u67ed'
 
 describe('majority judgment shared schemas', () => {
+  it('keeps a failed first round closed until a rerun exists', () => {
+    assert.isFalse(canTransitionFromRoundOneFailure('LIVE'))
+    assert.isFalse(canTransitionFromRoundOneFailure('FINAL'))
+    assert.isTrue(canTransitionFromRoundOneFailure('RERUN_PENDING'))
+    assert.isTrue(canTransitionFromRoundOneFailure('RERUN_LIVE'))
+  })
+
+  it('opens a rerun only from a failed first round', () => {
+    assert.isTrue(canStartMajorityJudgmentRerun('ROUND_1_FAILED'))
+    assert.isFalse(canStartMajorityJudgmentRerun('LIVE'))
+    assert.isFalse(canStartMajorityJudgmentRerun('FINAL'))
+    assert.isFalse(canStartMajorityJudgmentRerun('TIE_UNRESOLVED'))
+  })
+
   it('accepts all five grades and rejects values outside the on-ledger range', () => {
     for (const grade of [0, 1, 2, 3, 4]) {
       assert.isTrue(
@@ -91,9 +107,23 @@ describe('majority judgment shared schemas', () => {
   it('validates election permutations and tie-resolution orders', () => {
     const creation = {
       accountAddress,
-      temperatureCheckId: 3,
-      reviewStart: new Date('2026-07-01T00:00:00.000Z'),
-      candidateIds: [0, 1, 2],
+      title: 'Permanent RAC election',
+      shortDescription: 'Elect two members',
+      description: 'Candidate profiles',
+      links: ['https://example.com/election'],
+      roleId: 'rac-member',
+      seatCount: 2,
+      candidates: ['alice', 'bob', 'carol'].map((reference) => ({
+        reference,
+        displayName: reference,
+        description: `${reference} profile`,
+        links: [`https://example.com/${reference}`]
+      })),
+      parameterSetId: 'mj-rac',
+      tcVotingStart: new Date('2026-08-01T00:00:00.000Z'),
+      tcVotingEnd: new Date('2026-08-02T00:00:00.000Z'),
+      votingStart: new Date('2026-08-03T00:00:00.000Z'),
+      votingEnd: new Date('2026-08-10T00:00:00.000Z'),
       candidateOrder: [2, 0, 1]
     }
 
@@ -168,8 +198,13 @@ describe('majority judgment shared schemas', () => {
         shortDescription: 'Elect two members',
         description: 'Candidate profiles',
         seatCount: 2,
-        reviewStart: '2026-07-01T00:00:00.000Z',
-        reviewEnd: '2026-07-08T00:00:00.000Z',
+        snapshotAt: '2026-06-01T00:00:00.000Z',
+        tcVotingStart: '2026-07-01T00:00:00.000Z',
+        tcVotingEnd: '2026-07-08T00:00:00.000Z',
+        tcQuorumXrd: '300000',
+        tcApprovalThreshold: '0.5',
+        tcOutcome: 'PASSED',
+        tcOutcomeRecordedAt: '2026-07-08T00:00:00.000Z',
         parameterSetId: 'mj-rac',
         parameterSetVersion: 1,
         reserveListDays: 90,
@@ -193,6 +228,18 @@ describe('majority judgment shared schemas', () => {
         votingEnd: '2026-07-15T00:00:00.000Z',
         quorumXrd: '1000000',
         minimumMedianGrade: 2
+      },
+      temperatureCheckResult: {
+        forVotingPower: '600000',
+        againstVotingPower: '400000',
+        participationXrd: '1000000',
+        quorumXrd: '300000',
+        quorumMet: true,
+        approvalThreshold: '0.5',
+        forShare: '0.6',
+        approvalMet: true,
+        passed: true,
+        recordedAt: '2026-07-08T00:00:00.000Z'
       },
       result: {
         status: 'LIVE',

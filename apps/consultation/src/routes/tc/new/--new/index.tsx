@@ -8,7 +8,10 @@ export const Page: React.FC = () => {
   const handleSuccess = useCallback(
     (result: unknown) => {
       const event = result as { temperature_check_id: number; title: string }
-      navigate({ to: '/tc/$id', params: { id: String(event.temperature_check_id) } })
+      navigate({
+        to: '/tc/$id',
+        params: { id: String(event.temperature_check_id) }
+      })
     },
     [navigate]
   )
@@ -21,9 +24,9 @@ export const Page: React.FC = () => {
           New Proposal
         </h1>
         <p className="text-muted-foreground mt-2 max-w-lg">
-          This creates a Temperature Check (TC) to gauge community interest.
-          If the TC passes, it will be promoted to a full Governance Proposal
-          (GP) for final voting.
+          Create a standard Temperature Check leading to a Governance Proposal,
+          or atomically create an election whose candidate-list TC gates its
+          Majority Judgment vote.
         </p>
       </div>
 

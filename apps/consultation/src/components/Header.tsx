@@ -57,7 +57,9 @@ export default function Header() {
 
           <nav className="hidden sm:flex items-center gap-1">
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/" activeOptions={{ exact: true }}>Home</Link>
+              <Link to="/" activeOptions={{ exact: true }}>
+                Home
+              </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/tc/new">New Proposal</Link>
@@ -73,9 +75,7 @@ export default function Header() {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() =>
-              setTheme(actualTheme === 'dark' ? 'light' : 'dark')
-            }
+            onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
             aria-label="Toggle theme"
           >
             {actualTheme === 'dark' ? (

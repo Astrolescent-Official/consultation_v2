@@ -2,27 +2,35 @@ import { Data, Effect, Option } from 'effect'
 import {
   GovernanceComponent,
   type MajorityJudgmentElection,
-  type MajorityJudgmentElectionStatus
+  type MajorityJudgmentElectionStatus,
+  type TemperatureCheck
 } from 'shared/governance/index'
 import { MajorityJudgmentRepo } from './repo'
 
 export type MajorityJudgmentPhaseBoundaries = {
-  readonly reviewStart: Date
-  readonly reviewEnd: Date
+  readonly tcVotingStart: Date
+  readonly tcVotingEnd: Date
   readonly votingStart: Date
   readonly votingEnd: Date
+  readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
 }
 
 export const deriveMajorityJudgmentPhase = (
   now: Date,
   boundaries: MajorityJudgmentPhaseBoundaries
 ): MajorityJudgmentElectionStatus => {
-  if (now < boundaries.reviewStart) return 'PENDING'
-  if (now < boundaries.reviewEnd) return 'REVIEW_OPEN'
+  if (boundaries.tcOutcome === 'FAILED') return 'TC_FAILED'
+  if (boundaries.tcOutcome === 'PENDING') {
+    return now < boundaries.tcVotingStart ? 'PENDING' : 'TC_LIVE'
+  }
+  if (now < boundaries.votingStart) return 'MJ_PENDING'
   if (now >= boundaries.votingStart && now < boundaries.votingEnd) {
     return 'LIVE'
   }
-  return 'RERUN_PENDING'
+  // Deadline finalization determines whether this is a successful result or a
+  // quorum failure. Keep the phase active until that calculation is recorded;
+  // only the finalizer may enter ROUND_1_FAILED.
+  return 'LIVE'
 }
 
 export const deriveMajorityJudgmentRerunPhase = (
@@ -37,17 +45,28 @@ export const deriveMajorityJudgmentRerunPhase = (
   return 'RERUN_LIVE'
 }
 
+export const deriveRoundOneProjectedStatus = (
+  rerunStarted: boolean,
+  status: MajorityJudgmentElectionStatus
+): MajorityJudgmentElectionStatus => (rerunStarted ? 'ROUND_1_FAILED' : status)
+
 const deriveElectionStatus = (
   now: Date,
-  election: MajorityJudgmentElection
+  election: MajorityJudgmentElection,
+  temperatureCheck: TemperatureCheck
 ): MajorityJudgmentElectionStatus =>
   Option.match(election.rerun, {
     onNone: () =>
       deriveMajorityJudgmentPhase(now, {
-        reviewStart: election.reviewStart,
-        reviewEnd: election.reviewEnd,
+        tcVotingStart: temperatureCheck.start,
+        tcVotingEnd: temperatureCheck.deadline,
         votingStart: election.roundOne.start,
-        votingEnd: election.roundOne.deadline
+        votingEnd: election.roundOne.deadline,
+        tcOutcome: Option.match(temperatureCheck.outcome, {
+          onNone: () => 'PENDING' as const,
+          onSome: (outcome) =>
+            outcome.passed ? ('PASSED' as const) : ('FAILED' as const)
+        })
       }),
     onSome: (rerun) =>
       deriveMajorityJudgmentRerunPhase(now, rerun.start, rerun.deadline)
@@ -79,14 +98,31 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
             state_version: stateVersion
           }
         )
-        if (election.parameterSet.parameters._tag !== 'MajorityJudgment') {
+        const temperatureCheck = yield* governance.getTemperatureCheckById(
+          election.temperatureCheckId,
+          { state_version: stateVersion }
+        )
+        if (
+          temperatureCheck.parameterSet.parameters._tag !== 'MajorityJudgment'
+        ) {
           return yield* new InvalidMajorityJudgmentProjectionError({
             electionId,
             reason: 'Election must contain a Majority Judgment parameter set'
           })
         }
+        if (temperatureCheck.followUp._tag !== 'MajorityJudgmentElection') {
+          return yield* new InvalidMajorityJudgmentProjectionError({
+            electionId,
+            reason:
+              'Election must reference a Majority Judgment temperature check'
+          })
+        }
 
-        const status = deriveElectionStatus(observedAt, election)
+        const status = deriveElectionStatus(
+          observedAt,
+          election,
+          temperatureCheck
+        )
         const makeRound = (
           round: MajorityJudgmentElection['roundOne'],
           roundNumber: 1 | 2,
@@ -103,27 +139,42 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           votersKvsAddress: String(round.voters),
           status: roundStatus
         })
+        const rerunStarted = Option.isSome(election.rerun)
 
         yield* repo.projectElection({
           election: {
             id: electionId,
             temperatureCheckId: Number(election.temperatureCheckId),
-            roleId: election.roleId,
-            title: election.title,
-            shortDescription: election.shortDescription,
-            description: election.description,
-            seatCount: election.seatCount,
-            reviewStart: election.reviewStart,
-            reviewEnd: election.reviewEnd,
-            parameterSetId: election.parameterSet.id,
-            parameterSetVersion: election.parameterSet.version,
+            roleId: temperatureCheck.followUp.roleId,
+            title: temperatureCheck.title,
+            shortDescription: temperatureCheck.shortDescription,
+            description: temperatureCheck.description,
+            seatCount: temperatureCheck.followUp.seatCount,
+            snapshotAt: temperatureCheck.snapshot,
+            tcVotingStart: temperatureCheck.start,
+            tcVotingEnd: temperatureCheck.deadline,
+            tcQuorumXrd:
+              temperatureCheck.parameterSet.parameters.temperatureCheck.quorum,
+            tcApprovalThreshold:
+              temperatureCheck.parameterSet.parameters.temperatureCheck
+                .approvalThreshold,
+            tcOutcome: Option.match(temperatureCheck.outcome, {
+              onNone: () => null,
+              onSome: (outcome) => (outcome.passed ? 'PASSED' : 'FAILED')
+            }),
+            tcOutcomeRecordedAt: Option.match(temperatureCheck.outcome, {
+              onNone: () => null,
+              onSome: (outcome) => outcome.recordedAt
+            }),
+            parameterSetId: temperatureCheck.parameterSet.id,
+            parameterSetVersion: temperatureCheck.parameterSet.version,
             reserveListDays:
-              election.parameterSet.parameters.election.reserveListDays,
+              temperatureCheck.parameterSet.parameters.election.reserveListDays,
             status,
             hidden: election.hidden,
             createdAt: observedAt
           },
-          candidates: election.candidates.map((candidate) => ({
+          candidates: temperatureCheck.followUp.candidates.map((candidate) => ({
             electionId,
             candidateId: Number(candidate.id),
             reference: candidate.reference,
@@ -135,7 +186,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           round: makeRound(
             election.roundOne,
             1,
-            status === 'RERUN_LIVE' ? 'RERUN_PENDING' : status
+            deriveRoundOneProjectedStatus(rerunStarted, status)
           )
         })
 
@@ -144,7 +195,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           onSome: (rerun) => repo.projectRound(makeRound(rerun, 2, status))
         })
 
-        const activeRound = Option.isSome(election.rerun) ? 2 : 1
+        const activeRound = rerunStarted ? 2 : 1
         yield* repo.setPhaseStatus(electionId, activeRound, status)
 
         return election
