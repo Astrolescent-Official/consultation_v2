@@ -1,5 +1,10 @@
 # Agent Context Hub
 
+## Scrypto Verification
+
+Do not use `cargo test` to verify the Scrypto package. Use the Scrypto CLI and
+run both `scrypto test` and `scrypto build`.
+
 Central index of context files for AI agents and coding assistants working with this codebase.
 
 ## Quick Reference
