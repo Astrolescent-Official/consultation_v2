@@ -173,7 +173,7 @@ export const makeMajorityJudgmentTemperatureCheckFormSchema = (
       })
     ),
     candidates: Schema.Array(CandidateFormSchema).pipe(
-      Schema.minItems(2, { message: () => 'At least 2 candidates required' }),
+      Schema.minItems(1, { message: () => 'At least 1 candidate required' }),
       Schema.maxItems(20, { message: () => 'At most 20 candidates allowed' }),
       Schema.filter(
         (candidates) =>
@@ -183,10 +183,6 @@ export const makeMajorityJudgmentTemperatureCheckFormSchema = (
       )
     )
   }).pipe(
-    Schema.filter(
-      ({ seatCount, candidates }) => seatCount < candidates.length,
-      { message: () => 'Seats must be fewer than the number of candidates' }
-    ),
     Schema.filter(
       ({ tcVotingStart, tcVotingEnd, votingStart, votingEnd }) => {
         const tcStart = new Date(tcVotingStart).getTime()

@@ -109,6 +109,8 @@ const VoteClientLive = Layer.effect(
   })
 )
 
-export const voteClientRuntime = makeAtomRuntime(
-  VoteClientLive.pipe(Layer.provide(FetchHttpClient.layer))
+export const VoteClientLayer = VoteClientLive.pipe(
+  Layer.provide(FetchHttpClient.layer)
 )
+
+export const voteClientRuntime = makeAtomRuntime(VoteClientLayer)

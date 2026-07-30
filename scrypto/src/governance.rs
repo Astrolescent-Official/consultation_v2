@@ -234,14 +234,8 @@ mod governance {
                         "Election quorum must be greater than zero"
                     );
                     assert!(
-                        election.rerun_quorum > Decimal::ZERO
-                            && election.rerun_quorum < election.quorum,
-                        "Rerun quorum must be greater than zero and lower than Round 1 quorum"
-                    );
-                    assert!(
-                        election.rerun_minimum_median_grade.score()
-                            > election.minimum_median_grade.score(),
-                        "Rerun minimum median grade must be higher than the Round 1 grade"
+                        election.rerun_quorum > Decimal::ZERO,
+                        "Rerun quorum must be greater than zero"
                     );
                 }
             }
@@ -331,13 +325,9 @@ mod governance {
             assert!(
                 candidates.len() >= MIN_MAJORITY_JUDGMENT_CANDIDATES
                     && candidates.len() <= MAX_MAJORITY_JUDGMENT_CANDIDATES,
-                "Election must contain 2-20 candidates"
+                "Election must contain 1-20 candidates"
             );
             assert!(seat_count >= 1, "Election must contain at least one seat");
-            assert!(
-                usize::try_from(seat_count).unwrap() < candidates.len(),
-                "Seat count must be lower than candidate count"
-            );
 
             let mut references: Vec<String> = Vec::new();
             for candidate in &candidates {

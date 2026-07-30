@@ -79,6 +79,8 @@ const statusCopy = (status: MajorityJudgmentElectionStatus) => {
       return 'Candidate list approved — grading has not opened'
     case 'LIVE':
       return 'Round one voting'
+    case 'ROUND_1_FAILED':
+      return 'Turnout below quorum — awaiting a rerun decision'
     case 'RERUN_PENDING':
       return 'Rerun pending'
     case 'RERUN_LIVE':
@@ -272,8 +274,8 @@ export function MajorityJudgmentElectionView({
         ) : null}
         {status === 'RERUN_LIVE' ? (
           <p className="text-sm text-muted-foreground">
-            This rerun uses a reduced fixed quorum and a raised grade floor.
-            Minimum majority grade: {gradeName(minimumMedianGrade)}.
+            This rerun uses the same quorum and grade floor as Round 1. Minimum
+            majority grade: {gradeName(minimumMedianGrade)}.
           </p>
         ) : null}
       </header>
@@ -468,6 +470,12 @@ export function MajorityJudgmentElectionView({
                 Read the governance policy
               </a>
               .
+            </p>
+          ) : null}
+          {status === 'ROUND_1_FAILED' ? (
+            <p className="text-sm text-muted-foreground">
+              Turnout was below quorum. The election remains closed unless the
+              RAC opens a Round 2 rerun.
             </p>
           ) : null}
           {status === 'FINAL' &&

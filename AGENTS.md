@@ -1,5 +1,23 @@
 # Agent Context Hub
 
+## Codex Task Isolation
+
+Every implementation task must use its own linked Git worktree and a branch named `codex/<task-name>`. Do not edit, commit, or push implementation work from the primary checkout or from `main`.
+
+Create a task worktree with:
+
+```sh
+pnpm worktree:codex <task-name> [base-ref]
+```
+
+Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `codex/*` branch and rejects commits from the primary checkout.
+
+## Codex Completion Contract
+
+An implementation task is complete only after its changes are committed on its dedicated `codex/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
+
+`pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
+
 ## Scrypto Verification
 
 Do not use `cargo test` to verify the Scrypto package. Use the Scrypto CLI and

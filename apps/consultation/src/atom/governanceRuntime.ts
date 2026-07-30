@@ -8,6 +8,7 @@ import {
 import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
 import { RadixDappToolkit, SendTransaction } from '@/lib/dappToolkit'
 import { envVars } from '@/lib/envVars'
+import { VoteClientLayer } from './voteClient'
 
 /**
  * The one governance service graph for the app. Layers memoize by reference, so
@@ -19,7 +20,8 @@ export const governanceRuntime = makeAtomRuntime(
   Layer.mergeAll(
     GovernanceComponent.Default,
     AdminBadgeService.Default,
-    SendTransaction.Default
+    SendTransaction.Default,
+    VoteClientLayer
   ).pipe(
     Layer.provideMerge(RadixDappToolkit.Live),
     Layer.provideMerge(GatewayApiClientLayer),

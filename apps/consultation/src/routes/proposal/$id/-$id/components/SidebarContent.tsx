@@ -3,8 +3,8 @@ import type { ProposalId } from 'shared/governance/brandedTypes'
 import type { Proposal } from 'shared/governance/schemas'
 import { AccountVotesSection } from '@/components/detail/AccountVotesSection'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
-import { VotingSection } from './VotingSection'
 import type { ProposalVotedAccount } from '../types'
+import { VotingSection } from './VotingSection'
 
 type SidebarContentProps = {
   proposal: Proposal
@@ -12,7 +12,11 @@ type SidebarContentProps = {
   accountsVotesResult: Result.Result<ProposalVotedAccount[], unknown>
 }
 
-export function SidebarContent({ proposal, id, accountsVotesResult }: SidebarContentProps) {
+export function SidebarContent({
+  proposal,
+  id,
+  accountsVotesResult
+}: SidebarContentProps) {
   return (
     <div className="space-y-6">
       <VoteResultsSection

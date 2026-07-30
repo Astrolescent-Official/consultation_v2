@@ -4,8 +4,8 @@ import type { TemperatureCheckSchema } from 'shared/governance/schemas'
 import { AccountVotesSection } from '@/components/detail/AccountVotesSection'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { TC_VOTE_OPTIONS } from '@/lib/voting'
-import { VotingSection } from './VotingSection'
 import type { VotedAccount } from '../types'
+import { VotingSection } from './VotingSection'
 
 type TemperatureCheck = typeof TemperatureCheckSchema.Type
 
@@ -15,7 +15,11 @@ type SidebarContentProps = {
   accountsVotesResult: Result.Result<VotedAccount[], unknown>
 }
 
-export function SidebarContent({ temperatureCheck, id, accountsVotesResult }: SidebarContentProps) {
+export function SidebarContent({
+  temperatureCheck,
+  id,
+  accountsVotesResult
+}: SidebarContentProps) {
   return (
     <div className="space-y-6">
       <VoteResultsSection

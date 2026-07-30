@@ -85,7 +85,7 @@ describe('majority judgment election view', () => {
     assert.isNotNull(screen.getByText('500000 / 1000000 XRD'))
   })
 
-  it('labels live results provisional and discloses reruns and raised grades', () => {
+  it('labels live results provisional and discloses the rerun grade floor', () => {
     render(
       <MajorityJudgmentElectionView
         title="RAC election"
@@ -111,6 +111,7 @@ describe('majority judgment election view', () => {
   it('renders unresolved, failed, and final terminal explanations', () => {
     const statuses = [
       ['TIE_UNRESOLVED', 'Governance tie resolution required'],
+      ['ROUND_1_FAILED', 'Turnout below quorum — awaiting a rerun decision'],
       ['FAILED', 'The rerun did not meet quorum'],
       ['FINAL', 'Official result']
     ] as const

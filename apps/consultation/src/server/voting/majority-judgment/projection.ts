@@ -27,7 +27,10 @@ export const deriveMajorityJudgmentPhase = (
   if (now >= boundaries.votingStart && now < boundaries.votingEnd) {
     return 'LIVE'
   }
-  return 'RERUN_PENDING'
+  // Deadline finalization determines whether this is a successful result or a
+  // quorum failure. Keep the phase active until that calculation is recorded;
+  // only the finalizer may enter ROUND_1_FAILED.
+  return 'LIVE'
 }
 
 export const deriveMajorityJudgmentRerunPhase = (
@@ -41,6 +44,11 @@ export const deriveMajorityJudgmentRerunPhase = (
   // after the deadline cannot make the finalizer skip this round.
   return 'RERUN_LIVE'
 }
+
+export const deriveRoundOneProjectedStatus = (
+  rerunStarted: boolean,
+  status: MajorityJudgmentElectionStatus
+): MajorityJudgmentElectionStatus => (rerunStarted ? 'ROUND_1_FAILED' : status)
 
 const deriveElectionStatus = (
   now: Date,
@@ -131,6 +139,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           votersKvsAddress: String(round.voters),
           status: roundStatus
         })
+        const rerunStarted = Option.isSome(election.rerun)
 
         yield* repo.projectElection({
           election: {
@@ -177,7 +186,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           round: makeRound(
             election.roundOne,
             1,
-            status === 'RERUN_LIVE' ? 'RERUN_PENDING' : status
+            deriveRoundOneProjectedStatus(rerunStarted, status)
           )
         })
 
@@ -186,7 +195,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           onSome: (rerun) => repo.projectRound(makeRound(rerun, 2, status))
         })
 
-        const activeRound = Option.isSome(election.rerun) ? 2 : 1
+        const activeRound = rerunStarted ? 2 : 1
         yield* repo.setPhaseStatus(electionId, activeRound, status)
 
         return election

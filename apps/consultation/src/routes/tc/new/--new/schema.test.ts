@@ -162,7 +162,21 @@ describe('new temperature check parameter-set selection', () => {
         ...majorityJudgmentForm,
         seatCount: 2
       })._tag,
-      'Left'
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...majorityJudgmentForm,
+        seatCount: 3
+      })._tag,
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...majorityJudgmentForm,
+        candidates: [majorityJudgmentForm.candidates[0]]
+      })._tag,
+      'Right'
     )
     assert.strictEqual(
       Schema.decodeUnknownEither(TemperatureCheckFormSchema)({

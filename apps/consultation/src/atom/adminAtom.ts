@@ -1,7 +1,7 @@
 import { Atom } from '@effect-atom/atom-react'
 import { GatewayApiClient } from '@radix-effects/gateway'
 import { AccountAddress } from '@radix-effects/shared'
-import { Array as A, Data, Effect, Option, pipe } from 'effect'
+import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import type {
   ProposalId,
   TemperatureCheckId
@@ -12,7 +12,13 @@ import type {
   MajorityJudgmentRoundId,
   MakeMajorityJudgmentElectionInput
 } from 'shared/governance/index'
-import { AdminBadgeService, GovernanceComponent } from 'shared/governance/index'
+import {
+  AdminBadgeService,
+  canStartMajorityJudgmentRerun,
+  GovernanceComponent,
+  MajorityJudgmentElectionIdSchema,
+  MajorityJudgmentElectionStatusSchema
+} from 'shared/governance/index'
 import { parseSbor } from 'shared/helpers/parseSbor'
 import { MajorityJudgmentElectionCreatedEvent } from 'shared/schemas'
 import { governanceRuntime } from '@/atom/governanceRuntime'
@@ -21,11 +27,20 @@ import { getConnectedAccountAddress } from '@/lib/selectedAccount'
 import { majorityJudgmentElectionAtom } from './majorityJudgmentAtom'
 import { getProposalByIdAtom } from './proposalsAtom'
 import { getTemperatureCheckByIdAtom } from './temperatureChecksAtom'
+import { VoteClient } from './voteClient'
 import { transactionFailureMessage, withToast } from './withToast'
 
 class EventNotFoundError extends Data.TaggedError('EventNotFoundError')<{
   message: string
 }> {}
+
+export class InvalidMajorityJudgmentRerunStatusError extends Schema.TaggedError<InvalidMajorityJudgmentRerunStatusError>(
+  'InvalidMajorityJudgmentRerunStatusError'
+)('InvalidMajorityJudgmentRerunStatusError', {
+  electionId: MajorityJudgmentElectionIdSchema,
+  status: MajorityJudgmentElectionStatusSchema,
+  message: Schema.String
+}) {}
 
 /** Checks whether a specific account holds the admin badge */
 export const isAdminAtom = Atom.family((accountAddress: string) =>
@@ -177,6 +192,17 @@ export const startMajorityJudgmentRerunAtom = governanceRuntime.fn(
     ) {
       const governance = yield* GovernanceComponent
       const sendTransaction = yield* SendTransaction
+      const voteClient = yield* VoteClient
+      const election = yield* voteClient.GetMajorityJudgmentElection({
+        electionId: input.electionId
+      })
+      if (!canStartMajorityJudgmentRerun(election.election.status)) {
+        return yield* new InvalidMajorityJudgmentRerunStatusError({
+          electionId: input.electionId,
+          status: election.election.status,
+          message: 'A rerun can only be opened after Round 1 failed quorum'
+        })
+      }
       const accountAddress = yield* getConnectedAccountAddress()
       const manifest = yield* governance.startMajorityJudgmentRerunManifest({
         accountAddress,

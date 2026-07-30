@@ -10,9 +10,9 @@ import {
   Schedule,
   Schema
 } from 'effect'
+import { EntityId } from 'shared/governance/brandedTypes'
 import { GovernanceConfig } from 'shared/governance/config'
 import { GovernanceComponent } from 'shared/governance/index'
-import { EntityId } from 'shared/governance/brandedTypes'
 import { GovernanceEventProcessor } from './governanceEvents'
 import { LedgerCursor } from './ledgerCursor'
 import { MajorityJudgmentCalculation } from './majority-judgment/calculation'
