@@ -57,8 +57,12 @@ import { VoteOptionsField } from './VoteOptionsField'
 
 type TemperatureCheckFormProps = {
   maxVoteOptions?: number
-  onSuccess?: (result: unknown) => void
+  onSuccess?: (result: CreatedConsultation) => void
 }
+
+export type CreatedConsultation =
+  | { readonly temperature_check_id: number }
+  | { readonly election_id: number }
 
 export function TemperatureCheckForm({
   maxVoteOptions = 10,

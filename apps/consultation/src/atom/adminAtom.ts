@@ -130,9 +130,11 @@ export const createMajorityJudgmentElectionAtom = governanceRuntime.fn(
           onSome: (sbor) =>
             parseSbor(sbor, MajorityJudgmentElectionCreatedEvent),
           onNone: () =>
-            new EventNotFoundError({
-              message: 'MajorityJudgmentElectionCreatedEvent not found'
-            })
+            Effect.fail(
+              new EventNotFoundError({
+                message: 'MajorityJudgmentElectionCreatedEvent not found'
+              })
+            )
         })
       )
 
