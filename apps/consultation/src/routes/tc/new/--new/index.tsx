@@ -1,16 +1,24 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useCallback } from 'react'
-import { TemperatureCheckForm } from './components/TemperatureCheckForm'
+import {
+  type CreatedConsultation,
+  TemperatureCheckForm
+} from './components/TemperatureCheckForm'
+
+export const createdConsultationDestination = (result: CreatedConsultation) =>
+  'election_id' in result
+    ? { to: '/election/$id' as const, id: String(result.election_id) }
+    : { to: '/tc/$id' as const, id: String(result.temperature_check_id) }
 
 export const Page: React.FC = () => {
   const navigate = useNavigate()
 
   const handleSuccess = useCallback(
-    (result: unknown) => {
-      const event = result as { temperature_check_id: number; title: string }
+    (result: CreatedConsultation) => {
+      const destination = createdConsultationDestination(result)
       navigate({
-        to: '/tc/$id',
-        params: { id: String(event.temperature_check_id) }
+        to: destination.to,
+        params: { id: destination.id }
       })
     },
     [navigate]
