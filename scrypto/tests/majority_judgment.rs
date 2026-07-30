@@ -778,10 +778,6 @@ fn majority_judgment_parameter_boundaries_are_enforced() {
         mj_parameters_with(|election| election.reserve_list_days = 0),
         mj_parameters_with(|election| election.quorum = Decimal::ZERO),
         mj_parameters_with(|election| election.rerun_quorum = Decimal::ZERO),
-        mj_parameters_with(|election| election.rerun_quorum = election.quorum),
-        mj_parameters_with(|election| {
-            election.rerun_minimum_median_grade = election.minimum_median_grade
-        }),
     ];
 
     for parameters in invalid_cases {
@@ -797,6 +793,22 @@ fn majority_judgment_parameter_boundaries_are_enforced() {
             false,
         );
     }
+
+    // A rerun may use the same quorum and grade floor as Round 1.
+    add_parameter_set(
+        &mut ledger,
+        component,
+        &owner,
+        "equal-rerun",
+        GovernanceParameterSetInput {
+            label: "Equal rerun".to_string(),
+            parameters: mj_parameters_with(|election| {
+                election.rerun_quorum = election.quorum;
+                election.rerun_minimum_median_grade = election.minimum_median_grade;
+            }),
+        },
+        true,
+    );
 
     // A well-formed Majority Judgment parameter set is still accepted.
     add_mj_parameters(&mut ledger, component, &owner);
@@ -834,7 +846,7 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
             ..mj_draft()
         };
 
-    // Fewer than the minimum candidate count.
+    // One-candidate quality ratification is valid.
     create_election(
         &mut ledger,
         component,
@@ -846,7 +858,7 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         345_600,
         order_of(1),
         true,
-        false,
+        true,
     );
 
     // More than the maximum candidate count.
@@ -864,7 +876,8 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         false,
     );
 
-    // Seat count must be strictly lower than the candidate count.
+    // Seats may equal the number of candidates; the quality floor remains the
+    // operative filter.
     create_election(
         &mut ledger,
         component,
@@ -876,15 +889,16 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         345_600,
         order_of(3),
         true,
-        false,
+        true,
     );
 
-    // Within bounds, election creation succeeds.
+    // Seats may also exceed the candidate count; unfilled seats are handled
+    // off-chain as vacancies.
     create_election(
         &mut ledger,
         component,
         &owner,
-        draft_with(candidates_of(3), 2),
+        draft_with(candidates_of(3), 4),
         86_400,
         172_800,
         259_200,

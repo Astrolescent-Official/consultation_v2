@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react'
-import type {
-  MajorityJudgmentElectionStatus,
-  MajorityJudgmentRoundId
+import {
+  canStartMajorityJudgmentRerun,
+  type MajorityJudgmentElectionStatus,
+  type MajorityJudgmentRoundId
 } from 'shared/governance/index'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -67,7 +68,7 @@ export function MajorityJudgmentOwnerControls({
           {hidden ? 'Show election' : 'Hide election'}
         </Button>
 
-        {status === 'RERUN_PENDING' ? (
+        {canStartMajorityJudgmentRerun(status) ? (
           <div className="space-y-2 border-t pt-4">
             <label htmlFor={rerunStartId} className="block space-y-1 text-sm">
               <span>Rerun voting start</span>
@@ -84,7 +85,7 @@ export function MajorityJudgmentOwnerControls({
               disabled={busy || rerunStart.length === 0}
               onClick={() => onStartRerun(new Date(rerunStart))}
             >
-              Schedule rerun
+              Open Round 2 rerun
             </Button>
           </div>
         ) : null}

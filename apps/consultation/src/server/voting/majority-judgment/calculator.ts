@@ -422,7 +422,7 @@ export const calculateMajorityJudgment = (
   const status = !quorumMet
     ? round === 'Rerun'
       ? 'FAILED'
-      : 'RERUN_PENDING'
+      : 'ROUND_1_FAILED'
     : unresolved
       ? 'TIE_UNRESOLVED'
       : 'FINAL'

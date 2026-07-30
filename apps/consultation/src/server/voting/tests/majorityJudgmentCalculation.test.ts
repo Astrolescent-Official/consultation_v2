@@ -321,7 +321,7 @@ describe('majority judgment weighted calculation', () => {
       ],
       { quorumXrd: '10', minimumMedianGrade: 2, round: 'RoundOne' }
     )
-    assert.strictEqual(firstRound.status, 'RERUN_PENDING')
+    assert.strictEqual(firstRound.status, 'ROUND_1_FAILED')
 
     const rerun = calculate(
       [

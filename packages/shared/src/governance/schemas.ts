@@ -401,7 +401,7 @@ export const TemperatureCheckFollowUpInputSchema = Schema.Union(
     roleId: Schema.String.pipe(Schema.minLength(1)),
     seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
     candidates: Schema.Array(CandidateInputSchema).pipe(
-      Schema.minItems(2),
+      Schema.minItems(1),
       Schema.maxItems(20),
       Schema.filter(
         (candidates) =>
@@ -410,12 +410,7 @@ export const TemperatureCheckFollowUpInputSchema = Schema.Union(
         { message: () => 'Candidate references must be unique' }
       )
     )
-  }).pipe(
-    Schema.filter(
-      ({ seatCount, candidates }) => seatCount < candidates.length,
-      { message: () => 'Seat count must be less than candidate count' }
-    )
-  )
+  })
 )
 
 export const MakeTemperatureCheckInputSchema = Schema.Struct({

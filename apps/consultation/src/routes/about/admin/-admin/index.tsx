@@ -91,8 +91,8 @@ const emptyParameterSetForm: ParameterSetForm = {
   electionQuorum: '1000000',
   minimumMedianGrade: '2',
   rerunVotingDays: '5',
-  rerunQuorum: '500000',
-  rerunMinimumMedianGrade: '3',
+  rerunQuorum: '1000000',
+  rerunMinimumMedianGrade: '2',
   reserveListDays: '90'
 }
 

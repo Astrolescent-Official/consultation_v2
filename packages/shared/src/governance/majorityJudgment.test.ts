@@ -7,6 +7,8 @@ import {
 } from './governanceComponent'
 import {
   CandidateHttpUrlStringSchema,
+  canStartMajorityJudgmentRerun,
+  canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentElectionResponseSchema,
   MakeMajorityJudgmentElectionInputSchema,
@@ -18,6 +20,20 @@ const accountAddress =
   'account_tdx_2_1287t0ndg56s9zyxm8jg73fe42ash8enjjdm4hazxefenhexm0u67ed'
 
 describe('majority judgment shared schemas', () => {
+  it('keeps a failed first round closed until a rerun exists', () => {
+    assert.isFalse(canTransitionFromRoundOneFailure('LIVE'))
+    assert.isFalse(canTransitionFromRoundOneFailure('FINAL'))
+    assert.isTrue(canTransitionFromRoundOneFailure('RERUN_PENDING'))
+    assert.isTrue(canTransitionFromRoundOneFailure('RERUN_LIVE'))
+  })
+
+  it('opens a rerun only from a failed first round', () => {
+    assert.isTrue(canStartMajorityJudgmentRerun('ROUND_1_FAILED'))
+    assert.isFalse(canStartMajorityJudgmentRerun('LIVE'))
+    assert.isFalse(canStartMajorityJudgmentRerun('FINAL'))
+    assert.isFalse(canStartMajorityJudgmentRerun('TIE_UNRESOLVED'))
+  })
+
   it('accepts all five grades and rejects values outside the on-ledger range', () => {
     for (const grade of [0, 1, 2, 3, 4]) {
       assert.isTrue(

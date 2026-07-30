@@ -37,7 +37,7 @@ export const CandidatesField = withForm({
                       variant="ghost"
                       size="icon"
                       aria-label={`Remove candidate ${index + 1}`}
-                      disabled={candidates.length <= 2}
+                      disabled={candidates.length <= 1}
                       onClick={() => field.removeValue(index)}
                     >
                       <Trash2Icon className="size-4" />
