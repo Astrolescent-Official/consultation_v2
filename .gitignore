@@ -10,6 +10,7 @@ node_modules
 .env.local
 .env.development
 .env.development.local
+.env.test
 .env.test.local
 .env.production.local
 .env.production
@@ -50,7 +51,7 @@ scrypto/target/
 
 .claude
 
-.repos/effect
+.repos
 .notes
 
 # Let's Encrypt certificates & challenge files

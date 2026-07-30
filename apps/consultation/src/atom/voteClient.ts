@@ -10,7 +10,6 @@ import {
   MajorityJudgmentElectionResponseSchema
 } from 'shared/governance/index'
 import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
-import { envVars } from '@/lib/envVars'
 
 const VoteResultSchema = Schema.Struct({
   vote: Schema.String,
@@ -58,7 +57,7 @@ const VoteClientLive = Layer.effect(
   VoteClient,
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
-    const baseUrl = envVars.VOTE_COLLECTOR_URL
+    const baseUrl = globalThis.location.origin
 
     return {
       GetVoteResults: ({ type, entityId }) =>

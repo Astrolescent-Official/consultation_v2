@@ -1,0 +1,14 @@
+CALL_FUNCTION
+  Address("package_tdx_2_1p52l57u32xpsfqv5wtvd0c727mh485qafef0dlhm0x7r67nm3t6pj8")
+  "Governance"
+  "instantiate"
+  Address("resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq")
+  Tuple(
+    <TEMPERATURE_CHECK_DAYS>u16,
+    Decimal("<TEMPERATURE_CHECK_QUORUM>"),
+    Decimal("<TEMPERATURE_CHECK_APPROVAL_THRESHOLD>"),
+    <PROPOSAL_LENGTH_DAYS>u16,
+    Decimal("<PROPOSAL_QUORUM>"),
+    Decimal("<PROPOSAL_APPROVAL_THRESHOLD>")
+  )
+;

@@ -1,1 +1,0 @@
-ALTER TABLE "vote_calculation_state" ADD COLUMN "is_calculating" boolean DEFAULT false NOT NULL;

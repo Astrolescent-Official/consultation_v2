@@ -51,6 +51,9 @@ export const Route = createRootRoute({
     ],
     scripts: [
       {
+        src: '/app-config.js'
+      },
+      {
         children: themeScript
       }
     ]
@@ -82,7 +85,7 @@ function RootComponent() {
             <Outlet />
           </main>
           <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-            Powered by Radix DLT
+            Operated by Radix DAO LLC
           </footer>
         </div>
       </ThemeProvider>
