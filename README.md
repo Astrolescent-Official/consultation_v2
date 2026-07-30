@@ -41,6 +41,14 @@ The Worker test suite runs against local workerd and D1. It covers exact decimal
 
 ## Deployment
 
+GitHub Actions deployments require a repository secret named
+`CLOUDFLARE_API_TOKEN`. The token must be authorized for the Cloudflare account
+that owns the production and preview Workers and their D1 databases.
+
+Pushes to `main` deploy production after the `Verify` job succeeds. Other
+branches upload a version to the isolated preview Worker with a stable branch
+preview alias; they do not replace the production deployment.
+
 ```sh
 pnpm deploy:preview
 pnpm deploy:production

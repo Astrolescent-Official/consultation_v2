@@ -1,0 +1,60 @@
+name: Verify and deploy
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: ["**"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.25.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+  deploy-production:
+    name: Deploy production Worker
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: cdb0453c60d48cf58f44f34f9eb6bbe2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.25.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm deploy:production
+  deploy-preview:
+    name: Upload preview Worker version
+    needs: verify
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: cdb0453c60d48cf58f44f34f9eb6bbe2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.25.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Create a stable preview alias
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          alias_name=$(printf '%s' "$BRANCH_NAME" | tr '[:upper:]_/' '[:lower:]--' | tr -cs 'a-z0-9-' '-' | sed 's/^-*//; s/-*$//')
+          printf 'CLOUDFLARE_PREVIEW_ALIAS=branch-%s\n' "$(printf '%s' "${alias_name:-preview}" | cut -c1-33)" >> "$GITHUB_ENV"
+      - run: pnpm deploy:preview-version
