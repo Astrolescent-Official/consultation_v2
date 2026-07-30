@@ -18,6 +18,11 @@ An implementation task is complete only after its changes are committed on its d
 
 `pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
 
+## Scrypto Verification
+
+Do not use `cargo test` to verify the Scrypto package. Use the Scrypto CLI and
+run both `scrypto test` and `scrypto build`.
+
 Central index of context files for AI agents and coding assistants working with this codebase.
 
 ## Quick Reference

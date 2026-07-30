@@ -9,7 +9,7 @@
 		"check": "biome check .",
 		"check-types": "turbo run check-types",
 		"test:unit": "pnpm --filter consultation-dapp test && pnpm --filter shared exec vitest run",
-		"test:scrypto": "cargo test --manifest-path scrypto/Cargo.toml",
+		"test:scrypto": "cd scrypto && scrypto test && scrypto build",
 		"db:generate": "turbo run db:generate",
 		"test": "turbo run test",
 		"verify": "pnpm check && pnpm check-types && pnpm test:unit && pnpm test:scrypto",

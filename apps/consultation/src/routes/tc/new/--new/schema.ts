@@ -109,6 +109,7 @@ const sharedFields = {
     Schema.Literal(1),
     Schema.Number.pipe(Schema.greaterThan(1))
   ),
+  includeAbstain: Schema.Boolean,
   seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
   tcVotingStart: Schema.String,
   tcVotingEnd: Schema.String,
@@ -120,11 +121,22 @@ const StandardTemperatureCheckFormSchema = Schema.Struct({
   ...sharedFields,
   processType: Schema.Literal('Standard'),
   voteOptions: Schema.Array(VoteOptionSchema).pipe(
-    Schema.minItems(2, { message: () => 'At least 2 options required' })
+    Schema.minItems(2, { message: () => 'At least 2 options required' }),
+    Schema.maxItems(10, { message: () => 'At most 10 options allowed' })
   ),
   roleId: Schema.String,
   candidates: Schema.Array(UnusedCandidateSchema)
-})
+}).pipe(
+  Schema.filter(
+    ({ voteOptions, maxSelections, includeAbstain }) =>
+      voteOptions.length + (maxSelections === 1 && includeAbstain ? 1 : 0) <=
+      10,
+    {
+      message: () =>
+        'Single-choice proposals can have at most 9 custom options plus Abstain'
+    }
+  )
+)
 
 // The on-chain contract rejects a TC/election window shorter than the selected
 // governance parameter set's own `voting_days` (interpreted in minutes on
