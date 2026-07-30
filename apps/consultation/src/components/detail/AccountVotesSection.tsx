@@ -68,9 +68,7 @@ export function AccountVotesSection({
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
               Voters (0)
             </h3>
-            <p className="text-sm text-muted-foreground">
-              No voters yet.
-            </p>
+            <p className="text-sm text-muted-foreground">No voters yet.</p>
           </div>
         )
       }
@@ -129,7 +127,9 @@ export function AccountVotesSection({
             ) : (
               <div className="space-y-3">
                 {sortedVoters
-                  .filter((v) => selectedVote === null || v.vote === selectedVote)
+                  .filter(
+                    (v) => selectedVote === null || v.vote === selectedVote
+                  )
                   .map((voter, index, filtered) => {
                     const letter = letterByKey.get(voter.vote) ?? '?'
                     const isLast = index === filtered.length - 1

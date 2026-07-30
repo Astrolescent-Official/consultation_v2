@@ -1,10 +1,6 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Field,
-  FieldError,
-  FieldGroup
-} from '@/components/ui/field'
+import { Field, FieldError, FieldGroup } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { withForm } from '../formHook'
 import {
@@ -52,9 +48,7 @@ export const VoteOptionsField = withForm({
                       name={`voteOptions[${index}].label`}
                       validators={{
                         onBlur: ({ value }) =>
-                          !value
-                            ? { message: 'Label is required' }
-                            : undefined,
+                          !value ? { message: 'Label is required' } : undefined,
                         onChange: () => undefined
                       }}
                     >

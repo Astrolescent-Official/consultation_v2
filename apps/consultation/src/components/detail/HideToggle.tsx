@@ -1,6 +1,6 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { Cause } from 'effect'
-import { EyeOff, Eye, LoaderIcon } from 'lucide-react'
+import { Eye, EyeOff, LoaderIcon } from 'lucide-react'
 import { useCallback } from 'react'
 import type {
   ProposalId,
@@ -8,8 +8,8 @@ import type {
 } from 'shared/governance/brandedTypes'
 import {
   isAdminAtom,
-  toggleTemperatureCheckHiddenAtom,
-  toggleProposalHiddenAtom
+  toggleProposalHiddenAtom,
+  toggleTemperatureCheckHiddenAtom
 } from '@/atom/adminAtom'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 
@@ -30,7 +30,9 @@ export function HideToggle(props: HideToggleProps) {
 
   if (!currentAccount) return null
 
-  return <HideToggleWithAddress {...props} accountAddress={currentAccount.address} />
+  return (
+    <HideToggleWithAddress {...props} accountAddress={currentAccount.address} />
+  )
 }
 
 function HideToggleWithAddress(
