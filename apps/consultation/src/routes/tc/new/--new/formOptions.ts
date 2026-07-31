@@ -56,6 +56,11 @@ const formatLocalDateTime = (date: Date) =>
     .toISOString()
     .slice(0, 16)
 
+const MINIMUM_SCHEDULE_LEAD_MS = 60 * 60 * 1000
+
+const roundUpToMinute = (timestamp: number) =>
+  new Date(Math.ceil(timestamp / 60_000) * 60_000)
+
 export const makeMajorityJudgmentSchedule = (
   minimums: {
     readonly temperatureCheckVotingUnits: number
@@ -63,10 +68,14 @@ export const makeMajorityJudgmentSchedule = (
   },
   now = new Date()
 ) => {
-  // Leave one full unit before the TC starts. A datetime-local input omits
-  // seconds, so this avoids a schedule becoming invalid while the user fills
-  // in the form.
-  const tcStart = new Date(now.getTime() + 2 * msPerGovernanceDurationUnit)
+  // Stokenet uses minute-scale governance units, so a two-unit lead expires
+  // while a normal election form is being completed. Keep the two-unit lead
+  // for day-scale networks, but always leave at least an hour. Rounding up
+  // prevents the datetime-local input from truncating the start into the past.
+  const tcStart = roundUpToMinute(
+    now.getTime() +
+      Math.max(2 * msPerGovernanceDurationUnit, MINIMUM_SCHEDULE_LEAD_MS)
+  )
   const tcEnd = new Date(
     tcStart.getTime() +
       minimums.temperatureCheckVotingUnits * msPerGovernanceDurationUnit
