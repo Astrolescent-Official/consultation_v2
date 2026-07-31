@@ -12,7 +12,9 @@ permissions:
 jobs:
   verify:
     name: Verify
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+    env:
+      CC_wasm32_unknown_unknown: /opt/homebrew/opt/llvm/bin/clang
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

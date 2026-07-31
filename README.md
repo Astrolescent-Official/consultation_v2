@@ -50,6 +50,11 @@ GitHub Actions deployments require a repository secret named
 `CLOUDFLARE_API_TOKEN`. The token must be authorized for the Cloudflare account
 that owns the production and preview Workers and their D1 databases.
 
+The macOS self-hosted runner used by the `Verify` job requires Homebrew LLVM
+(`brew install llvm`). The job uses `/opt/homebrew/opt/llvm/bin/clang` to build
+Scrypto's `wasm32-unknown-unknown` target because Apple clang does not support
+that target.
+
 Pushes to `main` deploy production after the `Verify` job succeeds. Other
 branches upload a version to the isolated preview Worker with a stable branch
 preview alias; they do not replace the production deployment.
