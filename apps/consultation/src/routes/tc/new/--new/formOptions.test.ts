@@ -79,7 +79,7 @@ describe('Majority Judgment schedule defaults', () => {
     const votingStart = new Date(schedule.votingStart)
     const votingEnd = new Date(schedule.votingEnd)
 
-    assert.isAbove(tcStart.getTime(), now.getTime())
+    assert.isAtLeast(tcStart.getTime() - now.getTime(), 60 * 60 * 1000)
     assert.strictEqual(
       tcEnd.getTime() - tcStart.getTime(),
       5 * msPerGovernanceDurationUnit

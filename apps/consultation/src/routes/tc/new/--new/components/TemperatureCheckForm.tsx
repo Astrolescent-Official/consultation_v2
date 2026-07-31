@@ -54,6 +54,7 @@ import { CandidatesField } from './CandidatesField'
 import { LinksField } from './LinksField'
 import { MarkdownUploadField } from './MarkdownUploadField'
 import { MaxSelectionsField } from './MaxSelectionsField'
+import { SubmissionErrorSummary } from './SubmissionErrorSummary'
 import { VoteOptionsField } from './VoteOptionsField'
 
 type TemperatureCheckFormProps = {
@@ -179,6 +180,10 @@ export function TemperatureCheckForm({
     (state) => state.values.includeAbstain
   )
   const canSubmit = useStore(form.store, (state) => state.canSubmit)
+  const submitErrors = useStore(
+    form.store,
+    (state) => state.errorMap.onSubmit ?? []
+  )
   const parameterSetId = useStore(
     form.store,
     (state) => state.values.parameterSetId
@@ -609,9 +614,16 @@ export function TemperatureCheckForm({
         </CardContent>
       </Card>
 
+      <SubmissionErrorSummary
+        subject={isMajorityJudgment ? 'Election' : 'Temperature check'}
+        errors={submitErrors}
+      />
+
       {makeError && (
         <p className="text-sm text-destructive text-center">
-          Failed to create temperature check. Please try again.
+          Failed to create{' '}
+          {isMajorityJudgment ? 'election' : 'temperature check'}. Please try
+          again.
         </p>
       )}
 
