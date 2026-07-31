@@ -281,13 +281,15 @@ export class GovernanceComponent extends Effect.Service<GovernanceComponent>()(
       const getTemperatureChecks = () =>
         getComponentState().pipe(
           Effect.flatMap((componentState) =>
-            keyValueStore({
-              address: componentState.temperature_checks
-            })
+            componentState.temperature_check_count === 0
+              ? Effect.succeed([])
+              : keyValueStore({
+                  address: componentState.temperature_checks
+                }).pipe(Effect.map((result) => result.entries))
           ),
           Effect.map((result) =>
             pipe(
-              result.entries,
+              result,
               A.map((entry) =>
                 Effect.all(
                   [
