@@ -13,10 +13,12 @@ import { and, asc, eq, notInArray } from 'drizzle-orm'
 import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import {
   CandidateHttpUrlStringSchema,
+  canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
   MajorityJudgmentCandidateResult,
   MajorityJudgmentElectionResponseSchema,
+  type MajorityJudgmentElectionStatus,
   MajorityJudgmentElectionStatusSchema
 } from 'shared/governance/index'
 import { meetsQuorum } from '../../../lib/quorum'
@@ -122,11 +124,20 @@ const isTerminal = (status: string) =>
 
 export const isClosedMajorityJudgmentResult = (status: string) =>
   isTerminal(status) ||
+  status === 'ROUND_1_FAILED' ||
   status === 'RERUN_PENDING' ||
   status === 'TIE_UNRESOLVED'
 
 const isPhaseLocked = (status: string) =>
   isTerminal(status) || status === 'TIE_UNRESOLVED'
+
+const isPhaseTransitionBlocked = (
+  currentStatus: string,
+  nextStatus: MajorityJudgmentElectionStatus
+) =>
+  isPhaseLocked(currentStatus) ||
+  (currentStatus === 'ROUND_1_FAILED' &&
+    !canTransitionFromRoundOneFailure(nextStatus))
 
 export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()(
   'MajorityJudgmentRepo',
@@ -349,14 +360,21 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
       })
 
       const setPhaseStatus = Effect.fn('MajorityJudgmentRepo.setPhaseStatus')(
-        function* (electionId: number, round: number, status: string) {
+        function* (
+          electionId: number,
+          round: number,
+          status: MajorityJudgmentElectionStatus
+        ) {
           const rows = yield* db
             .select({ status: mjElection.status })
             .from(mjElection)
             .where(eq(mjElection.id, electionId))
             .limit(1)
           const currentStatus = rows[0]?.status
-          if (currentStatus === undefined || isPhaseLocked(currentStatus)) {
+          if (
+            currentStatus === undefined ||
+            isPhaseTransitionBlocked(currentStatus, status)
+          ) {
             return
           }
           yield* Effect.all([

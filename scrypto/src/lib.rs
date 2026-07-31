@@ -57,7 +57,7 @@ pub const MAX_LINKS: usize = 10;
 pub const MAX_CANDIDATE_LINKS: usize = 5;
 pub const MAX_VOTE_OPTIONS: usize = 10;
 pub const MAX_SELECTIONS: u32 = 5;
-pub const MIN_MAJORITY_JUDGMENT_CANDIDATES: usize = 2;
+pub const MIN_MAJORITY_JUDGMENT_CANDIDATES: usize = 1;
 pub const MAX_MAJORITY_JUDGMENT_CANDIDATES: usize = 20;
 
 // =============================================================================

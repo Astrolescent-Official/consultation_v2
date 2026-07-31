@@ -109,6 +109,7 @@ export const MajorityJudgmentElectionStatusSchema = Schema.Literal(
   'TC_FAILED',
   'MJ_PENDING',
   'LIVE',
+  'ROUND_1_FAILED',
   'RERUN_PENDING',
   'RERUN_LIVE',
   'FINAL',
@@ -117,6 +118,14 @@ export const MajorityJudgmentElectionStatusSchema = Schema.Literal(
 )
 export type MajorityJudgmentElectionStatus =
   typeof MajorityJudgmentElectionStatusSchema.Type
+
+export const canTransitionFromRoundOneFailure = (
+  nextStatus: MajorityJudgmentElectionStatus
+) => nextStatus === 'RERUN_PENDING' || nextStatus === 'RERUN_LIVE'
+
+export const canStartMajorityJudgmentRerun = (
+  status: MajorityJudgmentElectionStatus
+) => status === 'ROUND_1_FAILED'
 
 export const MajorityJudgmentCandidateOutcomeSchema = Schema.Literal(
   'SEATED',
@@ -140,7 +149,7 @@ export class MajorityJudgmentCandidateInput extends Schema.Class<MajorityJudgmen
 }) {}
 
 const CandidateIdsSchema = Schema.Array(MajorityJudgmentCandidateIdSchema).pipe(
-  Schema.minItems(2),
+  Schema.minItems(1),
   Schema.maxItems(20),
   Schema.filter(
     (candidateIds) =>
@@ -156,7 +165,7 @@ const RawMakeMajorityJudgmentVoteInputSchema = Schema.Struct({
   round: MajorityJudgmentRoundIdSchema,
   candidateIds: CandidateIdsSchema,
   grades: Schema.Array(CandidateGradeSchema).pipe(
-    Schema.minItems(2),
+    Schema.minItems(1),
     Schema.maxItems(20)
   )
 }).pipe(
@@ -213,7 +222,7 @@ export type MakeMajorityJudgmentVoteInput =
 const CandidateOrderSchema = Schema.Array(
   MajorityJudgmentCandidateIdSchema
 ).pipe(
-  Schema.minItems(2),
+  Schema.minItems(1),
   Schema.maxItems(20),
   Schema.filter(
     (candidateIds) =>
@@ -231,7 +240,7 @@ export const MakeMajorityJudgmentElectionInputSchema = Schema.Struct({
   roleId: Schema.String.pipe(Schema.minLength(1)),
   seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
   candidates: Schema.Array(MajorityJudgmentCandidateInput).pipe(
-    Schema.minItems(2),
+    Schema.minItems(1),
     Schema.maxItems(20)
   ),
   parameterSetId: Schema.String.pipe(Schema.minLength(1)),
@@ -241,9 +250,6 @@ export const MakeMajorityJudgmentElectionInputSchema = Schema.Struct({
   votingEnd: Schema.DateFromSelf,
   candidateOrder: CandidateOrderSchema
 }).pipe(
-  Schema.filter(({ seatCount, candidates }) => seatCount < candidates.length, {
-    message: () => 'Seat count must be less than candidate count'
-  }),
   Schema.filter(
     ({ candidates, candidateOrder }) => {
       const actual = [...candidateOrder].map(Number).sort((a, b) => a - b)

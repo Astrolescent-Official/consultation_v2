@@ -6,7 +6,8 @@ import {
 } from '../majority-judgment/calculation'
 import {
   deriveMajorityJudgmentPhase,
-  deriveMajorityJudgmentRerunPhase
+  deriveMajorityJudgmentRerunPhase,
+  deriveRoundOneProjectedStatus
 } from '../majority-judgment/projection'
 
 const grades = (first: Grade, second: Grade) => [
@@ -135,7 +136,7 @@ describe('majority judgment projected phase', () => {
         ...boundaries,
         tcOutcome: 'PASSED'
       }),
-      'RERUN_PENDING'
+      'LIVE'
     )
   })
 
@@ -154,6 +155,18 @@ describe('majority judgment projected phase', () => {
     assert.strictEqual(
       deriveMajorityJudgmentRerunPhase(deadline, start, deadline),
       'RERUN_LIVE'
+    )
+  })
+
+  it('preserves the Round 1 quorum failure after a rerun starts', () => {
+    assert.strictEqual(deriveRoundOneProjectedStatus(false, 'LIVE'), 'LIVE')
+    assert.strictEqual(
+      deriveRoundOneProjectedStatus(true, 'RERUN_PENDING'),
+      'ROUND_1_FAILED'
+    )
+    assert.strictEqual(
+      deriveRoundOneProjectedStatus(true, 'RERUN_LIVE'),
+      'ROUND_1_FAILED'
     )
   })
 })
