@@ -5,6 +5,38 @@ import {
 } from '@radix-effects/shared'
 import { Context, Effect, Layer, Config as ConfigEffect, Data } from 'effect'
 
+<<<<<<< Updated upstream
+=======
+const StokenetConfig = {
+   packageAddress: PackageAddress.make(
+    'package_tdx_2_1pkkqvahjxykk7en5r0d0gsq06kzw2gd0mgxl4hjdjdfyxgdlqaehtk'
+  ),
+  componentAddress: ComponentAddress.make(
+    'component_tdx_2_1cq627a0qv4xmjrzl7yym0ryl720vmp803u0nm40w49y5m30k5dgcej'
+  ),
+  adminBadgeAddress: NonFungibleResourceAddress.make(
+    'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'
+  ),
+  xrdResourceAddress: FungibleResourceAddress.make(
+    'resource_tdx_2_1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxtfd2jc'
+  )
+}
+
+const MainnetConfig = {
+  packageAddress: PackageAddress.make(
+    'package_rdx1p5w0ckjksr2q7ww5f5u76dzmvvekmyae2t7p6k2xm9v26ysddqvsvk'
+  ),
+  componentAddress: ComponentAddress.make(
+    'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
+  ),
+  adminBadgeAddress: NonFungibleResourceAddress.make(
+    'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
+  ),
+  xrdResourceAddress: FungibleResourceAddress.make(
+    'resource_rdx1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxradxrd'
+  )
+}
+>>>>>>> Stashed changes
 export class UnsupportedNetworkIdError extends Data.TaggedError(
   '@GovernenceConfig/UnsupportedNetworkIdError'
 )<{
