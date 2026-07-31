@@ -40,6 +40,7 @@ import { secureShuffleCandidateIds } from '@/routes/tc/$id/-$id/components/candi
 import { useAppForm } from '../formHook'
 import {
   getProposalVoteOptionLabels,
+  makeMajorityJudgmentSchedule,
   temperatureCheckFormOpts
 } from '../formOptions'
 import {
@@ -195,6 +196,9 @@ export function TemperatureCheckForm({
 
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
+  const scheduledMajorityJudgmentParameterSetId = useRef<string | undefined>(
+    undefined
+  )
 
   const hasAccounts =
     Result.isSuccess(accountsResult) && accountsResult.value.length > 0
@@ -251,6 +255,26 @@ export function TemperatureCheckForm({
       isMajorityJudgment ? 'MajorityJudgment' : 'Standard'
     )
   }, [form, isMajorityJudgment])
+
+  useEffect(() => {
+    if (
+      selectedParameterSet?.parameters._tag !== 'MajorityJudgment' ||
+      scheduledMajorityJudgmentParameterSetId.current ===
+        selectedParameterSet.id
+    )
+      return
+
+    const schedule = makeMajorityJudgmentSchedule({
+      temperatureCheckVotingUnits:
+        selectedParameterSet.parameters.temperatureCheck.votingDays,
+      electionVotingUnits: selectedParameterSet.parameters.election.votingDays
+    })
+    form.setFieldValue('tcVotingStart', schedule.tcVotingStart)
+    form.setFieldValue('tcVotingEnd', schedule.tcVotingEnd)
+    form.setFieldValue('votingStart', schedule.votingStart)
+    form.setFieldValue('votingEnd', schedule.votingEnd)
+    scheduledMajorityJudgmentParameterSetId.current = selectedParameterSet.id
+  }, [form, selectedParameterSet])
 
   return (
     <form
