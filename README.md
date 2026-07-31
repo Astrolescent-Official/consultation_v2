@@ -7,7 +7,7 @@ Radix governance consultation dApp running entirely on Cloudflare Workers and D1
 - TanStack Start serves the React dApp from the Worker.
 - `GET /vote-results`, `GET /account-votes`, and
   `GET /majority-judgment-election` are same-origin Worker routes.
-- the Worker's scheduled handler polls the Radix Gateway every five minutes in production.
+- the Worker's scheduled handler polls the Radix Gateway every minute in production.
 - Cloudflare D1 stores the cursor, lease, exact vote totals, and account votes.
 - production and preview use separate Workers, D1 databases, Radix networks, variables, and schedules.
 
