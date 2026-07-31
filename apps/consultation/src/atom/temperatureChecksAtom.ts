@@ -17,9 +17,13 @@ import {
   TemperatureCheckCreatedEvent
 } from 'shared/schemas'
 import { governanceRuntime as runtime } from '@/atom/governanceRuntime'
-import { SendTransaction, WalletErrorResponse } from '@/lib/dappToolkit'
+import { SendTransaction } from '@/lib/dappToolkit'
 import { getConnectedAccountAddress } from '@/lib/selectedAccount'
 import { truncateAddress } from '@/lib/utils'
+import {
+  batchTransactionToast,
+  transactionErrorMessage
+} from '@/lib/walletError'
 import { accountsAtom } from './dappToolkitAtom'
 import { transactionFailureMessage, withToast } from './withToast'
 
@@ -119,9 +123,7 @@ const voteOnTemperatureCheck = (input: MakeTemperatureCheckVoteInput) =>
               message: 'Account has already voted on this temperature check'
             })
           }
-          return yield* new WalletErrorResponse({
-            error: error.message
-          })
+          return yield* error
         })
       )
     )
@@ -158,8 +160,7 @@ export const voteOnTemperatureCheckBatchAtom = runtime.fn(
             Effect.succeed<VoteResult>({
               account: account.address,
               success: false,
-              error:
-                'message' in error ? (error.message as string) : 'Vote failed'
+              error: transactionErrorMessage(error, 'Vote failed')
             })
           )
         )
@@ -178,13 +179,7 @@ export const voteOnTemperatureCheckBatchAtom = runtime.fn(
     },
     withToast({
       whenLoading: 'Submitting votes...',
-      whenSuccess: ({ result }) => {
-        const successes = result.filter((r) => r.success).length
-        const failures = result.filter((r) => !r.success).length
-        if (failures === 0) return `${successes} vote(s) submitted`
-        if (successes === 0) return 'All votes failed'
-        return `${successes} submitted, ${failures} failed`
-      },
+      whenSuccess: ({ result }) => batchTransactionToast(result, 'vote'),
       whenFailure: () => Option.some('Failed to submit votes')
     })
   )
