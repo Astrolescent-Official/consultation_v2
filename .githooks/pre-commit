@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
-
 set -eu
 
 branch=$(git branch --show-current)
@@ -17,4 +16,4 @@ if [ "$git_dir" = ".git" ]; then
 	printf '%s\n' "Commits must be made from a linked worktree, not the primary checkout." >&2
 	printf '%s\n' "Create one with: pnpm worktree:codex <task-name>" >&2
 	exit 1
-fi
+	fi

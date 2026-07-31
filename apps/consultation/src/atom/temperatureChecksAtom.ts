@@ -71,9 +71,11 @@ export const makeTemperatureCheckAtom = runtime.fn(
         Option.match({
           onSome: (sbor) => parseSbor(sbor, TemperatureCheckCreatedEvent),
           onNone: () =>
-            new EventNotFoundError({
-              message: 'TemperatureCheckCreatedEvent not found'
-            })
+            Effect.fail(
+              new EventNotFoundError({
+                message: 'TemperatureCheckCreatedEvent not found'
+              })
+            )
         })
       )
 

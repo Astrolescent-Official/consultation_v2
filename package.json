@@ -9,12 +9,13 @@
 		"check": "biome check .",
 		"check-types": "turbo run check-types",
 		"test:unit": "pnpm --filter consultation-dapp test && pnpm --filter shared exec vitest run",
-		"test:scrypto": "cargo test --manifest-path scrypto/Cargo.toml",
+		"test:scrypto": "cd scrypto && scrypto test && scrypto build",
 		"db:generate": "turbo run db:generate",
 		"test": "turbo run test",
 		"verify": "pnpm check && pnpm check-types && pnpm test:unit && pnpm test:scrypto",
 		"setup:git-hooks": "./scripts/setup-git-hooks.sh",
 		"worktree:codex": "./scripts/new-codex-worktree.sh",
+		"deploy:preview-version": "./scripts/upload-preview-worker.sh",
 		"prepare": "./scripts/prepare-effect.sh && ./scripts/setup-git-hooks.sh",
 		"deploy:preview": "./deploy.sh preview",
 		"deploy:production": "./deploy.sh production"
@@ -24,7 +25,7 @@
 		"turbo": "^2.6.3",
 		"typescript": "5.9.3"
 	},
-	"packageManager": "pnpm@10.25.0+sha512.5e82639027af37cf832061bcc6d639c219634488e0f2baebe785028a793de7b525ffcd3f7ff574f5e9860654e098fe852ba8ac5dd5cefe1767d23a020a92f501",
+	"packageManager": "pnpm@10.25.0",
 	"engines": {
 		"node": ">=22"
 	}

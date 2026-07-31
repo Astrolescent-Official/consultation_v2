@@ -4,7 +4,7 @@ The repository-level Codex Task Isolation and Completion Contract apply to every
 
 For changes under `scrypto/`:
 
-- Run `pnpm test:scrypto` before handoff. This is included in `pnpm verify`.
+- Run `pnpm test:scrypto` before handoff. This runs both `scrypto test` and `scrypto build` and is included in `pnpm verify`.
 - Add or update Rust tests in `scrypto/tests/` for changed blueprint behavior, including authorization and state-transition cases where applicable.
 - Run `scrypto build` when a change affects deployable package output, manifests, or ledger-facing blueprint interfaces.
 - Do not publish packages, submit manifests, or mutate a Resim ledger unless the user explicitly asks.

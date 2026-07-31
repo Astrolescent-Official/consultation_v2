@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
-
 set -eu
 
 usage() {
@@ -33,5 +32,4 @@ fi
 
 git worktree add -b "$branch" "$worktree_path" "$base_ref"
 git -C "$worktree_path" config core.hooksPath .githooks
-
 printf '%s\n' "Created $worktree_path on $branch"

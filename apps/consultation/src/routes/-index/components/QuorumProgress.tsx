@@ -17,16 +17,16 @@ export function QuorumProgress({
   quorum,
   isActive
 }: QuorumProgressProps) {
-  const voteResultsResult = useAtomValue(
-    voteResultsAtom(entityType)(entityId)
-  )
+  const voteResultsResult = useAtomValue(voteResultsAtom(entityType)(entityId))
 
   return Result.builder(voteResultsResult)
     .onInitial(() => <QuorumProgressSkeleton />)
     .onFailure(() => (
       <div className="flex flex-row sm:flex-col gap-8 sm:gap-4">
         <div className="flex-1 sm:flex-none">
-          <div className="text-xs text-neutral-500 uppercase mb-1">Quorum Progress</div>
+          <div className="text-xs text-neutral-500 uppercase mb-1">
+            Quorum Progress
+          </div>
           <div className="text-sm text-muted-foreground">--</div>
         </div>
         <div>
@@ -40,9 +40,10 @@ export function QuorumProgress({
         (sum, r) => sum + Number(r.votePower),
         0
       )
-      const quorumProgress = !Number.isFinite(quorum) || quorum <= 0
-        ? 0
-        : (totalPower / quorum) * 100
+      const quorumProgress =
+        !Number.isFinite(quorum) || quorum <= 0
+          ? 0
+          : (totalPower / quorum) * 100
 
       return (
         <QuorumProgressDisplay

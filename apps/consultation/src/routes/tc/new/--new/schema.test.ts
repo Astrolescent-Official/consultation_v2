@@ -19,6 +19,7 @@ const validForm = {
     { id: 'two', label: 'Against' }
   ],
   maxSelections: 1,
+  includeAbstain: true,
   roleId: '',
   seatCount: 1,
   candidates: [],
@@ -39,6 +40,37 @@ describe('new temperature check parameter-set selection', () => {
     assert.isTrue(
       Schema.decodeUnknownEither(TemperatureCheckFormSchema)(missingSelection)
         ._tag === 'Left'
+    )
+  })
+
+  it('reserves the final option slot for Abstain only on single-choice proposals', () => {
+    const tenVoteOptions = Array.from({ length: 10 }, (_, index) => ({
+      id: String(index),
+      label: `Option ${index + 1}`
+    }))
+
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions
+      })._tag,
+      'Left'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions,
+        includeAbstain: false
+      })._tag,
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions,
+        maxSelections: 2
+      })._tag,
+      'Right'
     )
   })
 

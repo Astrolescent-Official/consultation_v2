@@ -81,6 +81,8 @@ function Field({
   ...props
 }: React.ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
   return (
+    // Field may wrap a single control; a fieldset would add incorrect group semantics.
+    // biome-ignore lint/a11y/useSemanticElements: role=group preserves the component's existing semantics
     <div
       role="group"
       data-slot="field"
@@ -208,8 +210,8 @@ function FieldError({
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
         {uniqueErrors.map(
-          (error, index) =>
-            error?.message && <li key={index}>{error.message}</li>
+          (error) =>
+            error?.message && <li key={error.message}>{error.message}</li>
         )}
       </ul>
     )

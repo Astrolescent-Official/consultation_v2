@@ -21,6 +21,26 @@ export const DEFAULT_VOTE_OPTIONS: VoteOption[] = [
   createVoteOption()
 ]
 
+export const ABSTAIN_VOTE_OPTION_LABEL = 'Abstain'
+
+export const getProposalVoteOptionLabels = ({
+  voteOptions,
+  maxSelections,
+  includeAbstain,
+  isAdmin
+}: {
+  voteOptions: ReadonlyArray<VoteOption>
+  maxSelections: number
+  includeAbstain: boolean
+  isAdmin: boolean
+}): string[] => {
+  const labels = voteOptions.map(({ label }) => label)
+  const shouldIncludeAbstain =
+    maxSelections === 1 && (includeAbstain || !isAdmin)
+
+  return shouldIncludeAbstain ? [...labels, ABSTAIN_VOTE_OPTION_LABEL] : labels
+}
+
 export const createCandidate = (): CandidateFormValue => ({
   id: crypto.randomUUID(),
   reference: '',
@@ -49,6 +69,7 @@ export const temperatureCheckFormOpts = formOptions({
     links: [''] as string[],
     voteOptions: DEFAULT_VOTE_OPTIONS,
     maxSelections: 1,
+    includeAbstain: true,
     roleId: '',
     seatCount: 1,
     candidates: [createCandidate(), createCandidate()],

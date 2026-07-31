@@ -38,7 +38,10 @@ import { useIsAdmin } from '@/hooks/useIsAdmin'
 import { formatGovernanceDuration } from '@/lib/governanceDuration'
 import { secureShuffleCandidateIds } from '@/routes/tc/$id/-$id/components/candidateOrder'
 import { useAppForm } from '../formHook'
-import { temperatureCheckFormOpts } from '../formOptions'
+import {
+  getProposalVoteOptionLabels,
+  temperatureCheckFormOpts
+} from '../formOptions'
 import {
   effectSchemaValidator,
   makeTemperatureCheckFormSchema,
@@ -54,8 +57,12 @@ import { VoteOptionsField } from './VoteOptionsField'
 
 type TemperatureCheckFormProps = {
   maxVoteOptions?: number
-  onSuccess?: (result: unknown) => void
+  onSuccess?: (result: CreatedConsultation) => void
 }
+
+export type CreatedConsultation =
+  | { readonly temperature_check_id: number }
+  | { readonly election_id: number }
 
 export function TemperatureCheckForm({
   maxVoteOptions = 10,
@@ -97,7 +104,10 @@ export function TemperatureCheckForm({
               }
             : undefined
         return effectSchemaValidator(makeTemperatureCheckFormSchema(minimums))({
-          value
+          value:
+            value.processType === 'Standard' && !isAdmin
+              ? { ...value, includeAbstain: true }
+              : value
         })
       }
     },
@@ -118,7 +128,12 @@ export function TemperatureCheckForm({
           ...common,
           followUp: {
             _tag: 'StandardProposal',
-            voteOptions: value.voteOptions.map(({ label }) => label),
+            voteOptions: getProposalVoteOptionLabels({
+              voteOptions: value.voteOptions,
+              maxSelections: value.maxSelections,
+              includeAbstain: value.includeAbstain,
+              isAdmin
+            }),
             maxSelections: value.maxSelections
           }
         })
@@ -158,12 +173,18 @@ export function TemperatureCheckForm({
     form.store,
     (state) => state.values.maxSelections
   )
+  const includeAbstain = useStore(
+    form.store,
+    (state) => state.values.includeAbstain
+  )
   const canSubmit = useStore(form.store, (state) => state.canSubmit)
   const parameterSetId = useStore(
     form.store,
     (state) => state.values.parameterSetId
   )
   const roleId = useStore(form.store, (state) => state.values.roleId)
+  const shouldIncludeAbstain =
+    maxSelections === 1 && (includeAbstain || !isAdmin)
 
   // Auto-adjust maxSelections if it exceeds option count (useEffect prevents render-during-render)
   useEffect(() => {
@@ -553,7 +574,12 @@ export function TemperatureCheckForm({
               <CardTitle className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
                 Vote Options
               </CardTitle>
-              <VoteOptionsField form={form} maxOptions={maxVoteOptions} />
+              <VoteOptionsField
+                form={form}
+                maxOptions={maxVoteOptions - (shouldIncludeAbstain ? 1 : 0)}
+                isSingleChoice={maxSelections === 1}
+                isAdmin={isAdmin}
+              />
             </>
           )}
         </CardContent>
