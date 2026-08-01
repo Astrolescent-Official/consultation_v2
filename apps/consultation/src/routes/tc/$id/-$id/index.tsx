@@ -124,7 +124,7 @@ function PageContentInner({
   id: TemperatureCheckId
   isAdmin: boolean
 }) {
-  const status = getItemStatus(tc.deadline)
+  const status = getItemStatus(tc.start, tc.deadline)
   const accountsVotesResult = useAtomValue(
     getTemperatureCheckVotesByAccountsAtom(tc.voters)
   )
