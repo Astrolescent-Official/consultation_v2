@@ -61,8 +61,9 @@ public application's sole source of truth:
 - the collector resolves this gate only before Round 1 opens. Once an election
   reaches `LIVE`, later cache changes cannot terminate an in-flight ballot.
 - cache readiness is an explicit persisted state, not inferred from row
-  presence. A zero-vote tally becomes authoritative only after a ledger read
-  reports a zero vote count.
+  presence. A zero-vote tally becomes authoritative after the collector
+  observes the entity's on-ledger creation event or a ledger read reports a
+  zero vote count.
 - component-cache backfill progress is keyed by Governance component address,
   processed in bounded resumable batches, and automatically restarts after an
   address rotation. A failed batch does not block unrelated finalization.
@@ -119,6 +120,8 @@ Required regression coverage includes:
 - contradictory TC records fail closed;
 - a missing vote cache defers finalization while an initialized zero-vote cache
   fails quorum normally;
+- standard TC and proposal creation events initialize an authoritative
+  zero-vote cache even after component backfill has completed;
 - a legacy quorum sentinel remains non-terminal and cannot render an operator
   outcome control;
 - vote-cache readiness and backfill progress remain component-scoped across an

@@ -4,7 +4,12 @@ import type {
   ProgrammaticScryptoSborValue
 } from '@radixdlt/babylon-gateway-api-sdk'
 import { Array as A, Effect, Option, Schema } from 'effect'
-import { ProposalId, TemperatureCheckId } from 'shared/governance/brandedTypes'
+import {
+  type EntityId,
+  type EntityType,
+  ProposalId,
+  TemperatureCheckId
+} from 'shared/governance/brandedTypes'
 import { GovernanceConfig } from 'shared/governance/config'
 import { GovernanceComponent } from 'shared/governance/index'
 import { parseSbor } from 'shared/helpers/parseSbor'
@@ -14,7 +19,9 @@ import {
   MajorityJudgmentElectionVotedEvent,
   MajorityJudgmentRerunStartedEvent,
   MajorityJudgmentTieResolutionRecordedEvent,
+  ProposalCreatedEvent,
   ProposalVotedEvent,
+  TemperatureCheckCreatedEvent,
   TemperatureCheckOutcomeRecordedEvent,
   TemperatureCheckVotedEvent
 } from 'shared/schemas'
@@ -23,6 +30,11 @@ import type { VoteCalculationPayload } from './vote-calculation/types'
 type StandardPayload = typeof VoteCalculationPayload.Type
 
 export type GovernanceAction =
+  | {
+      readonly _tag: 'StandardEntityCreated'
+      readonly type: EntityType
+      readonly entityId: EntityId
+    }
   | {
       readonly _tag: 'StandardVotesChanged'
       readonly payload: StandardPayload
@@ -64,6 +76,8 @@ export type GovernanceAction =
 
 const actionKey = (action: GovernanceAction) => {
   switch (action._tag) {
+    case 'StandardEntityCreated':
+      return `standard-created:${action.type}:${action.entityId}`
     case 'StandardVotesChanged':
       return `standard:${action.payload.type}:${action.payload.entityId}`
     case 'MajorityJudgmentVotesChanged':
@@ -135,6 +149,17 @@ export class GovernanceEventProcessor extends Effect.Service<GovernanceEventProc
           }
 
           switch (event.identifier.event) {
+            case 'TemperatureCheckCreatedEvent': {
+              const payload = yield* decodePayload(
+                event,
+                TemperatureCheckCreatedEvent
+              )
+              return Option.some<GovernanceAction>({
+                _tag: 'StandardEntityCreated',
+                type: 'temperature_check',
+                entityId: TemperatureCheckId.make(payload.temperature_check_id)
+              })
+            }
             case 'TemperatureCheckVotedEvent': {
               const payload = yield* decodePayload(
                 event,
@@ -175,6 +200,14 @@ export class GovernanceEventProcessor extends Effect.Service<GovernanceEventProc
                         stateVersion
                       })
                     : Option.none<GovernanceAction>()
+              })
+            }
+            case 'ProposalCreatedEvent': {
+              const payload = yield* decodePayload(event, ProposalCreatedEvent)
+              return Option.some<GovernanceAction>({
+                _tag: 'StandardEntityCreated',
+                type: 'proposal',
+                entityId: ProposalId.make(payload.proposal_id)
               })
             }
             case 'ProposalVotedEvent': {

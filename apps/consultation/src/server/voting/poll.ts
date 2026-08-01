@@ -138,6 +138,15 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
             Effect.fn('PollService.processGovernanceAction')(
               function* (action) {
                 switch (action._tag) {
+                  case 'StandardEntityCreated':
+                    yield* voteCalculationRepo.initializeComponentCache([
+                      {
+                        type: action.type,
+                        entityId: action.entityId,
+                        voteCount: 0
+                      }
+                    ])
+                    break
                   case 'StandardVotesChanged':
                     yield* calculateVotes(action.payload)
                     break
