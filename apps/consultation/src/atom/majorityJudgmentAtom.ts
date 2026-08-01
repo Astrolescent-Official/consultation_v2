@@ -11,6 +11,10 @@ import {
 } from 'shared/governance/index'
 import { governanceRuntime } from '@/atom/governanceRuntime'
 import { SendTransaction } from '@/lib/dappToolkit'
+import {
+  batchTransactionToast,
+  transactionErrorMessage
+} from '@/lib/walletError'
 import { accountsAtom } from './dappToolkitAtom'
 import { VoteClient, voteClientRuntime } from './voteClient'
 import { transactionFailureMessage, withToast } from './withToast'
@@ -108,18 +112,6 @@ type BatchVoteResult = {
   readonly error?: string
 }
 
-const errorMessage = (error: unknown) => {
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'message' in error &&
-    typeof error.message === 'string'
-  ) {
-    return error.message
-  }
-  return 'Vote failed'
-}
-
 export const voteOnMajorityJudgmentBatchAtom = governanceRuntime.fn(
   Effect.fn(
     function* (
@@ -163,7 +155,7 @@ export const voteOnMajorityJudgmentBatchAtom = governanceRuntime.fn(
               Effect.succeed<BatchVoteResult>({
                 account: account.address,
                 success: false,
-                error: errorMessage(error)
+                error: transactionErrorMessage(error, 'Vote failed')
               })
             )
           )
@@ -178,13 +170,7 @@ export const voteOnMajorityJudgmentBatchAtom = governanceRuntime.fn(
     },
     withToast({
       whenLoading: 'Submitting Majority Judgment ballot...',
-      whenSuccess: ({ result }) => {
-        const succeeded = result.filter(({ success }) => success).length
-        const failed = result.length - succeeded
-        return failed === 0
-          ? `${succeeded} ballot(s) submitted`
-          : `${succeeded} submitted, ${failed} failed`
-      },
+      whenSuccess: ({ result }) => batchTransactionToast(result, 'ballot'),
       whenFailure: transactionFailureMessage(
         'Failed to submit Majority Judgment ballot'
       )
