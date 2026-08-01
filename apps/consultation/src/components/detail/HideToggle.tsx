@@ -6,8 +6,10 @@ import type {
   ProposalId,
   TemperatureCheckId
 } from 'shared/governance/brandedTypes'
+import type { MajorityJudgmentElectionId } from 'shared/governance/index'
 import {
   isAdminAtom,
+  toggleMajorityJudgmentElectionHiddenAtom,
   toggleProposalHiddenAtom,
   toggleTemperatureCheckHiddenAtom
 } from '@/atom/adminAtom'
@@ -22,6 +24,11 @@ type HideToggleProps =
   | {
       type: 'proposal'
       id: ProposalId
+      hidden: boolean
+    }
+  | {
+      type: 'election'
+      id: MajorityJudgmentElectionId
       hidden: boolean
     }
 
@@ -59,19 +66,32 @@ function HideToggleButton(props: HideToggleProps) {
   const [proposalResult, toggleProposalHidden] = useAtom(
     toggleProposalHiddenAtom
   )
+  const [electionResult, toggleElectionHidden] = useAtom(
+    toggleMajorityJudgmentElectionHiddenAtom
+  )
 
   const isSubmitting =
     props.type === 'temperature_check'
       ? tcResult.waiting
-      : proposalResult.waiting
+      : props.type === 'proposal'
+        ? proposalResult.waiting
+        : electionResult.waiting
 
   const handleToggle = useCallback(() => {
     if (props.type === 'temperature_check') {
       toggleTcHidden(props.id)
-    } else {
+    } else if (props.type === 'proposal') {
       toggleProposalHidden(props.id)
+    } else {
+      toggleElectionHidden(props.id)
     }
-  }, [props.type, props.id, toggleTcHidden, toggleProposalHidden])
+  }, [
+    props.type,
+    props.id,
+    toggleTcHidden,
+    toggleProposalHidden,
+    toggleElectionHidden
+  ])
 
   return (
     <button
