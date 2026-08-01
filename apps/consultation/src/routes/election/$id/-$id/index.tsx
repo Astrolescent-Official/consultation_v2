@@ -1,6 +1,11 @@
-import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
-import { Cause } from 'effect'
-import { useCallback, useState } from 'react'
+import {
+  Result,
+  useAtom,
+  useAtomRefresh,
+  useAtomValue
+} from '@effect-atom/atom-react'
+import { Cause, Option } from 'effect'
+import { useCallback, useEffect, useState } from 'react'
 import {
   MajorityJudgmentCandidateIdSchema,
   type MajorityJudgmentElectionId
@@ -16,6 +21,8 @@ import {
   majorityJudgmentVoterEntriesAtom,
   voteOnMajorityJudgmentBatchAtom
 } from '@/atom/majorityJudgmentAtom'
+import { ElectionNotIndexedYetError } from '@/atom/voteClient'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InlineCode } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
@@ -38,7 +45,9 @@ export function Page({
 }: {
   readonly electionId: MajorityJudgmentElectionId
 }) {
-  const electionResult = useAtomValue(majorityJudgmentElectionAtom(electionId))
+  const electionAtom = majorityJudgmentElectionAtom(electionId)
+  const electionResult = useAtomValue(electionAtom)
+  const refreshElection = useAtomRefresh(electionAtom)
   const voterEntriesResult = useAtomValue(
     majorityJudgmentVoterEntriesAtom(electionId)
   )
@@ -52,8 +61,35 @@ export function Page({
     toggleMajorityJudgmentElectionHiddenAtom
   )
   const [voteAllAccounts, setVoteAllAccounts] = useState(false)
+  const [now, setNow] = useState(Date.now)
   const currentAccount = useCurrentAccount()
   const isAdmin = useIsAdmin()
+  const electionError = Result.error(electionResult)
+  const isIndexing = Option.exists(
+    electionError,
+    (error) => error instanceof ElectionNotIndexedYetError
+  )
+  const isAwaitingOutcomeProjection =
+    Result.isSuccess(electionResult) &&
+    electionResult.value.election.tcOutcome === 'PENDING' &&
+    now >= electionResult.value.election.tcVotingEnd.getTime()
+
+  useEffect(() => {
+    if (!Result.isSuccess(electionResult)) return
+    const deadline = electionResult.value.election.tcVotingEnd.getTime()
+    if (now >= deadline) return
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(deadline - now, 2_147_483_647)
+    )
+    return () => window.clearTimeout(timer)
+  }, [electionResult, now])
+
+  useEffect(() => {
+    if (!isIndexing && !isAwaitingOutcomeProjection) return
+    const timer = window.setInterval(refreshElection, 3_000)
+    return () => window.clearInterval(timer)
+  }, [isAwaitingOutcomeProjection, isIndexing, refreshElection])
 
   const submit = useCallback(
     (
@@ -90,7 +126,22 @@ export function Page({
 
   return Result.builder(electionResult)
     .onInitial(() => <div>Loading election…</div>)
-    .onFailure((error) => <InlineCode>{Cause.pretty(error)}</InlineCode>)
+    .onFailure((error) =>
+      isIndexing ? (
+        <div className="space-y-3 py-12 text-center">
+          <p className="font-medium">Election created; indexing it now…</p>
+          <p className="text-sm text-muted-foreground">
+            The ledger transaction is complete. This page will refresh as soon
+            as the collector publishes the election.
+          </p>
+          <Button type="button" variant="outline" onClick={refreshElection}>
+            Check now
+          </Button>
+        </div>
+      ) : (
+        <InlineCode>{Cause.pretty(error)}</InlineCode>
+      )
+    )
     .onSuccess((response) => {
       if (response.election.hidden && !isAdmin) {
         return (
@@ -124,6 +175,7 @@ export function Page({
         <div className="space-y-4">
           <ElectionTemperatureCheckStage
             temperatureCheckId={response.election.temperatureCheckId}
+            electionId={electionId}
             status={response.election.status}
             tcVotingEnd={response.election.tcVotingEnd}
             tcOutcome={response.election.tcOutcome}
@@ -170,6 +222,7 @@ export function Page({
             minimumMedianGrade={response.currentRound.minimumMedianGrade}
             initialGrades={mixedBallots ? NO_GRADES : currentEntry?.grades}
             result={response.result}
+            results={response.results}
             submitting={voteResult.waiting}
             onSubmit={submit}
           />

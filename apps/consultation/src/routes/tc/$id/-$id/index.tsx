@@ -153,6 +153,7 @@ function PageContentInner({
             followUp={tc.followUp}
             continuation={tc.continuation}
             outcome={tc.outcome}
+            deadline={tc.deadline}
           />
           <HideToggle type="temperature_check" id={id} hidden={tc.hidden} />
         </div>
@@ -173,6 +174,10 @@ function PageContentInner({
         deadline={tc.deadline}
         outcome={tc.outcome}
         isAdmin={isAdmin}
+        quorumXrd={tc.parameterSet.parameters.temperatureCheck.quorum}
+        approvalThreshold={
+          tc.parameterSet.parameters.temperatureCheck.approvalThreshold
+        }
       />
       <DetailPageDetails
         shortDescription={tc.shortDescription}

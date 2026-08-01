@@ -15,6 +15,14 @@ export type MajorityJudgmentPhaseBoundaries = {
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
 }
 
+export const deriveAuthoritativeTemperatureCheckOutcome = (
+  recorded: 'PENDING' | 'PASSED' | 'FAILED',
+  calculatedPassed: boolean
+): 'PENDING' | 'PASSED' | 'FAILED' => {
+  if (!calculatedPassed) return 'FAILED'
+  return recorded === 'PASSED' ? 'PASSED' : recorded
+}
+
 export const deriveMajorityJudgmentPhase = (
   now: Date,
   boundaries: MajorityJudgmentPhaseBoundaries
@@ -46,9 +54,9 @@ export const deriveMajorityJudgmentRerunPhase = (
 }
 
 export const deriveRoundOneProjectedStatus = (
-  rerunStarted: boolean,
+  _rerunStarted: boolean,
   status: MajorityJudgmentElectionStatus
-): MajorityJudgmentElectionStatus => (rerunStarted ? 'ROUND_1_FAILED' : status)
+): MajorityJudgmentElectionStatus => status
 
 const deriveElectionStatus = (
   now: Date,
@@ -68,8 +76,15 @@ const deriveElectionStatus = (
             outcome.passed ? ('PASSED' as const) : ('FAILED' as const)
         })
       }),
-    onSome: (rerun) =>
-      deriveMajorityJudgmentRerunPhase(now, rerun.start, rerun.deadline)
+    onSome: (rerun) => {
+      const recordedTcPassed = Option.exists(
+        temperatureCheck.outcome,
+        (outcome) => outcome.passed
+      )
+      return recordedTcPassed
+        ? deriveMajorityJudgmentRerunPhase(now, rerun.start, rerun.deadline)
+        : 'TC_FAILED'
+    }
   })
 
 export class InvalidMajorityJudgmentProjectionError extends Data.TaggedError(

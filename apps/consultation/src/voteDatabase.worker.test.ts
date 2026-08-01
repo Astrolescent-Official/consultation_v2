@@ -118,15 +118,20 @@ describe('runtime app configuration', () => {
         Layer.setConfigProvider(ConfigProvider.fromJson({ NETWORK_ID: 2 }))
       )
     )
-    const config = await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* GovernanceConfig
-      }).pipe(Effect.provide(layer))
-    )
+    const readConfig = <E>(
+      configLayer: Layer.Layer<GovernanceConfig, E, never>
+    ) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          return yield* GovernanceConfig
+        }).pipe(Effect.provide(configLayer))
+      )
+    const [config, expected] = await Promise.all([
+      readConfig(layer),
+      readConfig(GovernanceConfig.StokenetLive)
+    ])
 
-    expect(config.componentAddress).toBe(
-      'component_tdx_2_1crk7cwsd6xdys73hqx5yqjuky3a02dcklt4s86xmygw62mytae4d3j'
-    )
+    expect(config.componentAddress).toBe(expected.componentAddress)
   })
 })
 

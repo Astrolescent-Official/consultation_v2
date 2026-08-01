@@ -29,6 +29,14 @@ type ElectionResult = {
   readonly candidateResults: ReadonlyArray<CandidateResult>
   readonly tieBreakIterations: number
   readonly unresolvedCandidateIds: ReadonlyArray<number>
+  readonly quorumMet?: boolean
+}
+
+type HistoricalElectionResult = ElectionResult & {
+  readonly round: 'RoundOne' | 'Rerun'
+  readonly status: MajorityJudgmentElectionStatus
+  readonly totalVotingPower: string
+  readonly quorumXrd: string
 }
 
 type MajorityJudgmentElectionViewProps = {
@@ -52,6 +60,7 @@ type MajorityJudgmentElectionViewProps = {
     readonly grade: Grade
   }>
   readonly result?: ElectionResult
+  readonly results?: ReadonlyArray<HistoricalElectionResult>
   readonly submitting?: boolean
   readonly onSubmit?: (
     grades: ReadonlyArray<{
@@ -160,6 +169,7 @@ export function MajorityJudgmentElectionView({
   minimumMedianGrade = 0,
   initialGrades = emptyInitialGrades,
   result,
+  results = [],
   submitting = false,
   onSubmit
 }: MajorityJudgmentElectionViewProps) {
@@ -180,22 +190,28 @@ export function MajorityJudgmentElectionView({
   }, [initialGrades])
 
   useEffect(() => {
-    if (votingEnd === undefined || now >= votingEnd.getTime()) return
+    const activeDeadline = status === 'TC_LIVE' ? tcVotingEnd : votingEnd
+    if (activeDeadline === undefined || now >= activeDeadline.getTime()) return
     const maximumTimeout = 2_147_483_647
     const timer = window.setTimeout(
       () => setNow(Date.now()),
-      Math.min(votingEnd.getTime() - now, maximumTimeout)
+      Math.min(activeDeadline.getTime() - now, maximumTimeout)
     )
     return () => window.clearTimeout(timer)
-  }, [now, votingEnd])
+  }, [now, status, tcVotingEnd, votingEnd])
 
   const liveStatus = status === 'LIVE' || status === 'RERUN_LIVE'
+  const tcVotingOpen =
+    status === 'TC_LIVE' &&
+    (tcVotingEnd === undefined || now < tcVotingEnd.getTime())
   const votingOpen =
     liveStatus && (votingEnd === undefined || now < votingEnd.getTime())
   const currentStatusCopy =
-    liveStatus && !votingOpen
-      ? 'Voting closed; finalizing result'
-      : statusCopy(status)
+    status === 'TC_LIVE' && !tcVotingOpen
+      ? 'Candidate-list voting closed; awaiting the verified outcome'
+      : liveStatus && !votingOpen
+        ? 'Voting closed; finalizing result'
+        : statusCopy(status)
   const remaining = candidates.filter(
     (candidate) => !selectedGrades.has(candidate.id)
   ).length
@@ -235,7 +251,12 @@ export function MajorityJudgmentElectionView({
         parameterSetVersion !== undefined ? (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span>Role {roleId}</span>
-            <span>TC #{temperatureCheckId}</span>
+            <a
+              href={`/tc/${temperatureCheckId}`}
+              className="underline underline-offset-4"
+            >
+              Candidate-list TC #{temperatureCheckId}
+            </a>
             <span>
               {parameterSetId} v{parameterSetVersion}
             </span>
@@ -261,7 +282,7 @@ export function MajorityJudgmentElectionView({
                 target={tcVotingStart}
               />
             ) : null}
-            {status === 'TC_LIVE' ? (
+            {tcVotingOpen && tcVotingEnd !== undefined ? (
               <Countdown label="TC voting closes" target={tcVotingEnd} />
             ) : null}
             {status === 'MJ_PENDING' ? (
@@ -372,7 +393,7 @@ export function MajorityJudgmentElectionView({
                     ) : null}
                     <p>
                       {outcomeCopy(candidateResult.outcome)}
-                      {candidateResult.rank
+                      {candidateResult.rank && result?.quorumMet !== false
                         ? ` · Rank ${candidateResult.rank}`
                         : ''}
                     </p>
@@ -490,6 +511,36 @@ export function MajorityJudgmentElectionView({
               .
             </p>
           ) : null}
+        </section>
+      ) : null}
+
+      {results.length > 0 ? (
+        <section className="space-y-3" aria-label="Round audit history">
+          <div>
+            <h2 className="text-xl font-medium">Round audit history</h2>
+            <p className="text-sm text-muted-foreground">
+              Published tallies remain visible after a rerun opens.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {results.map((historicalResult) => (
+              <Card key={historicalResult.round}>
+                <CardContent className="space-y-2 pt-6 text-sm">
+                  <p className="font-medium">
+                    {historicalResult.round === 'RoundOne'
+                      ? 'Round 1'
+                      : 'Round 2 rerun'}
+                  </p>
+                  <p>{statusCopy(historicalResult.status)}</p>
+                  <p className="text-muted-foreground">
+                    {historicalResult.totalVotingPower} /{' '}
+                    {historicalResult.quorumXrd} XRD ·{' '}
+                    {historicalResult.quorumMet ? 'quorum met' : 'below quorum'}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
       ) : null}
     </div>

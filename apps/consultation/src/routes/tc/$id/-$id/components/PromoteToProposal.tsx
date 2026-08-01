@@ -16,18 +16,27 @@ type PromoteToProposalProps = {
   readonly followUp: TemperatureCheck['followUp']
   readonly continuation: TemperatureCheck['continuation']
   readonly outcome: TemperatureCheck['outcome']
+  readonly deadline: Date
 }
 
 export function PromoteToProposal({
   temperatureCheckId,
   followUp,
   continuation,
-  outcome
+  outcome,
+  deadline
 }: PromoteToProposalProps) {
   if (Option.isSome(continuation)) {
     return <ContinuationBanner continuation={continuation.value} />
   }
-  if (Option.isNone(outcome) || !outcome.value.passed) return null
+  if (Option.isNone(outcome)) {
+    return Date.now() >= deadline.getTime() ? (
+      <span className="text-xs text-muted-foreground">
+        Record the weighted TC outcome before creating a Governance Proposal.
+      </span>
+    ) : null
+  }
+  if (!outcome.value.passed) return null
 
   return (
     <AdminPromoteBadge

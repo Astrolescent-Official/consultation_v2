@@ -94,8 +94,8 @@ fn majority_judgment_parameters() -> GovernanceProcessParameters {
             quorum: dec!(5000),
             minimum_median_grade: Grade::Good,
             rerun_voting_days: 1,
-            rerun_quorum: dec!(2500),
-            rerun_minimum_median_grade: Grade::VeryGood,
+            rerun_quorum: dec!(5000),
+            rerun_minimum_median_grade: Grade::Good,
             reserve_list_days: 30,
         },
     }
@@ -778,6 +778,8 @@ fn majority_judgment_parameter_boundaries_are_enforced() {
         mj_parameters_with(|election| election.reserve_list_days = 0),
         mj_parameters_with(|election| election.quorum = Decimal::ZERO),
         mj_parameters_with(|election| election.rerun_quorum = Decimal::ZERO),
+        mj_parameters_with(|election| election.rerun_quorum = dec!(2500)),
+        mj_parameters_with(|election| election.rerun_minimum_median_grade = Grade::VeryGood),
     ];
 
     for parameters in invalid_cases {
@@ -794,7 +796,7 @@ fn majority_judgment_parameter_boundaries_are_enforced() {
         );
     }
 
-    // A rerun may use the same quorum and grade floor as Round 1.
+    // A rerun must use the same quorum and grade floor as Round 1.
     add_parameter_set(
         &mut ledger,
         component,
@@ -1038,6 +1040,57 @@ fn parameter_variants_candidate_rules_and_snapshots_are_enforced() {
 }
 
 #[test]
+fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
+    let mut ledger = LedgerSimulatorBuilder::new().build();
+    let owner = create_owner(&mut ledger);
+    let component = instantiate(&mut ledger, &owner);
+    add_mj_parameters(&mut ledger, component, &owner);
+
+    create_election(
+        &mut ledger,
+        component,
+        &owner,
+        mj_draft(),
+        86_400,
+        172_800,
+        259_200,
+        345_600,
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+            MajorityJudgmentCandidateId(2),
+        ],
+        true,
+        true,
+    );
+    advance_to(&mut ledger, 172_800);
+    record_outcome(&mut ledger, component, &owner, 0, true, true);
+    advance_to(&mut ledger, 345_600);
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
+        true,
+        true,
+    );
+    start_rerun(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        Instant::new(345_600),
+        true,
+        false,
+    );
+}
+
+#[test]
 fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
     let mut ledger = LedgerSimulatorBuilder::new().build();
     let owner = create_owner(&mut ledger);
@@ -1170,7 +1223,10 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         &owner,
         0,
         MajorityJudgmentRoundId::RoundOne,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
         true,
         false,
     );
@@ -1206,7 +1262,10 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         &owner,
         0,
         MajorityJudgmentRoundId::RoundOne,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(0)],
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(0),
+        ],
         true,
         false,
     );
@@ -1217,7 +1276,10 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         &owner,
         0,
         MajorityJudgmentRoundId::RoundOne,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(99)],
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(99),
+        ],
         true,
         false,
     );
@@ -1239,29 +1301,6 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         &owner,
         0,
         Instant::new(300_000),
-        true,
-        false,
-    );
-
-    // The valid tie resolution for Round 1 succeeds.
-    record_tie_resolution(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        MajorityJudgmentRoundId::RoundOne,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
-        true,
-        true,
-    );
-    // A tie resolution can only be recorded once per election.
-    record_tie_resolution(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        MajorityJudgmentRoundId::RoundOne,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
         true,
         false,
     );
@@ -1290,8 +1329,8 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
     let rerun = election.rerun.expect("rerun should exist");
     assert_eq!(rerun.start, Instant::new(345_600));
     assert_eq!(rerun.deadline, Instant::new(432_000));
-    assert_eq!(rerun.quorum, dec!(2500));
-    assert_eq!(rerun.minimum_median_grade, Grade::VeryGood);
+    assert_eq!(rerun.quorum, dec!(5000));
+    assert_eq!(rerun.minimum_median_grade, Grade::Good);
 
     // The rerun round is independent of Round 1: voting is immediately open.
     vote_mj_round(
@@ -1304,15 +1343,17 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         true,
     );
 
-    // A tie resolution for the rerun cannot be recorded before it ends, and Round 1
-    // already has a tie resolution recorded for the election.
+    // A tie resolution for the rerun cannot be recorded before it ends.
     record_tie_resolution(
         &mut ledger,
         component,
         &owner,
         0,
         MajorityJudgmentRoundId::Rerun,
-        vec![MajorityJudgmentCandidateId(0), MajorityJudgmentCandidateId(1)],
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
         true,
         false,
     );
@@ -1335,6 +1376,22 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         .expect("rerun should exist");
     assert_eq!(rerun.vote_count, 1);
     assert_eq!(rerun.revote_count, 0);
+
+    // A valid tie resolution for the completed rerun succeeds, and prevents any
+    // later lifecycle branch from replacing the adjudicated result.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::Rerun,
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
+        true,
+        true,
+    );
 
     // Only the owner may toggle visibility.
     toggle_hidden(&mut ledger, component, &owner, 0, false, false);

@@ -16,7 +16,7 @@ Before editing, verify the active branch and worktree with `git branch --show-cu
 
 An implementation task is complete only after its changes are committed on its dedicated `codex/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
 
-`pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
+`pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, the Workerd/D1 integration tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
 
 ## Scrypto Verification
 

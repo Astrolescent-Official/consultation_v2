@@ -237,6 +237,14 @@ mod governance {
                         election.rerun_quorum > Decimal::ZERO,
                         "Rerun quorum must be greater than zero"
                     );
+                    assert!(
+                        election.rerun_quorum == election.quorum,
+                        "Rerun quorum must match the Round 1 quorum"
+                    );
+                    assert!(
+                        election.rerun_minimum_median_grade == election.minimum_median_grade,
+                        "Rerun minimum median grade must match the Round 1 grade floor"
+                    );
                 }
             }
         }
@@ -1021,8 +1029,7 @@ mod governance {
             grades: Vec<CandidateGrade>,
         ) {
             Runtime::assert_access_rule(account.get_owner_role().rule);
-            let (_, temperature_check) =
-                self.passed_temperature_check_for_election(election_id);
+            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
             let candidates = match &temperature_check.follow_up {
                 TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
                     candidates.clone()
@@ -1093,8 +1100,7 @@ mod governance {
 
         pub fn start_majority_judgment_rerun(&mut self, election_id: u64, voting_start: Instant) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (_, temperature_check) =
-                self.passed_temperature_check_for_election(election_id);
+            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
             let parameters = match &temperature_check.parameter_set.parameters {
                 GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
                 GovernanceProcessParameters::Standard { .. } => {
@@ -1112,6 +1118,10 @@ mod governance {
                 "Round 1 has not ended"
             );
             assert!(election.rerun.is_none(), "Election rerun already exists");
+            assert!(
+                election.tie_resolution.is_none(),
+                "An election with a recorded tie resolution cannot be rerun"
+            );
             assert!(
                 voting_start.compare(now, TimeComparisonOperator::Gte),
                 "Rerun voting cannot start in the past"
@@ -1147,8 +1157,7 @@ mod governance {
             ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
         ) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (_, temperature_check) =
-                self.passed_temperature_check_for_election(election_id);
+            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
             let candidates = match &temperature_check.follow_up {
                 TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
                     candidates.clone()

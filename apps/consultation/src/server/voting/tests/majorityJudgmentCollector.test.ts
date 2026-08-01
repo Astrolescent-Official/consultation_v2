@@ -5,6 +5,7 @@ import {
   prepareMajorityJudgmentBallots
 } from '../majority-judgment/calculation'
 import {
+  deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase,
   deriveRoundOneProjectedStatus
@@ -158,15 +159,30 @@ describe('majority judgment projected phase', () => {
     )
   })
 
-  it('preserves the Round 1 quorum failure after a rerun starts', () => {
+  it('fails a recorded TC pass closed when the weighted verdict failed', () => {
+    assert.strictEqual(
+      deriveAuthoritativeTemperatureCheckOutcome('PASSED', false),
+      'FAILED'
+    )
+    assert.strictEqual(
+      deriveAuthoritativeTemperatureCheckOutcome('PASSED', true),
+      'PASSED'
+    )
+    assert.strictEqual(
+      deriveAuthoritativeTemperatureCheckOutcome('PENDING', true),
+      'PENDING'
+    )
+  })
+
+  it('does not invent a Round 1 failure merely because a rerun exists', () => {
     assert.strictEqual(deriveRoundOneProjectedStatus(false, 'LIVE'), 'LIVE')
     assert.strictEqual(
       deriveRoundOneProjectedStatus(true, 'RERUN_PENDING'),
-      'ROUND_1_FAILED'
+      'RERUN_PENDING'
     )
     assert.strictEqual(
       deriveRoundOneProjectedStatus(true, 'RERUN_LIVE'),
-      'ROUND_1_FAILED'
+      'RERUN_LIVE'
     )
   })
 })

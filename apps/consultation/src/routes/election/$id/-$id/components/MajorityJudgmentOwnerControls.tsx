@@ -56,7 +56,7 @@ export function MajorityJudgmentOwnerControls({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Election owner controls</CardTitle>
+        <CardTitle>Governance Operator controls</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button

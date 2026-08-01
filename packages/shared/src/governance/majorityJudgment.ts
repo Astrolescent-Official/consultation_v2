@@ -389,6 +389,9 @@ export class TemperatureCheckResultResponse extends Schema.Class<TemperatureChec
   approvalThreshold: PositiveDecimalStringSchema,
   forShare: DecimalStringSchema,
   approvalMet: Schema.Boolean,
+  calculatedPassed: Schema.Boolean,
+  recordedPassed: Schema.NullOr(Schema.Boolean),
+  outcomeConsistent: Schema.NullOr(Schema.Boolean),
   passed: Schema.NullOr(Schema.Boolean),
   recordedAt: Schema.NullOr(Schema.Date)
 }) {}
@@ -399,8 +402,10 @@ export class MajorityJudgmentElectionResponse extends Schema.Class<MajorityJudgm
   election: MajorityJudgmentElectionProjection,
   candidates: Schema.Array(MajorityJudgmentCandidateProjection),
   currentRound: MajorityJudgmentRoundProjection,
+  rounds: Schema.Array(MajorityJudgmentRoundProjection),
   temperatureCheckResult: TemperatureCheckResultResponse,
-  result: Schema.optional(MajorityJudgmentResultResponse)
+  result: Schema.optional(MajorityJudgmentResultResponse),
+  results: Schema.Array(MajorityJudgmentResultResponse)
 }) {}
 
 export const MajorityJudgmentElectionResponseSchema =

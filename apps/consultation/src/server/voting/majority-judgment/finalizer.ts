@@ -5,6 +5,7 @@ import {
   calculateMajorityJudgment
 } from './calculator'
 import {
+  deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase
 } from './projection'
@@ -153,27 +154,84 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
               function* (rounds) {
                 const latest = rounds[rounds.length - 1]
                 if (latest === undefined) return
-                for (const { election, round } of rounds) {
-                  if (round.round === latest.round.round) continue
-                  if (now < round.votingEnd) continue
-                  yield* closeRound(election, round, now, false)
-                }
-
                 const { election, round } = latest
-                const isRerun = round.round !== 1
-                const tcOutcome =
+                const recordedTcOutcome =
                   election.tcOutcome === 'FAILED'
                     ? ('FAILED' as const)
                     : election.tcOutcome === 'PASSED'
                       ? ('PASSED' as const)
                       : ('PENDING' as const)
+                const tcVerdict = yield* repo.getTemperatureCheckVerdict({
+                  temperatureCheckId: election.temperatureCheckId,
+                  quorumXrd: election.tcQuorumXrd,
+                  approvalThreshold: election.tcApprovalThreshold,
+                  recordedOutcome:
+                    election.tcOutcome === 'PASSED'
+                      ? 'PASSED'
+                      : election.tcOutcome === 'FAILED'
+                        ? 'FAILED'
+                        : null
+                })
+                const tcOutcome =
+                  now < election.tcVotingEnd
+                    ? recordedTcOutcome
+                    : deriveAuthoritativeTemperatureCheckOutcome(
+                        recordedTcOutcome,
+                        tcVerdict.calculatedPassed
+                      )
+                if (tcOutcome === 'FAILED') {
+                  yield* repo.setPhaseStatus(
+                    election.id,
+                    round.round,
+                    'TC_FAILED'
+                  )
+                  return
+                }
+                if (tcOutcome === 'PENDING') {
+                  yield* repo.setPhaseStatus(
+                    election.id,
+                    round.round,
+                    deriveMajorityJudgmentPhase(now, {
+                      tcVotingStart: election.tcVotingStart,
+                      tcVotingEnd: election.tcVotingEnd,
+                      votingStart: round.votingStart,
+                      votingEnd: round.votingEnd,
+                      tcOutcome
+                    })
+                  )
+                  return
+                }
 
-                // Round 1 additionally gates on the temperature check's outcome;
-                // a rerun only ever exists once that outcome is PASSED, so it
-                // only needs to wait out its own voting window.
-                const readyToFinalize = isRerun
-                  ? now >= round.votingEnd
-                  : tcOutcome === 'PASSED' && now >= round.votingEnd
+                for (const { election, round } of rounds) {
+                  if (round.round === latest.round.round) continue
+                  if (now < round.votingEnd) continue
+                  yield* closeRound(election, round, now, true)
+                }
+
+                const isRerun = round.round !== 1
+                if (isRerun) {
+                  const roundOneResult = yield* repo.getResult(election.id, 1)
+                  if (
+                    Option.isNone(roundOneResult) ||
+                    roundOneResult.value.status !== 'ROUND_1_FAILED'
+                  ) {
+                    yield* Effect.logWarning(
+                      'Ignoring rerun that is not backed by a Round 1 quorum failure',
+                      {
+                        electionId: election.id,
+                        roundOneStatus: Option.match(roundOneResult, {
+                          onNone: () => 'NOT_FINALIZED',
+                          onSome: ({ status }) => status
+                        })
+                      }
+                    )
+                    return
+                  }
+                }
+                // Round 1 additionally gates on the independently calculated
+                // temperature-check verdict. A rerun also requires the
+                // published Round 1 quorum failure checked above.
+                const readyToFinalize = now >= round.votingEnd
 
                 if (!readyToFinalize) {
                   const phase = isRerun

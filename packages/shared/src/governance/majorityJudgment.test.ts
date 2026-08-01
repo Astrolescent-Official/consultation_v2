@@ -238,6 +238,9 @@ describe('majority judgment shared schemas', () => {
         approvalThreshold: '0.5',
         forShare: '0.6',
         approvalMet: true,
+        calculatedPassed: true,
+        recordedPassed: true,
+        outcomeConsistent: true,
         passed: true,
         recordedAt: '2026-07-08T00:00:00.000Z'
       },
@@ -268,17 +271,22 @@ describe('majority judgment shared schemas', () => {
         unresolvedCandidateIds: []
       }
     }
+    const responseWithHistory = {
+      ...response,
+      rounds: [response.currentRound],
+      results: [response.result]
+    }
 
     assert.isTrue(
       Schema.decodeUnknownEither(MajorityJudgmentElectionResponseSchema)(
-        response
+        responseWithHistory
       )._tag === 'Right'
     )
     assert.isTrue(
       Schema.decodeUnknownEither(MajorityJudgmentElectionResponseSchema)({
-        ...response,
+        ...responseWithHistory,
         result: {
-          ...response.result,
+          ...responseWithHistory.result,
           totalVotingPower: 'not-a-decimal'
         }
       })._tag === 'Left'

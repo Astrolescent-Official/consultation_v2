@@ -226,6 +226,15 @@ describe('D1 majority judgment persistence', () => {
           }
         })
 
+        yield* repo.projectRound({
+          ...projection.round,
+          round: 2,
+          votingStart: new Date('2026-07-20T00:00:00.000Z'),
+          votingEnd: new Date('2026-08-03T00:00:00.000Z'),
+          status: 'RERUN_PENDING'
+        })
+        yield* repo.setPhaseStatus(7, 2, 'RERUN_PENDING')
+
         const ballots = yield* repo.getBallots(7, 1)
         const round = yield* repo.getRound(7, 1)
         const election = yield* repo.getElectionResponse(7)
@@ -247,6 +256,10 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
+    expect(response.election.currentRound.round).toBe('RoundOne')
+    expect(response.election.rounds).toHaveLength(2)
+    expect(response.election.results).toHaveLength(1)
+    expect(response.election.results[0]?.round).toBe('RoundOne')
     expect(response.election.temperatureCheckResult).toMatchObject({
       forVotingPower: '60',
       againstVotingPower: '40',
@@ -256,6 +269,9 @@ describe('D1 majority judgment persistence', () => {
       approvalThreshold: '0.5',
       forShare: '0.6',
       approvalMet: true,
+      calculatedPassed: true,
+      recordedPassed: true,
+      outcomeConsistent: true,
       passed: true
     })
 

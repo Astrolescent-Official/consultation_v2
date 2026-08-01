@@ -30,6 +30,12 @@ export class VoteClientError extends Data.TaggedError('VoteClientError')<{
   message: string
 }> {}
 
+export class ElectionNotIndexedYetError extends Data.TaggedError(
+  'ElectionNotIndexedYetError'
+)<{
+  readonly electionId: MajorityJudgmentElectionId
+}> {}
+
 export class VoteClient extends Context.Tag('VoteClient')<
   VoteClient,
   {
@@ -48,7 +54,7 @@ export class VoteClient extends Context.Tag('VoteClient')<
       electionId: MajorityJudgmentElectionId
     }) => Effect.Effect<
       typeof MajorityJudgmentElectionResponseSchema.Type,
-      VoteClientError
+      VoteClientError | ElectionNotIndexedYetError
     >
   }
 >() {}
@@ -96,13 +102,26 @@ const VoteClientLive = Layer.effect(
             )
           )
           .pipe(
-            Effect.flatMap((response) => response.json),
+            Effect.flatMap(
+              (response): Effect.Effect<unknown, unknown> =>
+                response.status === 404
+                  ? Effect.fail(new ElectionNotIndexedYetError({ electionId }))
+                  : response.json
+            ),
             Effect.flatMap(
               Schema.decodeUnknown(MajorityJudgmentElectionResponseSchema)
             ),
             Effect.scoped,
             Effect.catchAll(
-              (error) => new VoteClientError({ message: String(error) })
+              (
+                error
+              ): Effect.Effect<
+                never,
+                VoteClientError | ElectionNotIndexedYetError
+              > =>
+                error instanceof ElectionNotIndexedYetError
+                  ? Effect.fail(error)
+                  : Effect.fail(new VoteClientError({ message: String(error) }))
             )
           )
     }

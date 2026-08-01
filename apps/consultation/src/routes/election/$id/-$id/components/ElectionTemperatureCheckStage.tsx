@@ -1,6 +1,9 @@
 import { Option } from 'effect'
 import { TemperatureCheckId } from 'shared/governance/brandedTypes'
-import type { MajorityJudgmentElectionStatus } from 'shared/governance/index'
+import type {
+  MajorityJudgmentElectionId,
+  MajorityJudgmentElectionStatus
+} from 'shared/governance/index'
 import { AccountVotesSection } from '@/components/detail/AccountVotesSection'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
@@ -10,6 +13,7 @@ import { ElectionTemperatureCheckBallot } from './ElectionTemperatureCheckBallot
 
 export function ElectionTemperatureCheckStage({
   temperatureCheckId,
+  electionId,
   status,
   tcVotingEnd,
   tcOutcome,
@@ -17,6 +21,7 @@ export function ElectionTemperatureCheckStage({
   result
 }: {
   readonly temperatureCheckId: number
+  readonly electionId: MajorityJudgmentElectionId
   readonly status: MajorityJudgmentElectionStatus
   readonly tcVotingEnd: Date
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
@@ -27,6 +32,7 @@ export function ElectionTemperatureCheckStage({
     readonly participationXrd: string
     readonly quorumXrd: string
     readonly quorumMet: boolean
+    readonly approvalThreshold: string
     readonly forShare: string
     readonly approvalMet: boolean
     readonly passed: boolean | null
@@ -96,6 +102,9 @@ export function ElectionTemperatureCheckStage({
         deadline={tcVotingEnd}
         outcome={outcome}
         isAdmin={isAdmin}
+        quorumXrd={result.quorumXrd}
+        approvalThreshold={result.approvalThreshold}
+        electionId={electionId}
       />
       {votingOpen ? (
         <ElectionTemperatureCheckBallot temperatureCheckId={id} />
