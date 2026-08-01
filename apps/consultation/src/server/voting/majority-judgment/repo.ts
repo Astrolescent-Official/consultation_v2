@@ -54,6 +54,7 @@ export type MajorityJudgmentProjectionInput = {
   readonly election: ElectionProjection
   readonly candidates: ReadonlyArray<CandidateProjection>
   readonly round: RoundProjection
+  readonly temperatureCheckVoteCount: number
 }
 
 export type MajorityJudgmentBallotWrite = {
@@ -172,12 +173,16 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
 
       const projectElection = Effect.fn('MajorityJudgmentRepo.projectElection')(
         function* (input: MajorityJudgmentProjectionInput) {
-          // Presence of this component-scoped row distinguishes a legitimate
-          // zero-vote tally from a cache that has not been built yet.
-          yield* voteCalculationRepo.getOrCreateState(
-            'temperature_check',
-            input.election.temperatureCheckId
-          )
+          // Projection reads the linked TC at the same ledger state, so a zero
+          // vote count here is authoritative. Positive counts remain
+          // unavailable until their vote aggregation has actually committed.
+          yield* voteCalculationRepo.initializeComponentCache([
+            {
+              type: 'temperature_check',
+              entityId: input.election.temperatureCheckId,
+              voteCount: input.temperatureCheckVoteCount
+            }
+          ])
           yield* db
             .insert(mjElection)
             .values(input.election)
@@ -812,6 +817,8 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           currentRound: mapRound(currentRound),
           rounds: rounds.map(mapRound),
           temperatureCheckResult: {
+            tcParametersProjected:
+              election.tcQuorumXrd !== UNPROJECTED_TC_QUORUM_XRD,
             ...temperatureCheckResult,
             passed:
               election.tcOutcome === null

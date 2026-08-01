@@ -245,21 +245,30 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                   }
                 }
 
-                for (const { election, round } of rounds) {
-                  if (round.round === latest.round.round) continue
-                  if (now < round.votingEnd) continue
-                  const status = yield* closeRound(election, round, now, false)
+                for (const {
+                  election: supersededElection,
+                  round: supersededRound
+                } of rounds) {
+                  if (supersededRound.round === latest.round.round) continue
+                  if (now < supersededRound.votingEnd) continue
                   const supersededStatus = yield* Schema.decodeUnknown(
                     MajorityJudgmentElectionStatusSchema
-                  )(status)
+                  )(
+                    yield* closeRound(
+                      supersededElection,
+                      supersededRound,
+                      now,
+                      false
+                    )
+                  ).pipe(Effect.orDie)
                   if (supersededStatus !== 'ROUND_1_FAILED') {
                     // An invalid rerun must not replace a quorate or adjudicated
                     // Round 1 result. Persist that terminal status explicitly;
                     // the superseded-round calculation itself never rewrites
                     // the election row as a side effect.
                     yield* repo.setPhaseStatus(
-                      election.id,
-                      round.round,
+                      supersededElection.id,
+                      supersededRound.round,
                       supersededStatus
                     )
                     return

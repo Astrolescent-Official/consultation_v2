@@ -1,5 +1,5 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
-import { Cause } from 'effect'
+import { Cause, Option } from 'effect'
 import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
 import type { TemperatureCheckSchema } from 'shared/governance/schemas'
 import {
@@ -128,6 +128,13 @@ function PageContentInner({
   const accountsVotesResult = useAtomValue(
     getTemperatureCheckVotesByAccountsAtom(tc.voters)
   )
+  const electionId = Option.match(tc.continuation, {
+    onNone: () => undefined,
+    onSome: (continuation) =>
+      continuation._tag === 'MajorityJudgmentElection'
+        ? continuation.id
+        : undefined
+  })
 
   const header = (
     <DetailPageHeader
@@ -179,6 +186,7 @@ function PageContentInner({
         approvalThreshold={
           tc.parameterSet.parameters.temperatureCheck.approvalThreshold
         }
+        electionId={electionId}
       />
       <DetailPageDetails
         shortDescription={tc.shortDescription}

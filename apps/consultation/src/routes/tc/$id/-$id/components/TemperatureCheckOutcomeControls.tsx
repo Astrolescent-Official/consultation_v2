@@ -69,8 +69,10 @@ export function TemperatureCheckOutcomeControls({
         </span>
         {!consistent ? (
           <p className="text-destructive">
-            The recorded outcome contradicts the weighted tally. The collector
-            will fail this gate closed.
+            The recorded outcome contradicts the weighted tally.
+            {electionId === undefined
+              ? ''
+              : ' The collector will fail this election gate closed.'}
           </p>
         ) : null}
       </div>

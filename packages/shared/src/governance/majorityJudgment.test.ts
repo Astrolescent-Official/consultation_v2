@@ -230,6 +230,7 @@ describe('majority judgment shared schemas', () => {
         minimumMedianGrade: 2
       },
       temperatureCheckResult: {
+        tcParametersProjected: true,
         cacheAvailable: true,
         forVotingPower: '600000',
         againstVotingPower: '400000',

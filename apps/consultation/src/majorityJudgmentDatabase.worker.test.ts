@@ -10,7 +10,8 @@ import { ORM } from './server/voting/db/orm'
 import { MajorityJudgmentFinalizer } from './server/voting/majority-judgment/finalizer'
 import {
   type MajorityJudgmentProjectionInput,
-  MajorityJudgmentRepo
+  MajorityJudgmentRepo,
+  UNPROJECTED_TC_QUORUM_XRD
 } from './server/voting/majority-judgment/repo'
 import {
   type PollLeaseIdentity,
@@ -59,6 +60,7 @@ const runWithFinalizer = <A, E>(
   )
 
 const projection = {
+  temperatureCheckVoteCount: 0,
   election: {
     id: 7,
     temperatureCheckId: 3,
@@ -211,6 +213,43 @@ describe('D1 majority judgment persistence', () => {
     expect(live.election.status).toBe('LIVE')
   })
 
+  it('keeps a legacy quorum sentinel non-terminal and marks its parameters unprojected', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection({
+          ...projection,
+          election: {
+            ...projection.election,
+            status: 'TC_LIVE',
+            tcQuorumXrd: UNPROJECTED_TC_QUORUM_XRD
+          },
+          round: { ...projection.round, status: 'TC_LIVE' }
+        })
+      })
+    )
+
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 13,
+          proposerRoundTimestamp: new Date('2026-07-09T00:00:00.000Z')
+        })
+      })
+    )
+
+    const response = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(response.election.status).toBe('TC_LIVE')
+    expect(response.temperatureCheckResult.cacheAvailable).toBe(true)
+    expect(response.temperatureCheckResult.tcParametersProjected).toBe(false)
+  })
+
   it('publishes a superseded Round 1 failure and advances directly to the rerun', async () => {
     await runWithRepository(
       Effect.gen(function* () {
@@ -252,12 +291,14 @@ describe('D1 majority judgment persistence', () => {
          governance_component_address,
          type,
          entity_id,
-         last_vote_count
+         last_vote_count,
+         results_computed
        ) VALUES (
          'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y',
          'temperature_check',
          3,
-         2
+         2,
+         1
        )
        RETURNING id`
     ).first<{ id: number }>()

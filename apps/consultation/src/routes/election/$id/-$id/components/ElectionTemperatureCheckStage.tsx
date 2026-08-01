@@ -27,6 +27,7 @@ export function ElectionTemperatureCheckStage({
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
   readonly tcOutcomeRecordedAt: Date | null
   readonly result: {
+    readonly tcParametersProjected: boolean
     readonly cacheAvailable: boolean
     readonly forVotingPower: string
     readonly againstVotingPower: string
@@ -66,7 +67,12 @@ export function ElectionTemperatureCheckStage({
           are expressed with grades during the MJ stage.
         </p>
       </div>
-      {showTallies && result.cacheAvailable ? (
+      {!result.tcParametersProjected ? (
+        <p className="text-sm text-muted-foreground">
+          Awaiting ledger projection of the candidate-list parameters. Recording
+          is disabled until the fixed quorum is available.
+        </p>
+      ) : showTallies && result.cacheAvailable ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">For / Against</dt>
@@ -102,19 +108,22 @@ export function ElectionTemperatureCheckStage({
           The weighted vote cache is still being indexed.
         </p>
       ) : null}
-      <TemperatureCheckOutcomeControls
-        temperatureCheckId={id}
-        deadline={tcVotingEnd}
-        outcome={outcome}
-        isAdmin={isAdmin}
-        quorumXrd={result.quorumXrd}
-        approvalThreshold={result.approvalThreshold}
-        electionId={electionId}
-      />
+      {result.tcParametersProjected ? (
+        <TemperatureCheckOutcomeControls
+          temperatureCheckId={id}
+          deadline={tcVotingEnd}
+          outcome={outcome}
+          isAdmin={isAdmin}
+          quorumXrd={result.quorumXrd}
+          approvalThreshold={result.approvalThreshold}
+          electionId={electionId}
+        />
+      ) : null}
       {votingOpen ? (
         <ElectionTemperatureCheckBallot temperatureCheckId={id} />
       ) : null}
-      {status === 'TC_LIVE' || status === 'TC_FAILED' ? (
+      {(status === 'TC_LIVE' || status === 'TC_FAILED') &&
+      result.tcParametersProjected ? (
         <>
           <VoteResultsSection
             entityType="temperature_check"

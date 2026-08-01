@@ -60,6 +60,12 @@ public application's sole source of truth:
 - direct manifest submission cannot force the projection into MJ voting.
 - the collector resolves this gate only before Round 1 opens. Once an election
   reaches `LIVE`, later cache changes cannot terminate an in-flight ballot.
+- cache readiness is an explicit persisted state, not inferred from row
+  presence. A zero-vote tally becomes authoritative only after a ledger read
+  reports a zero vote count.
+- component-cache backfill progress is keyed by Governance component address,
+  processed in bounded resumable batches, and automatically restarts after an
+  address rotation. A failed batch does not block unrelated finalization.
 
 This is a deliberate fail-closed trust boundary. It does not claim that an
 off-ledger weighted calculation can be verified by Scrypto.
@@ -79,7 +85,9 @@ audit purposes, but the UI must not present that ordering as an elected rank.
 
 The D1 migration sentinel for legacy rows must be a valid positive decimal. It
 keeps the gate closed but non-terminal; finalization waits until a subsequent
-ledger projection replaces it with the actual snapshotted TC quorum.
+ledger projection replaces it with the actual snapshotted TC quorum. Election
+responses mark these parameters as unprojected, and the operator UI suppresses
+the tally and outcome-recording control until the real quorum is available.
 
 ## User experience requirements
 
@@ -111,6 +119,10 @@ Required regression coverage includes:
 - contradictory TC records fail closed;
 - a missing vote cache defers finalization while an initialized zero-vote cache
   fails quorum normally;
+- a legacy quorum sentinel remains non-terminal and cannot render an operator
+  outcome control;
+- vote-cache readiness and backfill progress remain component-scoped across an
+  address rotation;
 - a resolved TC gate is not re-evaluated after Round 1 opens;
 - no automatic rerun and no transition from a quorate Round 1 result;
 - equal rerun thresholds;

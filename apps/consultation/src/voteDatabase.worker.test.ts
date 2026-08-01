@@ -136,6 +136,51 @@ describe('runtime app configuration', () => {
 })
 
 describe('D1 vote persistence', () => {
+  it('tracks computed readiness explicitly and backfills each component independently', async () => {
+    const zeroVoteEntityId = EntityId.make(10)
+    const pendingEntityId = EntityId.make(11)
+
+    const mainnet = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        yield* repo.initializeComponentCache([
+          {
+            type: 'temperature_check',
+            entityId: zeroVoteEntityId,
+            voteCount: 0
+          },
+          { type: 'proposal', entityId: pendingEntityId, voteCount: 2 }
+        ])
+        const zeroVote = yield* repo.getResultsByEntity(
+          'temperature_check',
+          zeroVoteEntityId
+        )
+        const pending = yield* repo.getResultsByEntity(
+          'proposal',
+          pendingEntityId
+        )
+        yield* repo.setComponentCacheBackfillProgress(5)
+        const progress = yield* repo.getComponentCacheBackfillProgress()
+        return { zeroVote, pending, progress }
+      })
+    )
+
+    expect(mainnet).toEqual({
+      zeroVote: { cacheAvailable: true, results: [] },
+      pending: { cacheAvailable: false, results: [] },
+      progress: 5
+    })
+
+    const stokenetProgress = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getComponentCacheBackfillProgress()
+      }),
+      GovernanceConfig.StokenetLive
+    )
+    expect(stokenetProgress).toBe(0)
+  })
+
   it('isolates same-ID vote states from different governance components', async () => {
     await runWithRepository(
       Effect.gen(function* () {

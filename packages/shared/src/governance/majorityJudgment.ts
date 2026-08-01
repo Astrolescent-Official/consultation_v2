@@ -415,6 +415,7 @@ export class MajorityJudgmentResultResponse extends Schema.Class<MajorityJudgmen
 export class TemperatureCheckResultResponse extends Schema.Class<TemperatureCheckResultResponse>(
   'TemperatureCheckResultResponse'
 )({
+  tcParametersProjected: Schema.Boolean,
   cacheAvailable: Schema.Boolean,
   forVotingPower: DecimalStringSchema,
   againstVotingPower: DecimalStringSchema,

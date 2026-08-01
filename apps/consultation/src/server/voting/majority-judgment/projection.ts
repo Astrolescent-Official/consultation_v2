@@ -160,6 +160,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
         const rerunStarted = Option.isSome(election.rerun)
 
         yield* repo.projectElection({
+          temperatureCheckVoteCount: temperatureCheck.voteCount,
           election: {
             id: electionId,
             temperatureCheckId: Number(election.temperatureCheckId),
