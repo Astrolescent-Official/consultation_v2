@@ -1,11 +1,39 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
-import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
+import { TemperatureCheckId } from 'shared/governance/brandedTypes'
+import type { MajorityJudgmentElectionStatus } from 'shared/governance/index'
 import type { KeyValueStoreAddress } from 'shared/schemas'
 import {
   getTemperatureCheckByIdAtom,
   getTemperatureCheckVotesByAccountsAtom
 } from '@/atom/temperatureChecksAtom'
+import { useIsBeforeDeadline } from '@/hooks/useIsBeforeDeadline'
 import { VotingSection } from '@/routes/tc/$id/-$id/components/VotingSection'
+
+/**
+ * Shows the candidate-list ballot only while that gate is genuinely open, and
+ * closes it on its own at the deadline rather than at the next page load.
+ */
+export function ElectionTemperatureCheckVotingPanel({
+  temperatureCheckId,
+  status,
+  tcVotingEnd,
+  parametersProjected
+}: {
+  readonly temperatureCheckId: number
+  readonly status: MajorityJudgmentElectionStatus
+  readonly tcVotingEnd: Date
+  readonly parametersProjected: boolean
+}) {
+  const beforeDeadline = useIsBeforeDeadline(tcVotingEnd)
+  if (status !== 'TC_LIVE' || !parametersProjected || !beforeDeadline) {
+    return null
+  }
+  return (
+    <ElectionTemperatureCheckBallot
+      temperatureCheckId={TemperatureCheckId.make(temperatureCheckId)}
+    />
+  )
+}
 
 // While candidate-list voting is open, the live voters KVS address is only
 // available on-chain (it is not mirrored into the D1 projection), so this

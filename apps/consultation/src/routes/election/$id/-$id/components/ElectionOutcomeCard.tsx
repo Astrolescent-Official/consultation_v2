@@ -1,0 +1,77 @@
+import { type Grade, gradeName } from 'shared/governance/index'
+import { SidebarCard } from '@/components/detail/SidebarCard'
+import {
+  type Candidate,
+  CandidateOutcomeBadge,
+  type CandidateResult
+} from './CandidateCard'
+
+const rankOrder = (result?: CandidateResult) =>
+  result?.rank ?? Number.MAX_SAFE_INTEGER
+
+export function ElectionOutcomeCard({
+  candidates,
+  candidateResults,
+  provisional,
+  quorumMet,
+  seatCount
+}: {
+  readonly candidates: ReadonlyArray<Candidate>
+  readonly candidateResults: ReadonlyArray<CandidateResult>
+  readonly provisional: boolean
+  readonly quorumMet: boolean
+  readonly seatCount: number
+}) {
+  const resultByCandidate = new Map(
+    candidateResults.map((result) => [result.candidateId, result])
+  )
+  const ranked = [...candidates].sort(
+    (left, right) =>
+      rankOrder(resultByCandidate.get(left.id)) -
+      rankOrder(resultByCandidate.get(right.id))
+  )
+  const seated = candidateResults.filter(
+    ({ outcome }) => outcome === 'SEATED'
+  ).length
+
+  return (
+    <SidebarCard title={provisional ? 'Provisional standing' : 'Result'}>
+      <ol className="space-y-3">
+        {ranked.map((candidate) => {
+          const result = resultByCandidate.get(candidate.id)
+          const grade: Grade | null | undefined =
+            result?.finalMajorityGrade ?? result?.majorityGrade
+          return (
+            <li
+              key={candidate.id}
+              className="flex items-center justify-between gap-3 border-b border-border/50 pb-3 last:border-0 last:pb-0"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {candidate.displayName}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {grade === null || grade === undefined
+                    ? 'No majority grade'
+                    : gradeName(grade)}
+                </p>
+              </div>
+              <CandidateOutcomeBadge
+                outcome={result?.outcome}
+                rank={quorumMet && result?.rank ? result.rank : undefined}
+              />
+            </li>
+          )
+        })}
+      </ol>
+      <p className="mt-4 text-xs text-muted-foreground">
+        {quorumMet
+          ? `${seated} of ${seatCount} ${seatCount === 1 ? 'seat' : 'seats'} filled.`
+          : 'Turnout is below the fixed quorum, so no seats are awarded.'}
+        {provisional
+          ? ' These standings change with every ballot until the round closes.'
+          : ''}
+      </p>
+    </SidebarCard>
+  )
+}

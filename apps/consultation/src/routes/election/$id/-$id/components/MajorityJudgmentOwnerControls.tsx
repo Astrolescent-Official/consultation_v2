@@ -54,9 +54,11 @@ export function MajorityJudgmentOwnerControls({
   }, [unresolvedCandidateIds])
 
   return (
-    <Card>
+    <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Governance Operator controls</CardTitle>
+        <CardTitle className="text-base">
+          Governance Operator controls
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button
