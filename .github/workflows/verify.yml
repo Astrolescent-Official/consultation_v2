@@ -11,11 +11,30 @@ permissions:
   deployments: write
 
 jobs:
-  verify:
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      scrypto: ${{ steps.filter.outputs.scrypto }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect frontend and Scrypto changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - '**'
+              - '!scrypto/**'
+            scrypto:
+              - 'scrypto/**'
+
+  verify-frontend:
     name: Verify
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, macOS, ARM64]
-    env:
-      CC_wasm32_unknown_unknown: /opt/homebrew/opt/llvm/bin/clang
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -25,14 +44,35 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm verify
+      - run: pnpm check
+      - run: pnpm check-types
+      - run: pnpm test:unit
+      - run: pnpm test:worker
+
+  verify-scrypto:
+    name: Verify Scrypto
+    needs: changes
+    if: needs.changes.outputs.scrypto == 'true'
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.25.0
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pnpm test:scrypto
 
   deploy-production:
     name: Deploy production Worker
-    needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, verify-frontend, verify-scrypto]
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.changes.outputs.frontend == 'true' &&
+      (needs.verify-frontend.result == 'success') &&
+      (needs.verify-scrypto.result == 'success' || needs.verify-scrypto.result == 'skipped')
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -52,8 +92,14 @@ jobs:
 
   deploy-preview:
     name: Deploy PR preview Worker
-    needs: verify
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [changes, verify-frontend, verify-scrypto]
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.changes.outputs.frontend == 'true' &&
+      (needs.verify-frontend.result == 'success') &&
+      (needs.verify-scrypto.result == 'success' || needs.verify-scrypto.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
