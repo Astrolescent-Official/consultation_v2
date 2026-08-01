@@ -6,7 +6,7 @@ import {
   type MajorityJudgmentElectionStatus
 } from 'shared/governance/index'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 
 type Candidate = {
   readonly id: number
@@ -245,18 +245,24 @@ export function MajorityJudgmentElectionView({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <header className="space-y-2">
-        <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Majority Judgment election · {seatCount}{' '}
-          {seatCount === 1 ? 'seat' : 'seats'}
-        </p>
-        <h1 className="text-3xl font-light tracking-tight">{title}</h1>
+    <div className="space-y-8">
+      <header className="border-b border-border pb-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="bg-neutral-200 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+            Election
+          </span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {seatCount} {seatCount === 1 ? 'seat' : 'seats'}
+          </span>
+        </div>
+        <h1 className="mt-4 text-3xl font-light leading-tight tracking-tight md:text-4xl">
+          {title}
+        </h1>
         {roleId !== undefined &&
         temperatureCheckId !== undefined &&
         parameterSetId !== undefined &&
         parameterSetVersion !== undefined ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span>Role {roleId}</span>
             <Link
               to="/tc/$id"
@@ -270,14 +276,14 @@ export function MajorityJudgmentElectionView({
             </span>
           </div>
         ) : null}
-        <div className="rounded-md border px-4 py-3 text-sm font-medium">
+        <div className="mt-5 border-l-2 border-foreground pl-3 text-sm font-medium">
           {currentStatusCopy}
         </div>
         {tcVotingStart !== undefined &&
         tcVotingEnd !== undefined &&
         votingStart !== undefined &&
         votingEnd !== undefined ? (
-          <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+          <div className="mt-5 grid gap-x-8 gap-y-2 text-sm text-muted-foreground sm:grid-cols-2">
             <span>
               TC: {dateTime(tcVotingStart)}–{dateTime(tcVotingEnd)}
             </span>
@@ -302,14 +308,14 @@ export function MajorityJudgmentElectionView({
           </div>
         ) : null}
         {status === 'RERUN_LIVE' ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-4 text-sm text-muted-foreground">
             This rerun uses the same quorum and grade floor as Round 1. Minimum
             majority grade: {gradeName(minimumMedianGrade)}.
           </p>
         ) : null}
       </header>
 
-      <section className="space-y-3" aria-label="Candidates">
+      <section aria-label="Candidates">
         <div>
           <h2 className="text-xl font-medium">Candidates</h2>
           <p className="text-sm text-muted-foreground">
@@ -318,71 +324,72 @@ export function MajorityJudgmentElectionView({
               : 'This is the immutable candidate list committed when the election and its Temperature Check were created.'}
           </p>
         </div>
-        {candidates.map((candidate) => {
-          const candidateResult = resultByCandidate.get(candidate.id)
-          return (
-            <Card key={candidate.id}>
-              <CardHeader>
-                <CardTitle>{candidate.displayName}</CardTitle>
-                {candidate.reference ? (
-                  <p className="text-xs text-muted-foreground">
-                    {candidate.reference}
-                  </p>
-                ) : null}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm whitespace-pre-wrap">
-                  {candidate.description}
-                </p>
-                {candidate.links.length > 0 ? (
-                  <ul className="flex flex-wrap gap-3 text-sm">
-                    {candidate.links.map((link) => (
-                      <li key={link}>
-                        <a
-                          href={link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-4"
-                        >
-                          Candidate profile
-                        </a>
-                      </li>
+        <div className="mt-5 divide-y divide-border border-y border-border">
+          {candidates.map((candidate) => {
+            const candidateResult = resultByCandidate.get(candidate.id)
+            return (
+              <article key={candidate.id} className="py-6 first:pt-5 last:pb-5">
+                <div className="flex flex-col gap-5 sm:flex-row sm:justify-between">
+                  <div className="min-w-0 space-y-2 sm:max-w-xl">
+                    <h3 className="font-medium">{candidate.displayName}</h3>
+                    {candidate.reference ? (
+                      <p className="text-xs text-muted-foreground">
+                        {candidate.reference}
+                      </p>
+                    ) : null}
+                    <p className="text-sm whitespace-pre-wrap">
+                      {candidate.description}
+                    </p>
+                    {candidate.links.length > 0 ? (
+                      <ul className="flex flex-wrap gap-3 text-sm">
+                        {candidate.links.map((link) => (
+                          <li key={link}>
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline underline-offset-4"
+                            >
+                              Candidate profile
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <fieldset
+                    className="grid gap-2 sm:w-72"
+                    disabled={!votingOpen || submitting}
+                  >
+                    <legend className="sr-only">
+                      Grade {candidate.displayName}
+                    </legend>
+                    {grades.map((grade) => (
+                      <label
+                        key={grade}
+                        className="flex cursor-pointer items-center gap-2 border px-3 py-2 text-sm transition-colors has-[:checked]:border-foreground has-[:checked]:bg-secondary/70 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60"
+                      >
+                        <input
+                          type="radio"
+                          name={`candidate-${candidate.id}`}
+                          value={grade}
+                          disabled={!votingOpen || submitting}
+                          checked={selectedGrades.get(candidate.id) === grade}
+                          onChange={() =>
+                            setSelectedGrades((current) => {
+                              const next = new Map(current)
+                              next.set(candidate.id, grade)
+                              return next
+                            })
+                          }
+                        />
+                        {gradeName(grade)}
+                      </label>
                     ))}
-                  </ul>
-                ) : null}
-                <fieldset
-                  className="grid gap-2 sm:grid-cols-5"
-                  disabled={!votingOpen || submitting}
-                >
-                  <legend className="sr-only">
-                    Grade {candidate.displayName}
-                  </legend>
-                  {grades.map((grade) => (
-                    <label
-                      key={grade}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
-                    >
-                      <input
-                        type="radio"
-                        name={`candidate-${candidate.id}`}
-                        value={grade}
-                        disabled={!votingOpen || submitting}
-                        checked={selectedGrades.get(candidate.id) === grade}
-                        onChange={() =>
-                          setSelectedGrades((current) => {
-                            const next = new Map(current)
-                            next.set(candidate.id, grade)
-                            return next
-                          })
-                        }
-                      />
-                      {gradeName(grade)}
-                    </label>
-                  ))}
-                </fieldset>
-
+                  </fieldset>
+                </div>
                 {candidateResult ? (
-                  <div className="space-y-2 border-t pt-4 text-sm">
+                  <div className="mt-5 grid gap-2 border-t border-border pt-4 text-sm sm:grid-cols-2">
                     <p>
                       Majority grade:{' '}
                       {candidateResult.majorityGrade === null ||
@@ -423,10 +430,10 @@ export function MajorityJudgmentElectionView({
                     ) : null}
                   </div>
                 ) : null}
-              </CardContent>
-            </Card>
-          )
-        })}
+              </article>
+            )
+          })}
+        </div>
       </section>
 
       {/* Turnout is only meaningful once a round is open or has been tallied.
@@ -434,8 +441,8 @@ export function MajorityJudgmentElectionView({
           would read as zero participation rather than as voting not having
           started. */}
       {votingOpen || result ? (
-        <Card>
-          <CardContent className="space-y-3 pt-6">
+        <section className="border border-border bg-secondary/50 p-6">
+          <div className="space-y-3">
             <p className="font-medium">
               {totalVotingPower} / {quorumXrd} XRD
             </p>
@@ -468,8 +475,8 @@ export function MajorityJudgmentElectionView({
                 </Button>
               </>
             ) : null}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       ) : null}
 
       {result ? (
