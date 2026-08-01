@@ -31,7 +31,7 @@ jobs:
               - 'scrypto/**'
 
   verify-frontend:
-    name: Verify
+    name: Verify frontend and Worker
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: [self-hosted, macOS, ARM64]
