@@ -34,7 +34,7 @@ export function ItemCard({
   hidden,
   contextLabel
 }: ItemCardProps) {
-  const status: ItemStatus = getItemStatus(deadline)
+  const status: ItemStatus = getItemStatus(start, deadline)
   const isActive = status === 'active'
   const typeLabel = linkPrefix === '/tc' ? 'TC' : 'GP'
   const entityType: EntityType =
