@@ -40,9 +40,21 @@ export default {
   },
 
   async scheduled(controller, env) {
-    await runScheduledPoll(env, {
-      cron: controller.cron,
-      scheduledTime: controller.scheduledTime
-    })
+    try {
+      await runScheduledPoll(env, {
+        cron: controller.cron,
+        scheduledTime: controller.scheduledTime
+      })
+    } catch (error) {
+      console.error('Scheduled poll invocation failed', {
+        cron: controller.cron,
+        scheduledTime: controller.scheduledTime,
+        error:
+          error instanceof Error
+            ? { name: error.name, message: error.message, stack: error.stack }
+            : String(error)
+      })
+      throw error
+    }
   }
 } satisfies ExportedHandler<Env>
