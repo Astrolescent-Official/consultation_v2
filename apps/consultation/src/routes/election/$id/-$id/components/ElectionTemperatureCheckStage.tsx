@@ -59,9 +59,12 @@ export function ElectionTemperatureCheckStage({
   const showTallies = status !== 'PENDING' && status !== 'MJ_PENDING'
 
   return (
-    <section className="mx-auto max-w-5xl space-y-4 rounded-md border p-5">
+    <section className="space-y-5 border-y border-border py-6 lg:border-t-0 lg:pt-0">
       <div>
-        <h2 className="text-xl font-medium">Candidate-list approval</h2>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Election gate
+        </p>
+        <h2 className="mt-1 text-xl font-medium">Candidate-list approval</h2>
         <p className="text-sm text-muted-foreground">
           Vote For or Against the list as a whole. Individual candidate concerns
           are expressed with grades during the MJ stage.
@@ -73,7 +76,7 @@ export function ElectionTemperatureCheckStage({
           is disabled until the fixed quorum is available.
         </p>
       ) : showTallies && result.cacheAvailable ? (
-        <dl className="grid gap-2 text-sm sm:grid-cols-3">
+        <dl className="grid gap-5 border-y border-border py-4 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">For / Against</dt>
             <dd>

@@ -8,6 +8,7 @@ import { InlineCode } from '@/components/ui/typography'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
 import { formatDateRange } from '@/lib/utils'
 import { CardSkeletonList } from './CardSkeleton'
+import { getItemStatus, StatusBadge } from './StatusBadge'
 
 type VisibleElection = {
   readonly id: number
@@ -67,6 +68,7 @@ export function ElectionsList({
         <div className="flex flex-col gap-4">
           {visible.map((election) => {
             const dates = electionDates(election)
+            const status = getItemStatus(dates.start, dates.deadline)
             return (
               <Link
                 key={election.id}
@@ -74,30 +76,45 @@ export function ElectionsList({
                 params={{ id: String(election.id) }}
                 className="group block"
               >
-                <Card className="space-y-3 p-6 transition-colors group-hover:border-neutral-400 dark:group-hover:border-neutral-600">
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <span className="font-mono">Election #{election.id}</span>
-                    <span>
-                      {election.seatCount}{' '}
-                      {election.seatCount === 1 ? 'seat' : 'seats'}
-                    </span>
-                    <span>Role {election.roleId}</span>
-                    {election.hidden ? (
-                      <span className="bg-yellow-100 px-2 py-0.5 font-semibold uppercase text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
-                        Hidden
-                      </span>
-                    ) : null}
+                <Card className="p-6 transition-colors group-hover:border-neutral-400 dark:group-hover:border-neutral-600">
+                  <div className="flex flex-col gap-5 sm:flex-row sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <StatusBadge status={status} />
+                        <span className="font-mono text-xs text-neutral-500">
+                          Election #{election.id}
+                        </span>
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          {election.seatCount}{' '}
+                          {election.seatCount === 1 ? 'seat' : 'seats'} · Role{' '}
+                          {election.roleId}
+                        </span>
+                        {election.hidden ? (
+                          <span className="bg-yellow-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                            Hidden
+                          </span>
+                        ) : null}
+                      </div>
+                      <h3 className="text-xl font-medium text-neutral-900 decoration-neutral-400 underline-offset-4 group-hover:underline dark:text-neutral-100">
+                        {election.title}
+                      </h3>
+                      <p className="line-clamp-2 text-sm text-neutral-600 dark:text-neutral-400">
+                        {election.shortDescription}
+                      </p>
+                      <p className="pt-2 text-xs text-neutral-500">
+                        {formatDateRange(dates.start, dates.deadline)}
+                      </p>
+                    </div>
+                    <div className="border-t border-neutral-100 pt-4 text-xs text-muted-foreground sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0 dark:border-neutral-800">
+                      <div className="mb-1 uppercase tracking-wider">
+                        Parameters
+                      </div>
+                      <div className="font-mono">
+                        {election.parameterSet.id} v
+                        {election.parameterSet.version}
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-medium group-hover:underline">
-                    {election.title}
-                  </h3>
-                  <p className="line-clamp-2 text-sm text-muted-foreground">
-                    {election.shortDescription}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDateRange(dates.start, dates.deadline)} ·{' '}
-                    {election.parameterSet.id} v{election.parameterSet.version}
-                  </p>
                 </Card>
               </Link>
             )
