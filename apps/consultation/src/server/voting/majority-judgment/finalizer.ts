@@ -1,14 +1,22 @@
 import { Data, Effect, Option, Schema } from 'effect'
-import { GradeSchema } from 'shared/governance/index'
+import {
+  GradeSchema,
+  MajorityJudgmentElectionStatusSchema
+} from 'shared/governance/index'
 import {
   applyMajorityJudgmentTieResolution,
   calculateMajorityJudgment
 } from './calculator'
 import {
+  deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase
 } from './projection'
-import { isClosedMajorityJudgmentResult, MajorityJudgmentRepo } from './repo'
+import {
+  isClosedMajorityJudgmentResult,
+  MajorityJudgmentRepo,
+  UNPROJECTED_TC_QUORUM_XRD
+} from './repo'
 
 export class InvalidMajorityJudgmentTieResolutionError extends Data.TaggedError(
   'InvalidMajorityJudgmentTieResolutionError'
@@ -52,7 +60,7 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
             existingResult._tag === 'Some' &&
             isClosedMajorityJudgmentResult(existingResult.value.status)
           ) {
-            return
+            return existingResult.value.status
           }
 
           const [ballots, candidates] = yield* Effect.all([
@@ -122,6 +130,7 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
               status: result.status
             }
           })
+          return result.status
         }
       )
 
@@ -153,27 +162,143 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
               function* (rounds) {
                 const latest = rounds[rounds.length - 1]
                 if (latest === undefined) return
-                for (const { election, round } of rounds) {
-                  if (round.round === latest.round.round) continue
-                  if (now < round.votingEnd) continue
-                  yield* closeRound(election, round, now, false)
+                const { election, round } = latest
+                const tcGatePending =
+                  election.status === 'PENDING' ||
+                  election.status === 'TC_LIVE' ||
+                  election.status === 'MJ_PENDING'
+                if (tcGatePending) {
+                  const recordedTcOutcome =
+                    election.tcOutcome === 'FAILED'
+                      ? ('FAILED' as const)
+                      : election.tcOutcome === 'PASSED'
+                        ? ('PASSED' as const)
+                        : ('PENDING' as const)
+                  if (now < election.tcVotingEnd) {
+                    yield* repo.setPhaseStatus(
+                      election.id,
+                      round.round,
+                      deriveMajorityJudgmentPhase(now, {
+                        tcVotingStart: election.tcVotingStart,
+                        tcVotingEnd: election.tcVotingEnd,
+                        votingStart: round.votingStart,
+                        votingEnd: round.votingEnd,
+                        tcOutcome: recordedTcOutcome
+                      })
+                    )
+                    return
+                  }
+
+                  if (election.tcQuorumXrd === UNPROJECTED_TC_QUORUM_XRD) {
+                    yield* Effect.logWarning(
+                      'Deferring candidate-list verdict until legacy election parameters are projected',
+                      { electionId: election.id }
+                    )
+                    return
+                  }
+                  const tcVerdict = yield* repo.getTemperatureCheckVerdict({
+                    temperatureCheckId: election.temperatureCheckId,
+                    quorumXrd: election.tcQuorumXrd,
+                    approvalThreshold: election.tcApprovalThreshold,
+                    recordedOutcome:
+                      election.tcOutcome === 'PASSED'
+                        ? 'PASSED'
+                        : election.tcOutcome === 'FAILED'
+                          ? 'FAILED'
+                          : null
+                  })
+                  if (!tcVerdict.cacheAvailable) {
+                    yield* Effect.logWarning(
+                      'Deferring candidate-list verdict until the component-scoped vote cache is available',
+                      {
+                        electionId: election.id,
+                        temperatureCheckId: election.temperatureCheckId
+                      }
+                    )
+                    return
+                  }
+                  const tcOutcome = deriveAuthoritativeTemperatureCheckOutcome(
+                    recordedTcOutcome,
+                    tcVerdict.calculatedPassed
+                  )
+                  if (tcOutcome === 'FAILED') {
+                    yield* repo.setPhaseStatus(
+                      election.id,
+                      round.round,
+                      'TC_FAILED'
+                    )
+                    return
+                  }
+                  if (tcOutcome === 'PENDING') {
+                    yield* repo.setPhaseStatus(
+                      election.id,
+                      round.round,
+                      deriveMajorityJudgmentPhase(now, {
+                        tcVotingStart: election.tcVotingStart,
+                        tcVotingEnd: election.tcVotingEnd,
+                        votingStart: round.votingStart,
+                        votingEnd: round.votingEnd,
+                        tcOutcome
+                      })
+                    )
+                    return
+                  }
                 }
 
-                const { election, round } = latest
-                const isRerun = round.round !== 1
-                const tcOutcome =
-                  election.tcOutcome === 'FAILED'
-                    ? ('FAILED' as const)
-                    : election.tcOutcome === 'PASSED'
-                      ? ('PASSED' as const)
-                      : ('PENDING' as const)
+                for (const {
+                  election: supersededElection,
+                  round: supersededRound
+                } of rounds) {
+                  if (supersededRound.round === latest.round.round) continue
+                  if (now < supersededRound.votingEnd) continue
+                  const supersededStatus = yield* Schema.decodeUnknown(
+                    MajorityJudgmentElectionStatusSchema
+                  )(
+                    yield* closeRound(
+                      supersededElection,
+                      supersededRound,
+                      now,
+                      false
+                    )
+                  ).pipe(Effect.orDie)
+                  if (supersededStatus !== 'ROUND_1_FAILED') {
+                    // An invalid rerun must not replace a quorate or adjudicated
+                    // Round 1 result. Persist that terminal status explicitly;
+                    // the superseded-round calculation itself never rewrites
+                    // the election row as a side effect.
+                    yield* repo.setPhaseStatus(
+                      supersededElection.id,
+                      supersededRound.round,
+                      supersededStatus
+                    )
+                    return
+                  }
+                }
 
-                // Round 1 additionally gates on the temperature check's outcome;
-                // a rerun only ever exists once that outcome is PASSED, so it
-                // only needs to wait out its own voting window.
-                const readyToFinalize = isRerun
-                  ? now >= round.votingEnd
-                  : tcOutcome === 'PASSED' && now >= round.votingEnd
+                const isRerun = round.round !== 1
+                if (isRerun) {
+                  const roundOneResult = yield* repo.getResult(election.id, 1)
+                  if (
+                    Option.isNone(roundOneResult) ||
+                    roundOneResult.value.status !== 'ROUND_1_FAILED'
+                  ) {
+                    yield* Effect.logWarning(
+                      'Ignoring rerun that is not backed by a Round 1 quorum failure',
+                      {
+                        electionId: election.id,
+                        roundOneStatus: Option.match(roundOneResult, {
+                          onNone: () => 'NOT_FINALIZED',
+                          onSome: ({ status }) => status
+                        })
+                      }
+                    )
+                    return
+                  }
+                }
+                // The candidate-list gate is resolved only while the election
+                // is in its TC/MJ-pending phases. Once Round 1 opens, later
+                // cache changes cannot terminate an in-flight election.
+                const readyToFinalize = now >= round.votingEnd
 
                 if (!readyToFinalize) {
                   const phase = isRerun
@@ -187,7 +312,7 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                         tcVotingEnd: election.tcVotingEnd,
                         votingStart: round.votingStart,
                         votingEnd: round.votingEnd,
-                        tcOutcome
+                        tcOutcome: 'PASSED'
                       })
                   yield* repo.setPhaseStatus(election.id, round.round, phase)
                   return

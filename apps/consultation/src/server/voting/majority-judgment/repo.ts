@@ -1,4 +1,3 @@
-import BigNumber from 'bignumber.js'
 import {
   type MajorityJudgmentCandidateGradeJson,
   type MajorityJudgmentCandidateResultJson,
@@ -13,6 +12,7 @@ import { and, asc, eq, notInArray } from 'drizzle-orm'
 import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import {
   CandidateHttpUrlStringSchema,
+  calculateTemperatureCheckOutcome,
   canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
@@ -21,7 +21,6 @@ import {
   type MajorityJudgmentElectionStatus,
   MajorityJudgmentElectionStatusSchema
 } from 'shared/governance/index'
-import { meetsQuorum } from '../../../lib/quorum'
 import { VoteDatabase } from '../db/d1'
 import { ORM } from '../db/orm'
 import { guardedBatch } from '../pollLease'
@@ -30,6 +29,8 @@ import { VoteCalculationRepo } from '../vote-calculation/voteCalculationRepo'
 type ElectionProjection = typeof mjElection.$inferInsert
 type CandidateProjection = typeof mjCandidate.$inferInsert
 type RoundProjection = typeof mjRound.$inferInsert
+
+export const UNPROJECTED_TC_QUORUM_XRD = '1000000000000000000000000000000'
 
 const StoredCandidateGradesSchema = Schema.Array(
   Schema.Struct({
@@ -53,6 +54,7 @@ export type MajorityJudgmentProjectionInput = {
   readonly election: ElectionProjection
   readonly candidates: ReadonlyArray<CandidateProjection>
   readonly round: RoundProjection
+  readonly temperatureCheckVoteCount: number
 }
 
 export type MajorityJudgmentBallotWrite = {
@@ -131,11 +133,32 @@ export const isClosedMajorityJudgmentResult = (status: string) =>
 const isPhaseLocked = (status: string) =>
   isTerminal(status) || status === 'TIE_UNRESOLVED'
 
+const hasPassedTemperatureCheckGate = (status: string) =>
+  status === 'MJ_PENDING' ||
+  status === 'LIVE' ||
+  status === 'ROUND_1_FAILED' ||
+  status === 'RERUN_PENDING' ||
+  status === 'RERUN_LIVE' ||
+  status === 'TIE_UNRESOLVED' ||
+  status === 'FINAL' ||
+  status === 'FAILED'
+
+const isTemperatureCheckPhase = (status: MajorityJudgmentElectionStatus) =>
+  status === 'PENDING' || status === 'TC_LIVE' || status === 'TC_FAILED'
+
 const isPhaseTransitionBlocked = (
   currentStatus: string,
-  nextStatus: MajorityJudgmentElectionStatus
+  nextStatus: MajorityJudgmentElectionStatus,
+  hasPublishedRoundOneFailure: boolean
 ) =>
   isPhaseLocked(currentStatus) ||
+  (hasPassedTemperatureCheckGate(currentStatus) &&
+    isTemperatureCheckPhase(nextStatus)) ||
+  ((nextStatus === 'RERUN_PENDING' || nextStatus === 'RERUN_LIVE') &&
+    !hasPublishedRoundOneFailure &&
+    currentStatus !== 'ROUND_1_FAILED' &&
+    currentStatus !== 'RERUN_PENDING' &&
+    currentStatus !== 'RERUN_LIVE') ||
   (currentStatus === 'ROUND_1_FAILED' &&
     !canTransitionFromRoundOneFailure(nextStatus))
 
@@ -150,6 +173,16 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
 
       const projectElection = Effect.fn('MajorityJudgmentRepo.projectElection')(
         function* (input: MajorityJudgmentProjectionInput) {
+          // Projection reads the linked TC at the same ledger state, so a zero
+          // vote count here is authoritative. Positive counts remain
+          // unavailable until their vote aggregation has actually committed.
+          yield* voteCalculationRepo.initializeComponentCache([
+            {
+              type: 'temperature_check',
+              entityId: input.election.temperatureCheckId,
+              voteCount: input.temperatureCheckVoteCount
+            }
+          ])
           yield* db
             .insert(mjElection)
             .values(input.election)
@@ -344,6 +377,39 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
         return Option.some({ ...result.value, ...decodedJson })
       })
 
+      const getTemperatureCheckVerdict = Effect.fn(
+        'MajorityJudgmentRepo.getTemperatureCheckVerdict'
+      )(function* (input: {
+        readonly temperatureCheckId: number
+        readonly quorumXrd: string
+        readonly approvalThreshold: string
+        readonly recordedOutcome: 'PASSED' | 'FAILED' | null
+      }) {
+        const tcResults = yield* voteCalculationRepo.getResultsByEntity(
+          'temperature_check',
+          input.temperatureCheckId
+        )
+        const calculated = calculateTemperatureCheckOutcome({
+          results: tcResults.results,
+          quorumXrd: input.quorumXrd,
+          approvalThreshold: input.approvalThreshold
+        })
+        const recordedPassed =
+          input.recordedOutcome === null
+            ? null
+            : input.recordedOutcome === 'PASSED'
+
+        return {
+          cacheAvailable: tcResults.cacheAvailable,
+          ...calculated,
+          recordedPassed,
+          outcomeConsistent:
+            recordedPassed === null
+              ? null
+              : recordedPassed === calculated.calculatedPassed
+        } as const
+      })
+
       const setSnapshotStateVersion = Effect.fn(
         'MajorityJudgmentRepo.setSnapshotStateVersion'
       )(function* (
@@ -371,9 +437,27 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             .where(eq(mjElection.id, electionId))
             .limit(1)
           const currentStatus = rows[0]?.status
+          const roundOneFailures =
+            status === 'RERUN_PENDING' || status === 'RERUN_LIVE'
+              ? yield* db
+                  .select({ status: mjResult.status })
+                  .from(mjResult)
+                  .where(
+                    and(
+                      eq(mjResult.electionId, electionId),
+                      eq(mjResult.round, 1),
+                      eq(mjResult.status, 'ROUND_1_FAILED')
+                    )
+                  )
+                  .limit(1)
+              : []
           if (
             currentStatus === undefined ||
-            isPhaseTransitionBlocked(currentStatus, status)
+            isPhaseTransitionBlocked(
+              currentStatus,
+              status,
+              roundOneFailures[0] !== undefined
+            )
           ) {
             return
           }
@@ -635,40 +719,69 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             onSome: Effect.succeed
           })
         )
+        const hasRoundTwoResult = results.some(({ round }) => round === 2)
+        const activeRoundNumber =
+          hasRoundTwoResult ||
+          election.status === 'RERUN_PENDING' ||
+          election.status === 'RERUN_LIVE'
+            ? 2
+            : 1
         const currentRound = yield* pipe(
-          rounds,
-          A.last,
+          rounds.find(({ round }) => round === activeRoundNumber),
+          Option.fromNullable,
           Option.match({
             onNone: () =>
               Effect.fail(
                 new MajorityJudgmentRoundNotFoundError({
                   electionId,
-                  round: 1
+                  round: activeRoundNumber
                 })
               ),
             onSome: Effect.succeed
           })
         )
-        const tcResults = yield* voteCalculationRepo.getResultsByEntity(
-          'temperature_check',
-          election.temperatureCheckId
-        )
         const result = results.find(({ round }) => round === currentRound.round)
-        const forVotingPower = new BigNumber(
-          tcResults.results.find(({ vote }) => vote === 'For')?.votePower ?? '0'
-        )
-        const againstVotingPower = new BigNumber(
-          tcResults.results.find(({ vote }) => vote === 'Against')?.votePower ??
-            '0'
-        )
-        const participation = forVotingPower.plus(againstVotingPower)
-        const forShare = participation.isZero()
-          ? new BigNumber(0)
-          : forVotingPower.dividedBy(participation)
-        const quorumMet = meetsQuorum(participation, election.tcQuorumXrd)
-        const approvalMet = forShare.isGreaterThanOrEqualTo(
-          election.tcApprovalThreshold
-        )
+        const temperatureCheckResult = yield* getTemperatureCheckVerdict({
+          temperatureCheckId: election.temperatureCheckId,
+          quorumXrd: election.tcQuorumXrd,
+          approvalThreshold: election.tcApprovalThreshold,
+          recordedOutcome:
+            election.tcOutcome === 'PASSED'
+              ? 'PASSED'
+              : election.tcOutcome === 'FAILED'
+                ? 'FAILED'
+                : null
+        })
+        const mapRound = (round: (typeof rounds)[number]) => ({
+          round: round.round === 1 ? ('RoundOne' as const) : ('Rerun' as const),
+          snapshotAt: round.snapshotAt.toISOString(),
+          votingStart: round.votingStart.toISOString(),
+          votingEnd: round.votingEnd.toISOString(),
+          quorumXrd: round.quorumXrd,
+          minimumMedianGrade: round.minimumMedianGrade
+        })
+        const mapResult = (storedResult: (typeof results)[number]) => ({
+          status: storedResult.status,
+          round:
+            storedResult.round === 1
+              ? ('RoundOne' as const)
+              : ('Rerun' as const),
+          provisional:
+            storedResult.status === 'LIVE' ||
+            storedResult.status === 'RERUN_LIVE',
+          totalVotingPower: storedResult.totalVotingPower,
+          quorumXrd: storedResult.quorumXrd,
+          quorumMet: storedResult.quorumMet,
+          minimumMedianGrade: storedResult.minimumMedianGrade,
+          candidateResults: storedResult.candidateResults,
+          seatedCandidateIds: storedResult.seatedCandidateIds,
+          reserveCandidateIds: storedResult.reserveCandidateIds,
+          reserveExpiresAt:
+            storedResult.reserveExpiresAt?.toISOString() ?? null,
+          referredSeats: storedResult.referredSeats,
+          tieBreakIterations: storedResult.tieBreakIterations,
+          unresolvedCandidateIds: storedResult.unresolvedCandidateIds
+        })
 
         const response = {
           election: {
@@ -701,23 +814,12 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             links: candidate.links,
             displayOrder: candidate.displayOrder
           })),
-          currentRound: {
-            round: currentRound.round === 1 ? 'RoundOne' : 'Rerun',
-            snapshotAt: currentRound.snapshotAt.toISOString(),
-            votingStart: currentRound.votingStart.toISOString(),
-            votingEnd: currentRound.votingEnd.toISOString(),
-            quorumXrd: currentRound.quorumXrd,
-            minimumMedianGrade: currentRound.minimumMedianGrade
-          },
+          currentRound: mapRound(currentRound),
+          rounds: rounds.map(mapRound),
           temperatureCheckResult: {
-            forVotingPower: forVotingPower.toFixed(),
-            againstVotingPower: againstVotingPower.toFixed(),
-            participationXrd: participation.toFixed(),
-            quorumXrd: election.tcQuorumXrd,
-            quorumMet,
-            approvalThreshold: election.tcApprovalThreshold,
-            forShare: forShare.toFixed(),
-            approvalMet,
+            tcParametersProjected:
+              election.tcQuorumXrd !== UNPROJECTED_TC_QUORUM_XRD,
+            ...temperatureCheckResult,
             passed:
               election.tcOutcome === null
                 ? null
@@ -732,25 +834,9 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           election.status === 'RERUN_PENDING'
             ? {}
             : {
-                result: {
-                  status: election.status,
-                  round: currentRound.round === 1 ? 'RoundOne' : 'Rerun',
-                  provisional:
-                    result.status === 'LIVE' || result.status === 'RERUN_LIVE',
-                  totalVotingPower: result.totalVotingPower,
-                  quorumXrd: result.quorumXrd,
-                  quorumMet: result.quorumMet,
-                  minimumMedianGrade: result.minimumMedianGrade,
-                  candidateResults: result.candidateResults,
-                  seatedCandidateIds: result.seatedCandidateIds,
-                  reserveCandidateIds: result.reserveCandidateIds,
-                  reserveExpiresAt:
-                    result.reserveExpiresAt?.toISOString() ?? null,
-                  referredSeats: result.referredSeats,
-                  tieBreakIterations: result.tieBreakIterations,
-                  unresolvedCandidateIds: result.unresolvedCandidateIds
-                }
-              })
+                result: mapResult(result)
+              }),
+          results: results.map(mapResult)
         }
 
         return yield* Schema.decodeUnknown(
@@ -767,6 +853,7 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
         getCandidates,
         getRound,
         getResult,
+        getTemperatureCheckVerdict,
         setSnapshotStateVersion,
         setPhaseStatus,
         getActiveElectionRounds,

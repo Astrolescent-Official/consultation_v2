@@ -1,6 +1,11 @@
-import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
-import { Cause } from 'effect'
-import { useCallback, useState } from 'react'
+import {
+  Result,
+  useAtom,
+  useAtomRefresh,
+  useAtomValue
+} from '@effect-atom/atom-react'
+import { Cause, Option } from 'effect'
+import { useCallback, useEffect, useState } from 'react'
 import {
   MajorityJudgmentCandidateIdSchema,
   type MajorityJudgmentElectionId
@@ -16,10 +21,13 @@ import {
   majorityJudgmentVoterEntriesAtom,
   voteOnMajorityJudgmentBatchAtom
 } from '@/atom/majorityJudgmentAtom'
+import { ElectionNotIndexedYetError } from '@/atom/voteClient'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InlineCode } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
+import { automaticElectionRefreshDelay } from './automaticRefresh'
 import { ElectionTemperatureCheckStage } from './components/ElectionTemperatureCheckStage'
 import { MajorityJudgmentElectionView } from './components/MajorityJudgmentElectionView'
 import { MajorityJudgmentOwnerControls } from './components/MajorityJudgmentOwnerControls'
@@ -38,7 +46,9 @@ export function Page({
 }: {
   readonly electionId: MajorityJudgmentElectionId
 }) {
-  const electionResult = useAtomValue(majorityJudgmentElectionAtom(electionId))
+  const electionAtom = majorityJudgmentElectionAtom(electionId)
+  const electionResult = useAtomValue(electionAtom)
+  const refreshElection = useAtomRefresh(electionAtom)
   const voterEntriesResult = useAtomValue(
     majorityJudgmentVoterEntriesAtom(electionId)
   )
@@ -52,8 +62,54 @@ export function Page({
     toggleMajorityJudgmentElectionHiddenAtom
   )
   const [voteAllAccounts, setVoteAllAccounts] = useState(false)
+  const [now, setNow] = useState(Date.now)
+  const [automaticRefreshAttempt, setAutomaticRefreshAttempt] = useState(0)
   const currentAccount = useCurrentAccount()
   const isAdmin = useIsAdmin()
+  const electionError = Result.error(electionResult)
+  const isIndexing = Option.exists(
+    electionError,
+    (error) => error instanceof ElectionNotIndexedYetError
+  )
+  const isAwaitingOutcomeProjection =
+    Result.isSuccess(electionResult) &&
+    electionResult.value.election.tcOutcome === 'PENDING' &&
+    now >= electionResult.value.election.tcVotingEnd.getTime()
+  const isWaitingForProjection = isIndexing || isAwaitingOutcomeProjection
+  const automaticRefreshDelay = automaticElectionRefreshDelay(
+    automaticRefreshAttempt
+  )
+  const automaticRefreshPaused =
+    isWaitingForProjection && automaticRefreshDelay === undefined
+
+  useEffect(() => {
+    if (!Result.isSuccess(electionResult)) return
+    const deadline = electionResult.value.election.tcVotingEnd.getTime()
+    if (now >= deadline) return
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(deadline - now, 2_147_483_647)
+    )
+    return () => window.clearTimeout(timer)
+  }, [electionResult, now])
+
+  useEffect(() => {
+    if (!isWaitingForProjection) {
+      setAutomaticRefreshAttempt(0)
+      return
+    }
+    if (automaticRefreshDelay === undefined) return
+    const timer = window.setTimeout(() => {
+      refreshElection()
+      setAutomaticRefreshAttempt((attempt) => attempt + 1)
+    }, automaticRefreshDelay)
+    return () => window.clearTimeout(timer)
+  }, [automaticRefreshDelay, isWaitingForProjection, refreshElection])
+
+  const checkNow = useCallback(() => {
+    setAutomaticRefreshAttempt(0)
+    refreshElection()
+  }, [refreshElection])
 
   const submit = useCallback(
     (
@@ -90,7 +146,27 @@ export function Page({
 
   return Result.builder(electionResult)
     .onInitial(() => <div>Loading election…</div>)
-    .onFailure((error) => <InlineCode>{Cause.pretty(error)}</InlineCode>)
+    .onFailure((error) =>
+      isIndexing ? (
+        <div className="space-y-3 py-12 text-center">
+          <p className="font-medium">Election not available yet</p>
+          <p className="text-sm text-muted-foreground">
+            The election is not available in the collector yet. It may still be
+            indexing, or this election ID may not exist.
+          </p>
+          {automaticRefreshPaused ? (
+            <p className="text-xs text-muted-foreground">
+              Automatic checks paused after five attempts.
+            </p>
+          ) : null}
+          <Button type="button" variant="outline" onClick={checkNow}>
+            Check now
+          </Button>
+        </div>
+      ) : (
+        <InlineCode>{Cause.pretty(error)}</InlineCode>
+      )
+    )
     .onSuccess((response) => {
       if (response.election.hidden && !isAdmin) {
         return (
@@ -122,8 +198,20 @@ export function Page({
 
       return (
         <div className="space-y-4">
+          {automaticRefreshPaused && isAwaitingOutcomeProjection ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
+              <span>
+                The verified outcome is still pending; automatic checks have
+                paused.
+              </span>
+              <Button type="button" variant="outline" onClick={checkNow}>
+                Check now
+              </Button>
+            </div>
+          ) : null}
           <ElectionTemperatureCheckStage
             temperatureCheckId={response.election.temperatureCheckId}
+            electionId={electionId}
             status={response.election.status}
             tcVotingEnd={response.election.tcVotingEnd}
             tcOutcome={response.election.tcOutcome}
@@ -170,6 +258,7 @@ export function Page({
             minimumMedianGrade={response.currentRound.minimumMedianGrade}
             initialGrades={mixedBallots ? NO_GRADES : currentEntry?.grades}
             result={response.result}
+            results={response.results}
             submitting={voteResult.waiting}
             onSubmit={submit}
           />

@@ -16,6 +16,7 @@ export type AccountVoteRecord = {
 type StateRow = {
   readonly id: number
   readonly lastVoteCount: number
+  readonly resultsComputed: number
 }
 
 type VoteRow = {
@@ -30,7 +31,7 @@ type AccountVoteRow = VoteRow & {
 const PARAMETER_CHUNK_SIZE = 90
 const ACCOUNT_INSERT_CHUNK_SIZE = 20
 const RESULT_INSERT_CHUNK_SIZE = 30
-const COMPONENT_CACHE_BACKFILL_KEY = 'vote_cache_component_backfill_required'
+const COMPONENT_CACHE_BACKFILL_KEY_PREFIX = 'vote_cache_component_backfill'
 
 const chunksOf = <A>(values: ReadonlyArray<A>, size: number) => {
   const chunks: Array<ReadonlyArray<A>> = []
@@ -49,6 +50,7 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
       const database = yield* VoteDatabase
       const governanceConfig = yield* GovernanceConfig
       const governanceComponentAddress = governanceConfig.componentAddress
+      const componentCacheBackfillKey = `${COMPONENT_CACHE_BACKFILL_KEY_PREFIX}:${governanceComponentAddress}`
 
       const getOrCreateState = (
         type: 'temperature_check' | 'proposal',
@@ -73,7 +75,10 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
             'read vote calculation state',
             database
               .prepare(
-                `SELECT id, last_vote_count AS lastVoteCount
+                `SELECT
+                   id,
+                   last_vote_count AS lastVoteCount,
+                   results_computed AS resultsComputed
                  FROM vote_calculation_state
                  WHERE governance_component_address = ?
                    AND type = ?
@@ -90,26 +95,87 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
           return row
         })
 
-      const isComponentCacheBackfillRequired = () =>
+      const getComponentCacheBackfillProgress = () =>
         first<{ value: string }>(
           'read component cache backfill configuration',
           database
             .prepare(`SELECT value FROM config WHERE key = ?`)
-            .bind(COMPONENT_CACHE_BACKFILL_KEY)
+            .bind(componentCacheBackfillKey)
         ).pipe(
-          Effect.map((row) => row?.value === '1'),
+          Effect.map((row) => {
+            if (row?.value === 'complete') return null
+            const progress = Number(row?.value ?? 0)
+            return Number.isSafeInteger(progress) && progress >= 0
+              ? progress
+              : 0
+          }),
           Effect.orDie
         )
 
-      const completeComponentCacheBackfill = () =>
-        guardedBatch(database, 'complete component cache backfill', [
+      const setComponentCacheBackfillProgress = (
+        progress: number | 'complete'
+      ) =>
+        guardedBatch(database, 'update component cache backfill progress', [
           database
             .prepare(
-              `UPDATE config
-               SET value = '0'
-               WHERE key = ?`
+              `INSERT INTO config (key, value)
+               VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value`
             )
-            .bind(COMPONENT_CACHE_BACKFILL_KEY)
+            .bind(componentCacheBackfillKey, String(progress))
+        ]).pipe(Effect.orDie)
+
+      const initializeComponentCache = (
+        entities: ReadonlyArray<{
+          readonly type: 'temperature_check' | 'proposal'
+          readonly entityId: number
+          readonly voteCount: number
+        }>
+      ) => {
+        if (entities.length === 0) return Effect.void
+
+        return guardedBatch(database, 'initialize component vote cache', [
+          database
+            .prepare(
+              `INSERT INTO vote_calculation_state (
+                 governance_component_address,
+                 type,
+                 entity_id,
+                 last_vote_count,
+                 results_computed
+               )
+               SELECT
+                 ?,
+                 json_extract(value, '$.type'),
+                 CAST(json_extract(value, '$.entityId') AS INTEGER),
+                 0,
+                 CASE
+                   WHEN CAST(json_extract(value, '$.voteCount') AS INTEGER) = 0
+                   THEN 1
+                   ELSE 0
+                 END
+               FROM json_each(?)
+               WHERE true
+               ON CONFLICT(governance_component_address, type, entity_id)
+               DO UPDATE SET results_computed = CASE
+                 WHEN excluded.results_computed = 1 THEN 1
+                 ELSE vote_calculation_state.results_computed
+               END`
+            )
+            .bind(governanceComponentAddress, JSON.stringify(entities))
+        ]).pipe(Effect.orDie)
+      }
+
+      const markStateComputed = (stateId: number) =>
+        guardedBatch(database, 'mark vote calculation state computed', [
+          database
+            .prepare(
+              `UPDATE vote_calculation_state
+               SET results_computed = 1
+               WHERE id = ?
+                 AND governance_component_address = ?`
+            )
+            .bind(stateId, governanceComponentAddress)
         ]).pipe(Effect.orDie)
 
       const getAccountVotesByAddresses = (
@@ -144,25 +210,43 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
         })
 
       const getResultsByEntity = (type: string, entityId: number) =>
-        all<VoteRow>(
-          'read vote results',
-          database
-            .prepare(
-              `SELECT
-                 r.vote AS vote,
-                 r.vote_power AS votePower
-               FROM vote_calculation_state s
-               INNER JOIN vote_calculation_results r ON r.state_id = s.id
-               WHERE s.governance_component_address = ?
-                 AND s.type = ?
-                 AND s.entity_id = ?
-               ORDER BY r.vote ASC`
-            )
-            .bind(governanceComponentAddress, type, entityId)
-        ).pipe(
-          Effect.map((results) => ({ results })),
-          Effect.orDie
-        )
+        Effect.gen(function* () {
+          const state = yield* first<StateRow>(
+            'read vote calculation state for results',
+            database
+              .prepare(
+                `SELECT
+                   id,
+                   last_vote_count AS lastVoteCount,
+                   results_computed AS resultsComputed
+                 FROM vote_calculation_state
+                 WHERE governance_component_address = ?
+                   AND type = ?
+                   AND entity_id = ?`
+              )
+              .bind(governanceComponentAddress, type, entityId)
+          ).pipe(Effect.orDie)
+          if (state === null || state.resultsComputed !== 1) {
+            const results: ReadonlyArray<VoteRow> = []
+            return {
+              cacheAvailable: false,
+              results
+            }
+          }
+
+          const results = yield* all<VoteRow>(
+            'read vote results',
+            database
+              .prepare(
+                `SELECT vote, vote_power AS votePower
+                 FROM vote_calculation_results
+                 WHERE state_id = ?
+                 ORDER BY vote ASC`
+              )
+              .bind(state.id)
+          ).pipe(Effect.orDie)
+          return { cacheAvailable: true, results }
+        })
 
       const commitVoteResults = (params: {
         stateId: number
@@ -296,7 +380,8 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
             database
               .prepare(
                 `UPDATE vote_calculation_state
-                 SET last_vote_count = ?
+                 SET last_vote_count = ?,
+                     results_computed = 1
                  WHERE id = ?
                    AND governance_component_address = ?
                    AND type = ?
@@ -349,8 +434,10 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
 
       return {
         getOrCreateState,
-        isComponentCacheBackfillRequired,
-        completeComponentCacheBackfill,
+        getComponentCacheBackfillProgress,
+        setComponentCacheBackfillProgress,
+        initializeComponentCache,
+        markStateComputed,
         commitVoteResults,
         getResultsByEntity,
         getAccountVotesByEntity,

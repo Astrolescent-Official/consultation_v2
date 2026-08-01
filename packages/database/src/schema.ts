@@ -42,7 +42,13 @@ export const voteCalculationState = sqliteTable(
       .default(''),
     type: text('type').notNull(),
     entityId: integer('entity_id').notNull(),
-    lastVoteCount: integer('last_vote_count').notNull().default(0)
+    lastVoteCount: integer('last_vote_count').notNull().default(0),
+    // A row may be created before the ledger vote store is reconciled. Keep
+    // readiness explicit so row presence alone cannot authorize a terminal
+    // zero-vote verdict.
+    resultsComputed: integer('results_computed', { mode: 'boolean' })
+      .notNull()
+      .default(false)
   },
   (table) => [
     uniqueIndex('vote_calculation_state_component_type_entity_id_unique').on(

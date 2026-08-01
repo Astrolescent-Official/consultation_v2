@@ -1,0 +1,1 @@
+ALTER TABLE `vote_calculation_state` ADD `results_computed` integer DEFAULT false NOT NULL;

@@ -5,9 +5,10 @@ import {
   prepareMajorityJudgmentBallots
 } from '../majority-judgment/calculation'
 import {
+  deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase,
-  deriveRoundOneProjectedStatus
+  deriveProjectedTemperatureCheckOutcome
 } from '../majority-judgment/projection'
 
 const grades = (first: Grade, second: Grade) => [
@@ -158,15 +159,24 @@ describe('majority judgment projected phase', () => {
     )
   })
 
-  it('preserves the Round 1 quorum failure after a rerun starts', () => {
-    assert.strictEqual(deriveRoundOneProjectedStatus(false, 'LIVE'), 'LIVE')
+  it('fails a recorded TC pass closed when the weighted verdict failed', () => {
     assert.strictEqual(
-      deriveRoundOneProjectedStatus(true, 'RERUN_PENDING'),
-      'ROUND_1_FAILED'
+      deriveAuthoritativeTemperatureCheckOutcome('PASSED', false),
+      'FAILED'
     )
     assert.strictEqual(
-      deriveRoundOneProjectedStatus(true, 'RERUN_LIVE'),
-      'ROUND_1_FAILED'
+      deriveAuthoritativeTemperatureCheckOutcome('PASSED', true),
+      'PASSED'
     )
+    assert.strictEqual(
+      deriveAuthoritativeTemperatureCheckOutcome('PENDING', true),
+      'PENDING'
+    )
+  })
+
+  it('keeps a recorded pass at the projection gate until weighted verification', () => {
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(null), 'PENDING')
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(true), 'PENDING')
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(false), 'FAILED')
   })
 })

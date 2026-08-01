@@ -118,19 +118,69 @@ describe('runtime app configuration', () => {
         Layer.setConfigProvider(ConfigProvider.fromJson({ NETWORK_ID: 2 }))
       )
     )
-    const config = await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* GovernanceConfig
-      }).pipe(Effect.provide(layer))
-    )
+    const readConfig = <E>(
+      configLayer: Layer.Layer<GovernanceConfig, E, never>
+    ) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          return yield* GovernanceConfig
+        }).pipe(Effect.provide(configLayer))
+      )
+    const [config, expected] = await Promise.all([
+      readConfig(layer),
+      readConfig(GovernanceConfig.StokenetLive)
+    ])
 
-    expect(config.componentAddress).toBe(
-      'component_tdx_2_1crk7cwsd6xdys73hqx5yqjuky3a02dcklt4s86xmygw62mytae4d3j'
-    )
+    expect(config.componentAddress).toBe(expected.componentAddress)
   })
 })
 
 describe('D1 vote persistence', () => {
+  it('tracks computed readiness explicitly and backfills each component independently', async () => {
+    const zeroVoteEntityId = EntityId.make(10)
+    const pendingEntityId = EntityId.make(11)
+
+    const mainnet = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        yield* repo.initializeComponentCache([
+          {
+            type: 'temperature_check',
+            entityId: zeroVoteEntityId,
+            voteCount: 0
+          },
+          { type: 'proposal', entityId: pendingEntityId, voteCount: 2 }
+        ])
+        const zeroVote = yield* repo.getResultsByEntity(
+          'temperature_check',
+          zeroVoteEntityId
+        )
+        const pending = yield* repo.getResultsByEntity(
+          'proposal',
+          pendingEntityId
+        )
+        yield* repo.setComponentCacheBackfillProgress(5)
+        const progress = yield* repo.getComponentCacheBackfillProgress()
+        return { zeroVote, pending, progress }
+      })
+    )
+
+    expect(mainnet).toEqual({
+      zeroVote: { cacheAvailable: true, results: [] },
+      pending: { cacheAvailable: false, results: [] },
+      progress: 5
+    })
+
+    const stokenetProgress = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getComponentCacheBackfillProgress()
+      }),
+      GovernanceConfig.StokenetLive
+    )
+    expect(stokenetProgress).toBe(0)
+  })
+
   it('isolates same-ID vote states from different governance components', async () => {
     await runWithRepository(
       Effect.gen(function* () {
@@ -160,7 +210,7 @@ describe('D1 vote persistence', () => {
         return yield* repo.getResultsByEntity('temperature_check', entityId)
       })
     )
-    expect(mainnetResults).toEqual({ results: [] })
+    expect(mainnetResults).toEqual({ cacheAvailable: false, results: [] })
 
     const stokenetResults = await runWithRepository(
       Effect.gen(function* () {
@@ -170,6 +220,7 @@ describe('D1 vote persistence', () => {
       GovernanceConfig.StokenetLive
     )
     expect(stokenetResults).toEqual({
+      cacheAvailable: true,
       results: [{ vote: 'For', votePower: '100' }]
     })
   })
@@ -215,6 +266,7 @@ describe('D1 vote persistence', () => {
     )
     expect(resultsResponse.status).toBe(200)
     expect(await resultsResponse.json()).toEqual({
+      cacheAvailable: true,
       results: [
         { vote: 'Against', votePower },
         { vote: 'For', votePower: '0' }

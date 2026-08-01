@@ -53,8 +53,6 @@ type ParameterSetForm = {
   electionQuorum: string
   minimumMedianGrade: string
   rerunVotingDays: string
-  rerunQuorum: string
-  rerunMinimumMedianGrade: string
   reserveListDays: string
 }
 
@@ -73,8 +71,6 @@ const majorityJudgmentFields: ReadonlyArray<
     `Rerun voting (${governanceDurationUnitPlural})`,
     'number'
   ],
-  ['rerunQuorum', 'Rerun quorum (XRD)', 'text'],
-  ['rerunMinimumMedianGrade', 'Rerun minimum grade (0–4)', 'number'],
   ['reserveListDays', 'Reserve list (days)', 'number']
 ]
 
@@ -91,8 +87,6 @@ const emptyParameterSetForm: ParameterSetForm = {
   electionQuorum: '1000000',
   minimumMedianGrade: '2',
   rerunVotingDays: '5',
-  rerunQuorum: '1000000',
-  rerunMinimumMedianGrade: '2',
   reserveListDays: '90'
 }
 
@@ -126,9 +120,6 @@ const toFormValues = (
           parameterSet.parameters.election.minimumMedianGrade.toString(),
         rerunVotingDays:
           parameterSet.parameters.election.rerunVotingDays.toString(),
-        rerunQuorum: parameterSet.parameters.election.rerunQuorum,
-        rerunMinimumMedianGrade:
-          parameterSet.parameters.election.rerunMinimumMedianGrade.toString(),
         reserveListDays:
           parameterSet.parameters.election.reserveListDays.toString()
       }
@@ -174,15 +165,15 @@ const toParameterSetInput = (
                     ? 3
                     : 4,
           rerunVotingDays: Number(form.rerunVotingDays),
-          rerunQuorum: form.rerunQuorum,
+          rerunQuorum: form.electionQuorum,
           rerunMinimumMedianGrade:
-            Number(form.rerunMinimumMedianGrade) === 0
+            Number(form.minimumMedianGrade) === 0
               ? 0
-              : Number(form.rerunMinimumMedianGrade) === 1
+              : Number(form.minimumMedianGrade) === 1
                 ? 1
-                : Number(form.rerunMinimumMedianGrade) === 2
+                : Number(form.minimumMedianGrade) === 2
                   ? 2
-                  : Number(form.rerunMinimumMedianGrade) === 3
+                  : Number(form.minimumMedianGrade) === 3
                     ? 3
                     : 4,
           reserveListDays: Number(form.reserveListDays)
@@ -486,6 +477,10 @@ const ParameterSetFields = ({
         ) : (
           <fieldset className="space-y-4">
             <legend className="font-medium">Majority Judgment Election</legend>
+            <p className="text-xs text-muted-foreground">
+              A rerun uses the Round 1 quorum and minimum grade. Only its voting
+              duration differs.
+            </p>
             {majorityJudgmentFields.map(([field, label, type]) => (
               <ParameterInput
                 key={field}
@@ -493,19 +488,13 @@ const ParameterSetFields = ({
                 label={label}
                 type={type}
                 min={
-                  field === 'minimumMedianGrade' ||
-                  field === 'rerunMinimumMedianGrade'
+                  field === 'minimumMedianGrade'
                     ? '0'
                     : type === 'number'
                       ? '1'
                       : undefined
                 }
-                max={
-                  field === 'minimumMedianGrade' ||
-                  field === 'rerunMinimumMedianGrade'
-                    ? '4'
-                    : undefined
-                }
+                max={field === 'minimumMedianGrade' ? '4' : undefined}
                 value={form[field]}
                 onChange={(value) => handleChange(field, value)}
               />

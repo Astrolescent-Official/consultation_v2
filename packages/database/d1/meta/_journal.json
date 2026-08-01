@@ -29,6 +29,20 @@
       "when": 1785330372085,
       "tag": "0003_sturdy_captain_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785571200000,
+      "tag": "0004_fail_closed_legacy_mj_quorum",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785583104363,
+      "tag": "0005_deep_black_tom",
+      "breakpoints": true
     }
   ]
 }

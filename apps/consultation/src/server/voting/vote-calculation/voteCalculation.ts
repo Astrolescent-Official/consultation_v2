@@ -217,14 +217,18 @@ export class VoteCalculation extends Effect.Service<VoteCalculation>()(
           voteCount: payload.voteCount
         })
 
-        const { id: stateId, lastVoteCount } = yield* repo.getOrCreateState(
-          payload.type,
-          payload.entityId
-        )
+        const {
+          id: stateId,
+          lastVoteCount,
+          resultsComputed
+        } = yield* repo.getOrCreateState(payload.type, payload.entityId)
 
         yield* Effect.log('Last vote count', { lastVoteCount })
 
         if (payload.voteCount <= lastVoteCount) {
+          if (resultsComputed !== 1) {
+            yield* repo.markStateComputed(stateId)
+          }
           yield* Effect.log('No new votes, short-circuiting')
           return {
             type: payload.type,

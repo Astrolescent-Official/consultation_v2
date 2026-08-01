@@ -35,7 +35,8 @@ export function QuorumProgress({
         </div>
       </div>
     ))
-    .onSuccess((results) => {
+    .onSuccess(({ cacheAvailable, results }) => {
+      if (!cacheAvailable) return <QuorumProgressSkeleton />
       const totalPower = results.reduce(
         (sum, r) => sum + Number(r.votePower),
         0

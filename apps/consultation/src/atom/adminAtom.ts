@@ -156,6 +156,7 @@ export const recordTemperatureCheckOutcomeAtom = governanceRuntime.fn(
       input: {
         readonly temperatureCheckId: TemperatureCheckId
         readonly passed: boolean
+        readonly electionId?: MajorityJudgmentElectionId
       },
       get
     ) {
@@ -171,6 +172,9 @@ export const recordTemperatureCheckOutcomeAtom = governanceRuntime.fn(
         `Recording TC #${input.temperatureCheckId} as ${input.passed ? 'passed' : 'failed'}`
       )
       get.refresh(getTemperatureCheckByIdAtom(input.temperatureCheckId))
+      if (input.electionId !== undefined) {
+        get.refresh(majorityJudgmentElectionAtom(input.electionId))
+      }
       return result
     },
     withToast({

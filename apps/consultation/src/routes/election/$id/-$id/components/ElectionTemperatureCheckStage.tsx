@@ -1,6 +1,9 @@
 import { Option } from 'effect'
 import { TemperatureCheckId } from 'shared/governance/brandedTypes'
-import type { MajorityJudgmentElectionStatus } from 'shared/governance/index'
+import type {
+  MajorityJudgmentElectionId,
+  MajorityJudgmentElectionStatus
+} from 'shared/governance/index'
 import { AccountVotesSection } from '@/components/detail/AccountVotesSection'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
@@ -10,6 +13,7 @@ import { ElectionTemperatureCheckBallot } from './ElectionTemperatureCheckBallot
 
 export function ElectionTemperatureCheckStage({
   temperatureCheckId,
+  electionId,
   status,
   tcVotingEnd,
   tcOutcome,
@@ -17,16 +21,20 @@ export function ElectionTemperatureCheckStage({
   result
 }: {
   readonly temperatureCheckId: number
+  readonly electionId: MajorityJudgmentElectionId
   readonly status: MajorityJudgmentElectionStatus
   readonly tcVotingEnd: Date
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
   readonly tcOutcomeRecordedAt: Date | null
   readonly result: {
+    readonly tcParametersProjected: boolean
+    readonly cacheAvailable: boolean
     readonly forVotingPower: string
     readonly againstVotingPower: string
     readonly participationXrd: string
     readonly quorumXrd: string
     readonly quorumMet: boolean
+    readonly approvalThreshold: string
     readonly forShare: string
     readonly approvalMet: boolean
     readonly passed: boolean | null
@@ -59,7 +67,12 @@ export function ElectionTemperatureCheckStage({
           are expressed with grades during the MJ stage.
         </p>
       </div>
-      {showTallies ? (
+      {!result.tcParametersProjected ? (
+        <p className="text-sm text-muted-foreground">
+          Awaiting ledger projection of the candidate-list parameters. Recording
+          is disabled until the fixed quorum is available.
+        </p>
+      ) : showTallies && result.cacheAvailable ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">For / Against</dt>
@@ -90,17 +103,27 @@ export function ElectionTemperatureCheckStage({
             </dd>
           </div>
         </dl>
+      ) : showTallies ? (
+        <p className="text-sm text-muted-foreground">
+          The weighted vote cache is still being indexed.
+        </p>
       ) : null}
-      <TemperatureCheckOutcomeControls
-        temperatureCheckId={id}
-        deadline={tcVotingEnd}
-        outcome={outcome}
-        isAdmin={isAdmin}
-      />
+      {result.tcParametersProjected ? (
+        <TemperatureCheckOutcomeControls
+          temperatureCheckId={id}
+          deadline={tcVotingEnd}
+          outcome={outcome}
+          isAdmin={isAdmin}
+          quorumXrd={result.quorumXrd}
+          approvalThreshold={result.approvalThreshold}
+          electionId={electionId}
+        />
+      ) : null}
       {votingOpen ? (
         <ElectionTemperatureCheckBallot temperatureCheckId={id} />
       ) : null}
-      {status === 'TC_LIVE' || status === 'TC_FAILED' ? (
+      {(status === 'TC_LIVE' || status === 'TC_FAILED') &&
+      result.tcParametersProjected ? (
         <>
           <VoteResultsSection
             entityType="temperature_check"

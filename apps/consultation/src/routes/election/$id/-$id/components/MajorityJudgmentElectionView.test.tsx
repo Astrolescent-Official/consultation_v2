@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, assert, describe, it, vi } from 'vitest'
 import { MajorityJudgmentElectionView } from './MajorityJudgmentElectionView'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children }: { readonly children: ReactNode }) => children
+}))
 
 const candidates = [
   {
@@ -26,6 +31,8 @@ afterEach(() => {
 
 describe('majority judgment election view', () => {
   it('shows the TC stage, disables grades, and hides MJ tallies', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-21T12:00:00.000Z'))
     render(
       <MajorityJudgmentElectionView
         title="RAC election"
@@ -57,11 +64,37 @@ describe('majority judgment election view', () => {
     assert.isNull(screen.queryByText(/provisional/i))
     assert.isNull(screen.queryByText(/majority grade/i))
     assert.isNotNull(screen.getByText('Role rac'))
-    assert.isNotNull(screen.getByText('TC #42'))
+    assert.isNotNull(screen.getByText('Candidate-list TC #42'))
     assert.isNotNull(screen.getByText('rac-election v3'))
     assert.isNotNull(screen.getByText(/TC voting closes/i))
     assert.isNull(screen.queryByText(/XRD$/))
     assert.isNull(screen.queryByText(/participation/i))
+  })
+
+  it('does not describe TC voting as open after its deadline', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-22T10:00:00.000Z'))
+    render(
+      <MajorityJudgmentElectionView
+        title="RAC election"
+        status="TC_LIVE"
+        candidates={candidates}
+        seatCount={1}
+        tcVotingStart={new Date('2026-07-21T10:00:00.000Z')}
+        tcVotingEnd={new Date('2026-07-22T10:00:00.000Z')}
+        votingStart={new Date('2026-07-23T10:00:00.000Z')}
+        votingEnd={new Date('2026-07-30T10:00:00.000Z')}
+        quorumXrd="1000000"
+        totalVotingPower="0"
+      />
+    )
+
+    assert.isNotNull(
+      screen.getByText(
+        'Candidate-list voting closed; awaiting the verified outcome'
+      )
+    )
+    assert.isNull(screen.queryByText(/TC voting closes/i))
   })
 
   it('requires one grade per candidate and reports the remaining count', () => {

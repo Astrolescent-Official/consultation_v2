@@ -15,6 +15,18 @@ export type MajorityJudgmentPhaseBoundaries = {
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
 }
 
+export const deriveAuthoritativeTemperatureCheckOutcome = (
+  recorded: 'PENDING' | 'PASSED' | 'FAILED',
+  calculatedPassed: boolean
+): 'PENDING' | 'PASSED' | 'FAILED' => {
+  if (!calculatedPassed) return 'FAILED'
+  return recorded === 'PASSED' ? 'PASSED' : recorded
+}
+
+export const deriveProjectedTemperatureCheckOutcome = (
+  recordedPassed: boolean | null
+): 'PENDING' | 'FAILED' => (recordedPassed === false ? 'FAILED' : 'PENDING')
+
 export const deriveMajorityJudgmentPhase = (
   now: Date,
   boundaries: MajorityJudgmentPhaseBoundaries
@@ -45,11 +57,6 @@ export const deriveMajorityJudgmentRerunPhase = (
   return 'RERUN_LIVE'
 }
 
-export const deriveRoundOneProjectedStatus = (
-  rerunStarted: boolean,
-  status: MajorityJudgmentElectionStatus
-): MajorityJudgmentElectionStatus => (rerunStarted ? 'ROUND_1_FAILED' : status)
-
 const deriveElectionStatus = (
   now: Date,
   election: MajorityJudgmentElection,
@@ -62,14 +69,25 @@ const deriveElectionStatus = (
         tcVotingEnd: temperatureCheck.deadline,
         votingStart: election.roundOne.start,
         votingEnd: election.roundOne.deadline,
-        tcOutcome: Option.match(temperatureCheck.outcome, {
-          onNone: () => 'PENDING' as const,
-          onSome: (outcome) =>
-            outcome.passed ? ('PASSED' as const) : ('FAILED' as const)
-        })
+        // A recorded pass is necessary but not sufficient. Keep the
+        // projection at the TC gate until the collector verifies the
+        // component-scoped weighted tally. The finalizer alone opens MJ.
+        tcOutcome: deriveProjectedTemperatureCheckOutcome(
+          Option.match(temperatureCheck.outcome, {
+            onNone: () => null,
+            onSome: (outcome) => outcome.passed
+          })
+        )
       }),
-    onSome: (rerun) =>
-      deriveMajorityJudgmentRerunPhase(now, rerun.start, rerun.deadline)
+    onSome: (rerun) => {
+      const recordedTcPassed = Option.exists(
+        temperatureCheck.outcome,
+        (outcome) => outcome.passed
+      )
+      return recordedTcPassed
+        ? deriveMajorityJudgmentRerunPhase(now, rerun.start, rerun.deadline)
+        : 'TC_FAILED'
+    }
   })
 
 export class InvalidMajorityJudgmentProjectionError extends Data.TaggedError(
@@ -142,6 +160,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
         const rerunStarted = Option.isSome(election.rerun)
 
         yield* repo.projectElection({
+          temperatureCheckVoteCount: temperatureCheck.voteCount,
           election: {
             id: electionId,
             temperatureCheckId: Number(election.temperatureCheckId),
@@ -183,11 +202,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
             links: candidate.links,
             displayOrder: candidate.displayOrder
           })),
-          round: makeRound(
-            election.roundOne,
-            1,
-            deriveRoundOneProjectedStatus(rerunStarted, status)
-          )
+          round: makeRound(election.roundOne, 1, status)
         })
 
         yield* Option.match(election.rerun, {

@@ -25,6 +25,7 @@ import { VoteCalculation } from './vote-calculation/voteCalculation'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
 
 const PAGE_SIZE = 100
+const COMPONENT_CACHE_BACKFILL_BATCH_SIZE = 5
 
 const LedgerDrainStateSchema = Schema.Struct({
   state_version: Schema.Number,
@@ -137,6 +138,15 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
             Effect.fn('PollService.processGovernanceAction')(
               function* (action) {
                 switch (action._tag) {
+                  case 'StandardEntityCreated':
+                    yield* voteCalculationRepo.initializeComponentCache([
+                      {
+                        type: action.type,
+                        entityId: action.entityId,
+                        voteCount: 0
+                      }
+                    ])
+                    break
                   case 'StandardVotesChanged':
                     yield* calculateVotes(action.payload)
                     break
@@ -190,9 +200,9 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
     const backfillComponentCache = Effect.fn(
       '@Consultation/PollService.backfillComponentCache'
     )(function* () {
-      const required =
-        yield* voteCalculationRepo.isComponentCacheBackfillRequired()
-      if (!required) return
+      const progress =
+        yield* voteCalculationRepo.getComponentCacheBackfillProgress()
+      if (progress === null) return
 
       const [temperatureChecks, proposalPage] = yield* Effect.all(
         [
@@ -221,13 +231,38 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
           voteCount: proposal.voteCount,
           start: proposal.start.getTime()
         }))
-      ].filter((payload) => payload.voteCount > 0)
+      ].sort((left, right) => {
+        if (left.type === right.type) return left.entityId - right.entityId
+        return left.type === 'temperature_check' ? -1 : 1
+      })
+      const batch = payloads.slice(
+        progress,
+        progress + COMPONENT_CACHE_BACKFILL_BATCH_SIZE
+      )
+
+      if (batch.length === 0) {
+        yield* voteCalculationRepo.setComponentCacheBackfillProgress('complete')
+        return
+      }
 
       yield* Effect.logInfo('Backfilling component-scoped vote cache', {
-        entityCount: payloads.length
+        entityCount: payloads.length,
+        progress,
+        batchSize: batch.length
       })
-      yield* Effect.forEach(payloads, calculateVotes, { concurrency: 1 })
-      yield* voteCalculationRepo.completeComponentCacheBackfill()
+      // Initialize the whole batch in one D1 statement. Ledger-confirmed
+      // zero-vote entities become authoritative immediately; only positive
+      // vote counts need the heavier aggregation path.
+      yield* voteCalculationRepo.initializeComponentCache(batch)
+      yield* Effect.forEach(
+        batch.filter((payload) => payload.voteCount > 0),
+        calculateVotes,
+        { concurrency: 1 }
+      )
+      const nextProgress = progress + batch.length
+      yield* voteCalculationRepo.setComponentCacheBackfillProgress(
+        nextProgress >= payloads.length ? 'complete' : nextProgress
+      )
     })
 
     return Effect.fn('@Consultation/PollService')(function* () {
@@ -258,11 +293,19 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
       // this affected-entity query was exhausted. Its proposer timestamp, not
       // collector wall time, proves that every valid pre-deadline vote visible
       // at that ledger point was processed before a terminal result is written.
+      // Populate component-scoped vote state before finalization. Progress is
+      // keyed by governance component address, so a rotation automatically
+      // starts a fresh bounded backfill. A failed batch is retried on the next
+      // poll, but it must not prevent unrelated elections from finalizing.
+      yield* backfillComponentCache().pipe(
+        Effect.catchAllCause((cause) =>
+          Effect.logError('Component vote-cache backfill deferred', { cause })
+        )
+      )
       yield* Option.match(drained.watermark, {
         onNone: () => Effect.void,
         onSome: majorityJudgmentFinalizer.finalize
       })
-      yield* backfillComponentCache()
 
       yield* Effect.logInfo('Poll completed', {
         fromStateVersion: sv,
