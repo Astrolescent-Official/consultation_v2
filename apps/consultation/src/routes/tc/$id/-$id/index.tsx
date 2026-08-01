@@ -154,6 +154,7 @@ function PageContentInner({
             continuation={tc.continuation}
             outcome={tc.outcome}
             deadline={tc.deadline}
+            isAdmin={isAdmin}
           />
           <HideToggle type="temperature_check" id={id} hidden={tc.hidden} />
         </div>

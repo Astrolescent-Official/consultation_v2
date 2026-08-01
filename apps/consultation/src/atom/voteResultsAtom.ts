@@ -8,8 +8,7 @@ export const voteResultsAtom = Atom.family((type: EntityType) =>
     voteClientRuntime.atom(
       Effect.gen(function* () {
         const client = yield* VoteClient
-        const { results } = yield* client.GetVoteResults({ type, entityId })
-        return results
+        return yield* client.GetVoteResults({ type, entityId })
       })
     )
   )

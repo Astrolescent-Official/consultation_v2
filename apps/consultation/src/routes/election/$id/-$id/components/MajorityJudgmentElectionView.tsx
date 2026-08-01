@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import {
   type Grade,
@@ -26,6 +27,7 @@ type CandidateResult = {
 }
 
 type ElectionResult = {
+  readonly round?: 'RoundOne' | 'Rerun'
   readonly candidateResults: ReadonlyArray<CandidateResult>
   readonly tieBreakIterations: number
   readonly unresolvedCandidateIds: ReadonlyArray<number>
@@ -37,6 +39,7 @@ type HistoricalElectionResult = ElectionResult & {
   readonly status: MajorityJudgmentElectionStatus
   readonly totalVotingPower: string
   readonly quorumXrd: string
+  readonly provisional: boolean
 }
 
 type MajorityJudgmentElectionViewProps = {
@@ -226,6 +229,10 @@ export function MajorityJudgmentElectionView({
       ),
     [result]
   )
+  const historicalResults = results.filter(
+    (historicalResult) =>
+      !historicalResult.provisional && historicalResult.round !== result?.round
+  )
 
   const submit = () => {
     if (!votingOpen || remaining > 0 || onSubmit === undefined) return
@@ -251,12 +258,13 @@ export function MajorityJudgmentElectionView({
         parameterSetVersion !== undefined ? (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span>Role {roleId}</span>
-            <a
-              href={`/tc/${temperatureCheckId}`}
+            <Link
+              to="/tc/$id"
+              params={{ id: String(temperatureCheckId) }}
               className="underline underline-offset-4"
             >
               Candidate-list TC #{temperatureCheckId}
-            </a>
+            </Link>
             <span>
               {parameterSetId} v{parameterSetVersion}
             </span>
@@ -487,9 +495,9 @@ export function MajorityJudgmentElectionView({
             <p className="text-sm text-muted-foreground">
               No candidate is elected; all seats return to the applicable
               vacancy or founding-election process.{' '}
-              <a href="/about" className="underline underline-offset-4">
+              <Link to="/about" className="underline underline-offset-4">
                 Read the governance policy
-              </a>
+              </Link>
               .
             </p>
           ) : null}
@@ -505,16 +513,16 @@ export function MajorityJudgmentElectionView({
             <p className="text-sm text-muted-foreground">
               Unfilled seats return to the applicable vacancy or
               founding-election process.{' '}
-              <a href="/about" className="underline underline-offset-4">
+              <Link to="/about" className="underline underline-offset-4">
                 Read the governance policy
-              </a>
+              </Link>
               .
             </p>
           ) : null}
         </section>
       ) : null}
 
-      {results.length > 0 ? (
+      {historicalResults.length > 0 ? (
         <section className="space-y-3" aria-label="Round audit history">
           <div>
             <h2 className="text-xl font-medium">Round audit history</h2>
@@ -523,7 +531,7 @@ export function MajorityJudgmentElectionView({
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {results.map((historicalResult) => (
+            {historicalResults.map((historicalResult) => (
               <Card key={historicalResult.round}>
                 <CardContent className="space-y-2 pt-6 text-sm">
                   <p className="font-medium">

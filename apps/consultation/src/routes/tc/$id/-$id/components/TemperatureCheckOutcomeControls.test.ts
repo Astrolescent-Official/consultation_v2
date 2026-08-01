@@ -1,5 +1,5 @@
+import { calculateTemperatureCheckOutcome } from 'shared/governance/index'
 import { assert, describe, it } from 'vitest'
-import { calculateTemperatureCheckOutcome } from './TemperatureCheckOutcomeControls'
 
 describe('temperature check outcome controls', () => {
   it('requires both quorum and approval before offering a pass', () => {
@@ -12,7 +12,17 @@ describe('temperature check outcome controls', () => {
         quorumXrd: '100',
         approvalThreshold: '0.5'
       }),
-      { quorumMet: true, approvalMet: true, passed: true }
+      {
+        forVotingPower: '60',
+        againstVotingPower: '40',
+        participationXrd: '100',
+        quorumXrd: '100',
+        quorumMet: true,
+        approvalThreshold: '0.5',
+        forShare: '0.6',
+        approvalMet: true,
+        calculatedPassed: true
+      }
     )
     assert.isFalse(
       calculateTemperatureCheckOutcome({
@@ -22,7 +32,7 @@ describe('temperature check outcome controls', () => {
         ],
         quorumXrd: '100',
         approvalThreshold: '0.5'
-      }).passed
+      }).calculatedPassed
     )
     assert.isFalse(
       calculateTemperatureCheckOutcome({
@@ -32,7 +42,7 @@ describe('temperature check outcome controls', () => {
         ],
         quorumXrd: '100',
         approvalThreshold: '0.5'
-      }).passed
+      }).calculatedPassed
     )
   })
 })

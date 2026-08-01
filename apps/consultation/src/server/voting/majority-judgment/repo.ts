@@ -1,4 +1,3 @@
-import BigNumber from 'bignumber.js'
 import {
   type MajorityJudgmentCandidateGradeJson,
   type MajorityJudgmentCandidateResultJson,
@@ -13,6 +12,7 @@ import { and, asc, eq, notInArray } from 'drizzle-orm'
 import { Array as A, Data, Effect, Option, pipe, Schema } from 'effect'
 import {
   CandidateHttpUrlStringSchema,
+  calculateTemperatureCheckOutcome,
   canTransitionFromRoundOneFailure,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
@@ -21,7 +21,6 @@ import {
   type MajorityJudgmentElectionStatus,
   MajorityJudgmentElectionStatusSchema
 } from 'shared/governance/index'
-import { meetsQuorum } from '../../../lib/quorum'
 import { VoteDatabase } from '../db/d1'
 import { ORM } from '../db/orm'
 import { guardedBatch } from '../pollLease'
@@ -30,6 +29,8 @@ import { VoteCalculationRepo } from '../vote-calculation/voteCalculationRepo'
 type ElectionProjection = typeof mjElection.$inferInsert
 type CandidateProjection = typeof mjCandidate.$inferInsert
 type RoundProjection = typeof mjRound.$inferInsert
+
+export const UNPROJECTED_TC_QUORUM_XRD = '1000000000000000000000000000000'
 
 const StoredCandidateGradesSchema = Schema.Array(
   Schema.Struct({
@@ -131,12 +132,29 @@ export const isClosedMajorityJudgmentResult = (status: string) =>
 const isPhaseLocked = (status: string) =>
   isTerminal(status) || status === 'TIE_UNRESOLVED'
 
+const hasPassedTemperatureCheckGate = (status: string) =>
+  status === 'MJ_PENDING' ||
+  status === 'LIVE' ||
+  status === 'ROUND_1_FAILED' ||
+  status === 'RERUN_PENDING' ||
+  status === 'RERUN_LIVE' ||
+  status === 'TIE_UNRESOLVED' ||
+  status === 'FINAL' ||
+  status === 'FAILED'
+
+const isTemperatureCheckPhase = (status: MajorityJudgmentElectionStatus) =>
+  status === 'PENDING' || status === 'TC_LIVE' || status === 'TC_FAILED'
+
 const isPhaseTransitionBlocked = (
   currentStatus: string,
-  nextStatus: MajorityJudgmentElectionStatus
+  nextStatus: MajorityJudgmentElectionStatus,
+  hasPublishedRoundOneFailure: boolean
 ) =>
   isPhaseLocked(currentStatus) ||
+  (hasPassedTemperatureCheckGate(currentStatus) &&
+    isTemperatureCheckPhase(nextStatus)) ||
   ((nextStatus === 'RERUN_PENDING' || nextStatus === 'RERUN_LIVE') &&
+    !hasPublishedRoundOneFailure &&
     currentStatus !== 'ROUND_1_FAILED' &&
     currentStatus !== 'RERUN_PENDING' &&
     currentStatus !== 'RERUN_LIVE') ||
@@ -154,6 +172,12 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
 
       const projectElection = Effect.fn('MajorityJudgmentRepo.projectElection')(
         function* (input: MajorityJudgmentProjectionInput) {
+          // Presence of this component-scoped row distinguishes a legitimate
+          // zero-vote tally from a cache that has not been built yet.
+          yield* voteCalculationRepo.getOrCreateState(
+            'temperature_check',
+            input.election.temperatureCheckId
+          )
           yield* db
             .insert(mjElection)
             .values(input.election)
@@ -360,40 +384,24 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           'temperature_check',
           input.temperatureCheckId
         )
-        const forVotingPower = new BigNumber(
-          tcResults.results.find(({ vote }) => vote === 'For')?.votePower ?? '0'
-        )
-        const againstVotingPower = new BigNumber(
-          tcResults.results.find(({ vote }) => vote === 'Against')?.votePower ??
-            '0'
-        )
-        const participation = forVotingPower.plus(againstVotingPower)
-        const forShare = participation.isZero()
-          ? new BigNumber(0)
-          : forVotingPower.dividedBy(participation)
-        const quorumMet = meetsQuorum(participation, input.quorumXrd)
-        const approvalMet = forShare.isGreaterThanOrEqualTo(
-          input.approvalThreshold
-        )
-        const calculatedPassed = quorumMet && approvalMet
+        const calculated = calculateTemperatureCheckOutcome({
+          results: tcResults.results,
+          quorumXrd: input.quorumXrd,
+          approvalThreshold: input.approvalThreshold
+        })
         const recordedPassed =
           input.recordedOutcome === null
             ? null
             : input.recordedOutcome === 'PASSED'
 
         return {
-          forVotingPower: forVotingPower.toFixed(),
-          againstVotingPower: againstVotingPower.toFixed(),
-          participationXrd: participation.toFixed(),
-          quorumXrd: input.quorumXrd,
-          quorumMet,
-          approvalThreshold: input.approvalThreshold,
-          forShare: forShare.toFixed(),
-          approvalMet,
-          calculatedPassed,
+          cacheAvailable: tcResults.cacheAvailable,
+          ...calculated,
           recordedPassed,
           outcomeConsistent:
-            recordedPassed === null ? null : recordedPassed === calculatedPassed
+            recordedPassed === null
+              ? null
+              : recordedPassed === calculated.calculatedPassed
         } as const
       })
 
@@ -424,9 +432,27 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             .where(eq(mjElection.id, electionId))
             .limit(1)
           const currentStatus = rows[0]?.status
+          const roundOneFailures =
+            status === 'RERUN_PENDING' || status === 'RERUN_LIVE'
+              ? yield* db
+                  .select({ status: mjResult.status })
+                  .from(mjResult)
+                  .where(
+                    and(
+                      eq(mjResult.electionId, electionId),
+                      eq(mjResult.round, 1),
+                      eq(mjResult.status, 'ROUND_1_FAILED')
+                    )
+                  )
+                  .limit(1)
+              : []
           if (
             currentStatus === undefined ||
-            isPhaseTransitionBlocked(currentStatus, status)
+            isPhaseTransitionBlocked(
+              currentStatus,
+              status,
+              roundOneFailures[0] !== undefined
+            )
           ) {
             return
           }
@@ -801,7 +827,7 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           election.status === 'RERUN_PENDING'
             ? {}
             : {
-                result: mapResult({ ...result, status: election.status })
+                result: mapResult(result)
               }),
           results: results.map(mapResult)
         }

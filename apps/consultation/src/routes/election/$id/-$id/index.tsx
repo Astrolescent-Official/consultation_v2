@@ -27,6 +27,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { InlineCode } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
+import { automaticElectionRefreshDelay } from './automaticRefresh'
 import { ElectionTemperatureCheckStage } from './components/ElectionTemperatureCheckStage'
 import { MajorityJudgmentElectionView } from './components/MajorityJudgmentElectionView'
 import { MajorityJudgmentOwnerControls } from './components/MajorityJudgmentOwnerControls'
@@ -62,6 +63,7 @@ export function Page({
   )
   const [voteAllAccounts, setVoteAllAccounts] = useState(false)
   const [now, setNow] = useState(Date.now)
+  const [automaticRefreshAttempt, setAutomaticRefreshAttempt] = useState(0)
   const currentAccount = useCurrentAccount()
   const isAdmin = useIsAdmin()
   const electionError = Result.error(electionResult)
@@ -73,6 +75,12 @@ export function Page({
     Result.isSuccess(electionResult) &&
     electionResult.value.election.tcOutcome === 'PENDING' &&
     now >= electionResult.value.election.tcVotingEnd.getTime()
+  const isWaitingForProjection = isIndexing || isAwaitingOutcomeProjection
+  const automaticRefreshDelay = automaticElectionRefreshDelay(
+    automaticRefreshAttempt
+  )
+  const automaticRefreshPaused =
+    isWaitingForProjection && automaticRefreshDelay === undefined
 
   useEffect(() => {
     if (!Result.isSuccess(electionResult)) return
@@ -86,10 +94,22 @@ export function Page({
   }, [electionResult, now])
 
   useEffect(() => {
-    if (!isIndexing && !isAwaitingOutcomeProjection) return
-    const timer = window.setInterval(refreshElection, 3_000)
-    return () => window.clearInterval(timer)
-  }, [isAwaitingOutcomeProjection, isIndexing, refreshElection])
+    if (!isWaitingForProjection) {
+      setAutomaticRefreshAttempt(0)
+      return
+    }
+    if (automaticRefreshDelay === undefined) return
+    const timer = window.setTimeout(() => {
+      refreshElection()
+      setAutomaticRefreshAttempt((attempt) => attempt + 1)
+    }, automaticRefreshDelay)
+    return () => window.clearTimeout(timer)
+  }, [automaticRefreshDelay, isWaitingForProjection, refreshElection])
+
+  const checkNow = useCallback(() => {
+    setAutomaticRefreshAttempt(0)
+    refreshElection()
+  }, [refreshElection])
 
   const submit = useCallback(
     (
@@ -129,12 +149,17 @@ export function Page({
     .onFailure((error) =>
       isIndexing ? (
         <div className="space-y-3 py-12 text-center">
-          <p className="font-medium">Election created; indexing it now…</p>
+          <p className="font-medium">Election not available yet</p>
           <p className="text-sm text-muted-foreground">
-            The ledger transaction is complete. This page will refresh as soon
-            as the collector publishes the election.
+            The election is not available in the collector yet. It may still be
+            indexing, or this election ID may not exist.
           </p>
-          <Button type="button" variant="outline" onClick={refreshElection}>
+          {automaticRefreshPaused ? (
+            <p className="text-xs text-muted-foreground">
+              Automatic checks paused after five attempts.
+            </p>
+          ) : null}
+          <Button type="button" variant="outline" onClick={checkNow}>
             Check now
           </Button>
         </div>
@@ -173,6 +198,17 @@ export function Page({
 
       return (
         <div className="space-y-4">
+          {automaticRefreshPaused && isAwaitingOutcomeProjection ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
+              <span>
+                The verified outcome is still pending; automatic checks have
+                paused.
+              </span>
+              <Button type="button" variant="outline" onClick={checkNow}>
+                Check now
+              </Button>
+            </div>
+          ) : null}
           <ElectionTemperatureCheckStage
             temperatureCheckId={response.election.temperatureCheckId}
             electionId={electionId}

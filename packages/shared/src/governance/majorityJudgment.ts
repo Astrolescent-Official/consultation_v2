@@ -18,6 +18,40 @@ export const PositiveDecimalStringSchema = DecimalStringSchema.pipe(
   })
 )
 
+export const calculateTemperatureCheckOutcome = (input: {
+  readonly results: ReadonlyArray<{
+    readonly vote: string
+    readonly votePower: string
+  }>
+  readonly quorumXrd: string
+  readonly approvalThreshold: string
+}) => {
+  const forVotingPower = new BigNumber(
+    input.results.find(({ vote }) => vote === 'For')?.votePower ?? '0'
+  )
+  const againstVotingPower = new BigNumber(
+    input.results.find(({ vote }) => vote === 'Against')?.votePower ?? '0'
+  )
+  const participation = forVotingPower.plus(againstVotingPower)
+  const forShare = participation.isZero()
+    ? new BigNumber(0)
+    : forVotingPower.dividedBy(participation)
+  const quorumMet = participation.isGreaterThanOrEqualTo(input.quorumXrd)
+  const approvalMet = forShare.isGreaterThanOrEqualTo(input.approvalThreshold)
+
+  return {
+    forVotingPower: forVotingPower.toFixed(),
+    againstVotingPower: againstVotingPower.toFixed(),
+    participationXrd: participation.toFixed(),
+    quorumXrd: input.quorumXrd,
+    quorumMet,
+    approvalThreshold: input.approvalThreshold,
+    forShare: forShare.toFixed(),
+    approvalMet,
+    calculatedPassed: quorumMet && approvalMet
+  }
+}
+
 export const CandidateHttpUrlStringSchema = Schema.String.pipe(
   Schema.filter(
     (value) => {
@@ -381,6 +415,7 @@ export class MajorityJudgmentResultResponse extends Schema.Class<MajorityJudgmen
 export class TemperatureCheckResultResponse extends Schema.Class<TemperatureCheckResultResponse>(
   'TemperatureCheckResultResponse'
 )({
+  cacheAvailable: Schema.Boolean,
   forVotingPower: DecimalStringSchema,
   againstVotingPower: DecimalStringSchema,
   participationXrd: DecimalStringSchema,

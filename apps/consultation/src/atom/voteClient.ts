@@ -17,6 +17,7 @@ const VoteResultSchema = Schema.Struct({
 })
 
 const GetVoteResultsResponse = Schema.Struct({
+  cacheAvailable: Schema.Boolean,
   results: Schema.Array(VoteResultSchema)
 })
 

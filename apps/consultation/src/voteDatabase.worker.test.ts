@@ -165,7 +165,7 @@ describe('D1 vote persistence', () => {
         return yield* repo.getResultsByEntity('temperature_check', entityId)
       })
     )
-    expect(mainnetResults).toEqual({ results: [] })
+    expect(mainnetResults).toEqual({ cacheAvailable: false, results: [] })
 
     const stokenetResults = await runWithRepository(
       Effect.gen(function* () {
@@ -175,6 +175,7 @@ describe('D1 vote persistence', () => {
       GovernanceConfig.StokenetLive
     )
     expect(stokenetResults).toEqual({
+      cacheAvailable: true,
       results: [{ vote: 'For', votePower: '100' }]
     })
   })
@@ -220,6 +221,7 @@ describe('D1 vote persistence', () => {
     )
     expect(resultsResponse.status).toBe(200)
     expect(await resultsResponse.json()).toEqual({
+      cacheAvailable: true,
       results: [
         { vote: 'Against', votePower },
         { vote: 'For', votePower: '0' }

@@ -1,37 +1,19 @@
-import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
-import BigNumber from 'bignumber.js'
+import {
+  Result,
+  useAtom,
+  useAtomRefresh,
+  useAtomValue
+} from '@effect-atom/atom-react'
 import { Option } from 'effect'
 import { LoaderIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
 import type { MajorityJudgmentElectionId } from 'shared/governance/index'
+import { calculateTemperatureCheckOutcome } from 'shared/governance/index'
 import type { TemperatureCheck } from 'shared/governance/schemas'
 import { recordTemperatureCheckOutcomeAtom } from '@/atom/adminAtom'
 import { voteResultsAtom } from '@/atom/voteResultsAtom'
 import { Button } from '@/components/ui/button'
-
-export const calculateTemperatureCheckOutcome = (input: {
-  readonly results: ReadonlyArray<{
-    readonly vote: string
-    readonly votePower: string
-  }>
-  readonly quorumXrd: string
-  readonly approvalThreshold: string
-}) => {
-  const forPower = new BigNumber(
-    input.results.find(({ vote }) => vote === 'For')?.votePower ?? '0'
-  )
-  const againstPower = new BigNumber(
-    input.results.find(({ vote }) => vote === 'Against')?.votePower ?? '0'
-  )
-  const participation = forPower.plus(againstPower)
-  const forShare = participation.isZero()
-    ? new BigNumber(0)
-    : forPower.dividedBy(participation)
-  const quorumMet = participation.isGreaterThanOrEqualTo(input.quorumXrd)
-  const approvalMet = forShare.isGreaterThanOrEqualTo(input.approvalThreshold)
-  return { quorumMet, approvalMet, passed: quorumMet && approvalMet }
-}
 
 export function TemperatureCheckOutcomeControls({
   temperatureCheckId,
@@ -52,17 +34,19 @@ export function TemperatureCheckOutcomeControls({
 }) {
   const [result, recordOutcome] = useAtom(recordTemperatureCheckOutcomeAtom)
   const [now, setNow] = useState(Date.now)
-  const voteResults = useAtomValue(
+  const weightedResultsAtom =
     voteResultsAtom('temperature_check')(temperatureCheckId)
-  )
-  const calculated = Result.isSuccess(voteResults)
-    ? calculateTemperatureCheckOutcome({
-        results: voteResults.value,
-        quorumXrd,
-        approvalThreshold
-      })
-    : undefined
-  const calculatedPassed = calculated?.passed === true
+  const voteResults = useAtomValue(weightedResultsAtom)
+  const refreshVoteResults = useAtomRefresh(weightedResultsAtom)
+  const calculated =
+    Result.isSuccess(voteResults) && voteResults.value.cacheAvailable
+      ? calculateTemperatureCheckOutcome({
+          results: voteResults.value.results,
+          quorumXrd,
+          approvalThreshold
+        })
+      : undefined
+  const calculatedPassed = calculated?.calculatedPassed === true
 
   useEffect(() => {
     const deadlineMs = deadline.getTime()
@@ -93,6 +77,44 @@ export function TemperatureCheckOutcomeControls({
     )
   }
   if (!isAdmin || now < deadline.getTime()) return null
+
+  if (Result.isFailure(voteResults)) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-destructive">
+        <span>The verified weighted result could not be loaded.</span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={refreshVoteResults}
+        >
+          Try again
+        </Button>
+      </div>
+    )
+  }
+
+  if (
+    calculated === undefined &&
+    Result.isSuccess(voteResults) &&
+    !voteResults.value.cacheAvailable
+  ) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>
+          Weighted votes are still being indexed; recording is disabled.
+        </span>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={refreshVoteResults}
+        >
+          Check again
+        </Button>
+      </div>
+    )
+  }
 
   if (calculated === undefined) {
     return (

@@ -144,25 +144,40 @@ export class VoteCalculationRepo extends Effect.Service<VoteCalculationRepo>()(
         })
 
       const getResultsByEntity = (type: string, entityId: number) =>
-        all<VoteRow>(
-          'read vote results',
-          database
-            .prepare(
-              `SELECT
-                 r.vote AS vote,
-                 r.vote_power AS votePower
-               FROM vote_calculation_state s
-               INNER JOIN vote_calculation_results r ON r.state_id = s.id
-               WHERE s.governance_component_address = ?
-                 AND s.type = ?
-                 AND s.entity_id = ?
-               ORDER BY r.vote ASC`
-            )
-            .bind(governanceComponentAddress, type, entityId)
-        ).pipe(
-          Effect.map((results) => ({ results })),
-          Effect.orDie
-        )
+        Effect.gen(function* () {
+          const state = yield* first<StateRow>(
+            'read vote calculation state for results',
+            database
+              .prepare(
+                `SELECT id, last_vote_count AS lastVoteCount
+                 FROM vote_calculation_state
+                 WHERE governance_component_address = ?
+                   AND type = ?
+                   AND entity_id = ?`
+              )
+              .bind(governanceComponentAddress, type, entityId)
+          ).pipe(Effect.orDie)
+          if (state === null) {
+            const results: ReadonlyArray<VoteRow> = []
+            return {
+              cacheAvailable: false,
+              results
+            }
+          }
+
+          const results = yield* all<VoteRow>(
+            'read vote results',
+            database
+              .prepare(
+                `SELECT vote, vote_power AS votePower
+                 FROM vote_calculation_results
+                 WHERE state_id = ?
+                 ORDER BY vote ASC`
+              )
+              .bind(state.id)
+          ).pipe(Effect.orDie)
+          return { cacheAvailable: true, results }
+        })
 
       const commitVoteResults = (params: {
         stateId: number

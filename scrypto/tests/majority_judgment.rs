@@ -432,7 +432,7 @@ fn start_rerun(
     voting_start: Instant,
     authorized: bool,
     should_succeed: bool,
-) {
+) -> TransactionReceipt {
     let builder = if authorized {
         owner_builder(owner)
     } else {
@@ -458,6 +458,7 @@ fn start_rerun(
     } else {
         receipt.expect_commit_failure();
     }
+    receipt
 }
 
 fn record_tie_resolution(
@@ -1079,7 +1080,21 @@ fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
         true,
         true,
     );
-    start_rerun(
+    // A tie resolution can only be recorded once per election.
+    record_tie_resolution(
+        &mut ledger,
+        component,
+        &owner,
+        0,
+        MajorityJudgmentRoundId::RoundOne,
+        vec![
+            MajorityJudgmentCandidateId(0),
+            MajorityJudgmentCandidateId(1),
+        ],
+        true,
+        false,
+    );
+    let receipt = start_rerun(
         &mut ledger,
         component,
         &owner,
@@ -1088,6 +1103,12 @@ fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
         true,
         false,
     );
+    receipt.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("An election with a recorded tie resolution cannot be rerun")
+        }
+        _ => false,
+    });
 }
 
 #[test]

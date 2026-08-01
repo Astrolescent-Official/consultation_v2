@@ -43,7 +43,14 @@ export function VoteResultsSection({
         Failed to load vote results.
       </div>
     ))
-    .onSuccess((results) => {
+    .onSuccess(({ cacheAvailable, results }) => {
+      if (!cacheAvailable) {
+        return (
+          <div className="py-4 text-sm text-muted-foreground">
+            Vote results are still being indexed.
+          </div>
+        )
+      }
       const resultMap = new Map(
         results.map((r) => [r.vote, Number(r.votePower)])
       )

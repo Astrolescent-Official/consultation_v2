@@ -221,7 +221,7 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
           voteCount: proposal.voteCount,
           start: proposal.start.getTime()
         }))
-      ].filter((payload) => payload.voteCount > 0)
+      ]
 
       yield* Effect.logInfo('Backfilling component-scoped vote cache', {
         entityCount: payloads.length
@@ -258,11 +258,14 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
       // this affected-entity query was exhausted. Its proposer timestamp, not
       // collector wall time, proves that every valid pre-deadline vote visible
       // at that ledger point was processed before a terminal result is written.
+      // Populate component-scoped vote state before finalization. In
+      // particular, address rotation and a fresh D1 otherwise look exactly
+      // like a legitimate zero-vote tally and could fail elections terminally.
+      yield* backfillComponentCache()
       yield* Option.match(drained.watermark, {
         onNone: () => Effect.void,
         onSome: majorityJudgmentFinalizer.finalize
       })
-      yield* backfillComponentCache()
 
       yield* Effect.logInfo('Poll completed', {
         fromStateVersion: sv,

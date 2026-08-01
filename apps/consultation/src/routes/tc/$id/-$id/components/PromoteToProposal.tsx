@@ -1,13 +1,13 @@
-import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
+import { useAtom } from '@effect-atom/atom-react'
 import { useNavigate } from '@tanstack/react-router'
 import { Option } from 'effect'
 import { ArrowUpRight, LoaderIcon } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type {
   TemperatureCheck,
   TemperatureCheckId
 } from 'shared/governance/index'
-import { isAdminAtom, promoteToProposalAtom } from '@/atom/adminAtom'
+import { promoteToProposalAtom } from '@/atom/adminAtom'
 import { Button } from '@/components/ui/button'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 
@@ -17,6 +17,7 @@ type PromoteToProposalProps = {
   readonly continuation: TemperatureCheck['continuation']
   readonly outcome: TemperatureCheck['outcome']
   readonly deadline: Date
+  readonly isAdmin: boolean
 }
 
 export function PromoteToProposal({
@@ -24,15 +25,29 @@ export function PromoteToProposal({
   followUp,
   continuation,
   outcome,
-  deadline
+  deadline,
+  isAdmin
 }: PromoteToProposalProps) {
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const deadlineMs = deadline.getTime()
+    if (now >= deadlineMs) return
+    const timer = window.setTimeout(
+      () => setNow(Date.now()),
+      Math.min(deadlineMs - now, 2_147_483_647)
+    )
+    return () => window.clearTimeout(timer)
+  }, [deadline, now])
+
   if (Option.isSome(continuation)) {
     return <ContinuationBanner continuation={continuation.value} />
   }
   if (Option.isNone(outcome)) {
-    return Date.now() >= deadline.getTime() ? (
+    return isAdmin && now >= deadline.getTime() ? (
       <span className="text-xs text-muted-foreground">
-        Record the weighted TC outcome before creating a Governance Proposal.
+        {followUp._tag === 'StandardProposal'
+          ? 'Record the weighted TC outcome before creating a Governance Proposal.'
+          : 'Record the weighted TC outcome before Majority Judgment voting can open.'}
       </span>
     ) : null
   }
@@ -42,6 +57,7 @@ export function PromoteToProposal({
     <AdminPromoteBadge
       temperatureCheckId={temperatureCheckId}
       followUp={followUp}
+      isAdmin={isAdmin}
     />
   )
 }
@@ -82,42 +98,22 @@ function ContinuationBanner({
 
 function AdminPromoteBadge({
   temperatureCheckId,
-  followUp
+  followUp,
+  isAdmin
 }: {
   readonly temperatureCheckId: TemperatureCheckId
   readonly followUp: TemperatureCheck['followUp']
+  readonly isAdmin: boolean
 }) {
   const currentAccount = useCurrentAccount()
-  if (!currentAccount) return null
-  return (
-    <AdminPromoteBadgeWithAddress
-      temperatureCheckId={temperatureCheckId}
-      followUp={followUp}
-      accountAddress={currentAccount.address}
-    />
-  )
-}
-
-function AdminPromoteBadgeWithAddress({
-  temperatureCheckId,
-  followUp,
-  accountAddress
-}: {
-  readonly temperatureCheckId: TemperatureCheckId
-  readonly followUp: TemperatureCheck['followUp']
-  readonly accountAddress: string
-}) {
-  const isAdminResult = useAtomValue(isAdminAtom(accountAddress))
-  return Result.builder(isAdminResult)
-    .onInitial(() => null)
-    .onFailure(() => null)
-    .onSuccess((isAdmin) => {
-      if (!isAdmin) return null
-      return followUp._tag === 'StandardProposal' ? (
-        <PromoteStandard temperatureCheckId={temperatureCheckId} />
-      ) : null
-    })
-    .render()
+  if (
+    !isAdmin ||
+    currentAccount === undefined ||
+    followUp._tag !== 'StandardProposal'
+  ) {
+    return null
+  }
+  return <PromoteStandard temperatureCheckId={temperatureCheckId} />
 }
 
 function PromoteStandard({

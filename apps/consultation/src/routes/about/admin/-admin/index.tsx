@@ -53,8 +53,6 @@ type ParameterSetForm = {
   electionQuorum: string
   minimumMedianGrade: string
   rerunVotingDays: string
-  rerunQuorum: string
-  rerunMinimumMedianGrade: string
   reserveListDays: string
 }
 
@@ -89,8 +87,6 @@ const emptyParameterSetForm: ParameterSetForm = {
   electionQuorum: '1000000',
   minimumMedianGrade: '2',
   rerunVotingDays: '5',
-  rerunQuorum: '1000000',
-  rerunMinimumMedianGrade: '2',
   reserveListDays: '90'
 }
 
@@ -124,9 +120,6 @@ const toFormValues = (
           parameterSet.parameters.election.minimumMedianGrade.toString(),
         rerunVotingDays:
           parameterSet.parameters.election.rerunVotingDays.toString(),
-        rerunQuorum: parameterSet.parameters.election.rerunQuorum,
-        rerunMinimumMedianGrade:
-          parameterSet.parameters.election.rerunMinimumMedianGrade.toString(),
         reserveListDays:
           parameterSet.parameters.election.reserveListDays.toString()
       }
@@ -495,19 +488,13 @@ const ParameterSetFields = ({
                 label={label}
                 type={type}
                 min={
-                  field === 'minimumMedianGrade' ||
-                  field === 'rerunMinimumMedianGrade'
+                  field === 'minimumMedianGrade'
                     ? '0'
                     : type === 'number'
                       ? '1'
                       : undefined
                 }
-                max={
-                  field === 'minimumMedianGrade' ||
-                  field === 'rerunMinimumMedianGrade'
-                    ? '4'
-                    : undefined
-                }
+                max={field === 'minimumMedianGrade' ? '4' : undefined}
                 value={form[field]}
                 onChange={(value) => handleChange(field, value)}
               />

@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, assert, describe, it, vi } from 'vitest'
 import { MajorityJudgmentElectionView } from './MajorityJudgmentElectionView'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children }: { readonly children: ReactNode }) => children
+}))
 
 const candidates = [
   {

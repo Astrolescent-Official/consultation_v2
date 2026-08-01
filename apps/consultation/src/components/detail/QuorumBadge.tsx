@@ -20,7 +20,8 @@ export function QuorumBadge({
   return Result.builder(voteResultsResult)
     .onInitial(() => null)
     .onFailure(() => null)
-    .onSuccess((results) => {
+    .onSuccess(({ cacheAvailable, results }) => {
+      if (!cacheAvailable) return null
       const totalVotePower = results.reduce(
         (sum, r) => sum.plus(r.votePower),
         new BigNumber(0)

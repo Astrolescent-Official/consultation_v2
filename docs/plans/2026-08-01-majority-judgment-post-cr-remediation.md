@@ -51,11 +51,15 @@ Governance Operator records the TC outcome on-ledger, but that record is not the
 public application's sole source of truth:
 
 - the collector calculates quorum and approval from weighted votes;
+- a missing component-scoped aggregate is unknown, not a zero-vote tally; the
+  collector defers a terminal verdict until cache initialization is recorded;
 - the operator UI offers only that calculated pass/fail value;
 - a recorded outcome that contradicts the calculation is surfaced as an audit
   error and the election remains `TC_FAILED`;
 - the finalizer requires both a recorded pass and a calculated pass;
 - direct manifest submission cannot force the projection into MJ voting.
+- the collector resolves this gate only before Round 1 opens. Once an election
+  reaches `LIVE`, later cache changes cannot terminate an in-flight ballot.
 
 This is a deliberate fail-closed trust boundary. It does not claim that an
 off-ledger weighted calculation can be verified by Scrypto.
@@ -73,14 +77,15 @@ The public election response retains:
 A below-quorum tally may retain deterministic candidate ordering internally for
 audit purposes, but the UI must not present that ordering as an elected rank.
 
-The D1 migration sentinel for legacy rows must be a valid positive decimal and
-must fail closed. A subsequent ledger projection replaces it with the actual
-snapshotted TC quorum.
+The D1 migration sentinel for legacy rows must be a valid positive decimal. It
+keeps the gate closed but non-terminal; finalization waits until a subsequent
+ledger projection replaces it with the actual snapshotted TC quorum.
 
 ## User experience requirements
 
-- Immediately after creation, a D1 `404` means "not indexed yet", not a corrupt
-  election. The page explains the state and polls until the projection appears.
+- Immediately after creation, a D1 `404` may mean "not indexed yet" or an
+  unknown election ID. The page explains both possibilities, retries with
+  bounded backoff, then leaves a manual refresh action for the long tail.
 - Once the TC deadline passes, the election banner says voting is closed and is
   awaiting the verified outcome; it must not show an open-vote instruction or a
   countdown frozen at zero.
@@ -104,6 +109,9 @@ copying deployment addresses into assertions.
 Required regression coverage includes:
 
 - contradictory TC records fail closed;
+- a missing vote cache defers finalization while an initialized zero-vote cache
+  fails quorum normally;
+- a resolved TC gate is not re-evaluated after Round 1 opens;
 - no automatic rerun and no transition from a quorate Round 1 result;
 - equal rerun thresholds;
 - Round 1 history remains available throughout Round 2;

@@ -27,6 +27,7 @@ export function ElectionTemperatureCheckStage({
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
   readonly tcOutcomeRecordedAt: Date | null
   readonly result: {
+    readonly cacheAvailable: boolean
     readonly forVotingPower: string
     readonly againstVotingPower: string
     readonly participationXrd: string
@@ -65,7 +66,7 @@ export function ElectionTemperatureCheckStage({
           are expressed with grades during the MJ stage.
         </p>
       </div>
-      {showTallies ? (
+      {showTallies && result.cacheAvailable ? (
         <dl className="grid gap-2 text-sm sm:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">For / Against</dt>
@@ -96,6 +97,10 @@ export function ElectionTemperatureCheckStage({
             </dd>
           </div>
         </dl>
+      ) : showTallies ? (
+        <p className="text-sm text-muted-foreground">
+          The weighted vote cache is still being indexed.
+        </p>
       ) : null}
       <TemperatureCheckOutcomeControls
         temperatureCheckId={id}

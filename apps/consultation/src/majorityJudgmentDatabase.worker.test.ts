@@ -7,6 +7,7 @@ import { GovernanceConfig } from 'shared/governance/config'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { VoteDatabaseLive } from './server/voting/db/d1'
 import { ORM } from './server/voting/db/orm'
+import { MajorityJudgmentFinalizer } from './server/voting/majority-judgment/finalizer'
 import {
   type MajorityJudgmentProjectionInput,
   MajorityJudgmentRepo
@@ -30,6 +31,14 @@ const repositoryLayer = () =>
     Layer.provide(GovernanceConfig.MainnetLive)
   )
 
+const finalizationLayer = () =>
+  MajorityJudgmentFinalizer.Default.pipe(
+    Layer.provide(ORM.Default),
+    Layer.provideMerge(VoteDatabaseLive(env.DB)),
+    Layer.provide(D1Client.layer({ db: env.DB })),
+    Layer.provide(GovernanceConfig.MainnetLive)
+  )
+
 const lease: PollLeaseIdentity = {
   owner: 'majority-judgment-test',
   durationMs: 60_000
@@ -40,6 +49,13 @@ const runWithRepository = <A, E>(
 ) =>
   Effect.runPromise(
     withPollLease(lease, effect).pipe(Effect.provide(repositoryLayer()))
+  )
+
+const runWithFinalizer = <A, E>(
+  effect: Effect.Effect<A, E, MajorityJudgmentFinalizer>
+) =>
+  Effect.runPromise(
+    withPollLease(lease, effect).pipe(Effect.provide(finalizationLayer()))
   )
 
 const projection = {
@@ -113,6 +129,123 @@ beforeEach(async () => {
 })
 
 describe('D1 majority judgment persistence', () => {
+  it('defers a missing cache, fails an initialized zero-vote tally, and never reopens the TC gate', async () => {
+    const tcLiveProjection: MajorityJudgmentProjectionInput = {
+      ...projection,
+      election: { ...projection.election, status: 'TC_LIVE' },
+      round: { ...projection.round, status: 'TC_LIVE' }
+    }
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection(tcLiveProjection)
+      })
+    )
+
+    await env.DB.prepare(
+      `DELETE FROM vote_calculation_state
+       WHERE type = 'temperature_check' AND entity_id = 3`
+    ).run()
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 10,
+          proposerRoundTimestamp: new Date('2026-07-09T00:00:00.000Z')
+        })
+      })
+    )
+    const unavailable = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(unavailable.election.status).toBe('TC_LIVE')
+    expect(unavailable.temperatureCheckResult.cacheAvailable).toBe(false)
+
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection(tcLiveProjection)
+      })
+    )
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 11,
+          proposerRoundTimestamp: new Date('2026-07-09T00:00:00.000Z')
+        })
+      })
+    )
+    const failed = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(failed.election.status).toBe('TC_FAILED')
+
+    await env.DB.prepare(
+      `UPDATE mj_election SET status = 'LIVE' WHERE id = 7`
+    ).run()
+    await env.DB.prepare(
+      `UPDATE mj_round SET status = 'LIVE' WHERE election_id = 7 AND round = 1`
+    ).run()
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 12,
+          proposerRoundTimestamp: new Date('2026-07-10T00:00:00.000Z')
+        })
+      })
+    )
+    const live = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(live.election.status).toBe('LIVE')
+  })
+
+  it('publishes a superseded Round 1 failure and advances directly to the rerun', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection(projection)
+        yield* repo.projectRound({
+          ...projection.round,
+          round: 2,
+          votingStart: new Date('2026-07-20T00:00:00.000Z'),
+          votingEnd: new Date('2026-08-03T00:00:00.000Z'),
+          status: 'RERUN_LIVE'
+        })
+      })
+    )
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 20,
+          proposerRoundTimestamp: new Date('2026-07-20T00:00:00.000Z')
+        })
+      })
+    )
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        const response = yield* repo.getElectionResponse(7)
+        expect(response.election.status).toBe('RERUN_LIVE')
+        expect(response.currentRound.round).toBe('Rerun')
+        expect(response.results).toHaveLength(1)
+        expect(response.results[0]?.status).toBe('ROUND_1_FAILED')
+      })
+    )
+  })
+
   it('projects idempotently and preserves revotes, decimals, JSON, and dates', async () => {
     const tcState = await env.DB.prepare(
       `INSERT INTO vote_calculation_state (
@@ -261,6 +394,7 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.results).toHaveLength(1)
     expect(response.election.results[0]?.round).toBe('RoundOne')
     expect(response.election.temperatureCheckResult).toMatchObject({
+      cacheAvailable: true,
       forVotingPower: '60',
       againstVotingPower: '40',
       participationXrd: '100',

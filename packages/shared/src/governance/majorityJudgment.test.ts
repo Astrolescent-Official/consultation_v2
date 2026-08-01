@@ -230,6 +230,7 @@ describe('majority judgment shared schemas', () => {
         minimumMedianGrade: 2
       },
       temperatureCheckResult: {
+        cacheAvailable: true,
         forVotingPower: '600000',
         againstVotingPower: '400000',
         participationXrd: '1000000',

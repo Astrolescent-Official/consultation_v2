@@ -8,7 +8,7 @@ import {
   deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase,
-  deriveRoundOneProjectedStatus
+  deriveProjectedTemperatureCheckOutcome
 } from '../majority-judgment/projection'
 
 const grades = (first: Grade, second: Grade) => [
@@ -174,15 +174,9 @@ describe('majority judgment projected phase', () => {
     )
   })
 
-  it('does not invent a Round 1 failure merely because a rerun exists', () => {
-    assert.strictEqual(deriveRoundOneProjectedStatus(false, 'LIVE'), 'LIVE')
-    assert.strictEqual(
-      deriveRoundOneProjectedStatus(true, 'RERUN_PENDING'),
-      'RERUN_PENDING'
-    )
-    assert.strictEqual(
-      deriveRoundOneProjectedStatus(true, 'RERUN_LIVE'),
-      'RERUN_LIVE'
-    )
+  it('keeps a recorded pass at the projection gate until weighted verification', () => {
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(null), 'PENDING')
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(true), 'PENDING')
+    assert.strictEqual(deriveProjectedTemperatureCheckOutcome(false), 'FAILED')
   })
 })

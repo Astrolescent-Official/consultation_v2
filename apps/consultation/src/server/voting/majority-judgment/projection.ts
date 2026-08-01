@@ -23,6 +23,10 @@ export const deriveAuthoritativeTemperatureCheckOutcome = (
   return recorded === 'PASSED' ? 'PASSED' : recorded
 }
 
+export const deriveProjectedTemperatureCheckOutcome = (
+  recordedPassed: boolean | null
+): 'PENDING' | 'FAILED' => (recordedPassed === false ? 'FAILED' : 'PENDING')
+
 export const deriveMajorityJudgmentPhase = (
   now: Date,
   boundaries: MajorityJudgmentPhaseBoundaries
@@ -53,11 +57,6 @@ export const deriveMajorityJudgmentRerunPhase = (
   return 'RERUN_LIVE'
 }
 
-export const deriveRoundOneProjectedStatus = (
-  _rerunStarted: boolean,
-  status: MajorityJudgmentElectionStatus
-): MajorityJudgmentElectionStatus => status
-
 const deriveElectionStatus = (
   now: Date,
   election: MajorityJudgmentElection,
@@ -70,11 +69,15 @@ const deriveElectionStatus = (
         tcVotingEnd: temperatureCheck.deadline,
         votingStart: election.roundOne.start,
         votingEnd: election.roundOne.deadline,
-        tcOutcome: Option.match(temperatureCheck.outcome, {
-          onNone: () => 'PENDING' as const,
-          onSome: (outcome) =>
-            outcome.passed ? ('PASSED' as const) : ('FAILED' as const)
-        })
+        // A recorded pass is necessary but not sufficient. Keep the
+        // projection at the TC gate until the collector verifies the
+        // component-scoped weighted tally. The finalizer alone opens MJ.
+        tcOutcome: deriveProjectedTemperatureCheckOutcome(
+          Option.match(temperatureCheck.outcome, {
+            onNone: () => null,
+            onSome: (outcome) => outcome.passed
+          })
+        )
       }),
     onSome: (rerun) => {
       const recordedTcPassed = Option.exists(
@@ -198,11 +201,7 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
             links: candidate.links,
             displayOrder: candidate.displayOrder
           })),
-          round: makeRound(
-            election.roundOne,
-            1,
-            deriveRoundOneProjectedStatus(rerunStarted, status)
-          )
+          round: makeRound(election.roundOne, 1, status)
         })
 
         yield* Option.match(election.rerun, {
