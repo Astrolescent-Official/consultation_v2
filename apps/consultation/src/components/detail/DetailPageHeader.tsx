@@ -5,17 +5,47 @@ import { formatDateTime } from '@/lib/utils'
 import type { ItemStatus } from '@/routes/-index/components/StatusBadge'
 import { StatusBadge } from '@/routes/-index/components/StatusBadge'
 
+/** One voting window. Multi-phase entities pass one entry per phase. */
+export type DetailPageSchedule = {
+  readonly label?: string
+  readonly start: Date
+  readonly deadline: Date
+}
+
 type DetailPageHeaderProps = {
   status: ItemStatus
   typeBadge: string
   id: number
   title: string
-  start: Date
-  deadline: Date
-  author: string
-  links: readonly string[]
+  /** Single voting window. Ignored when `schedule` is provided. */
+  start?: Date
+  deadline?: Date
+  schedule?: readonly DetailPageSchedule[]
+  author?: string
+  links?: readonly string[]
   quorumBadge?: ReactNode
   originBadge?: ReactNode
+  /** Extra facts rendered inline after `TYPE #id`. */
+  meta?: ReactNode
+  /** Extra metadata rows rendered below the schedule, author and links. */
+  extraMeta?: ReactNode
+  /** Rendered below the metadata block, e.g. a phase banner. */
+  children?: ReactNode
+}
+
+export function DetailPageMetaRow({
+  icon,
+  children
+}: {
+  icon: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span className="w-4 shrink-0 flex justify-center">{icon}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  )
 }
 
 export function DetailPageHeader({
@@ -25,11 +55,20 @@ export function DetailPageHeader({
   title,
   start,
   deadline,
+  schedule,
   author,
-  links,
+  links = [],
   quorumBadge,
-  originBadge
+  originBadge,
+  meta,
+  extraMeta,
+  children
 }: DetailPageHeaderProps) {
+  const windows =
+    schedule ??
+    (start !== undefined && deadline !== undefined ? [{ start, deadline }] : [])
+  const externalLinks = links.filter((link) => /^https?:\/\//i.test(link))
+
   return (
     <div className="lg:border-b lg:border-border lg:pb-6 pb-2">
       <div className="flex items-center gap-2 mb-4">
@@ -47,38 +86,35 @@ export function DetailPageHeader({
         <span>
           {typeBadge} #{id}
         </span>
+        {meta}
         {originBadge}
       </div>
 
       {/* Metadata rows - consistent styling */}
-      <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-        <span className="w-4 shrink-0 flex justify-center">
-          <Calendar className="size-4" />
-        </span>
-        <span>
-          {formatDateTime(start)} – {formatDateTime(deadline)}
-        </span>
-      </div>
-      {author && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-4 shrink-0 flex justify-center">
-            <User className="size-4" />
-          </span>
-          <AddressLink
-            address={author}
-            className="text-sm text-muted-foreground"
-          />
-        </div>
-      )}
-      {links.length > 0 && (
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="w-4 shrink-0 flex justify-center">
-            <LinkIcon className="size-4" />
-          </span>
-          <div className="flex items-center gap-4">
-            {links
-              .filter((link) => /^https?:\/\//i.test(link))
-              .map((link) => (
+      <div className="mt-6 space-y-2">
+        {windows.map((window) => (
+          <DetailPageMetaRow
+            key={`${window.label ?? ''}-${window.start.getTime()}`}
+            icon={<Calendar className="size-4" />}
+          >
+            {window.label ? (
+              <span className="text-foreground">{window.label}: </span>
+            ) : null}
+            {formatDateTime(window.start)} – {formatDateTime(window.deadline)}
+          </DetailPageMetaRow>
+        ))}
+        {author && (
+          <DetailPageMetaRow icon={<User className="size-4" />}>
+            <AddressLink
+              address={author}
+              className="text-sm text-muted-foreground"
+            />
+          </DetailPageMetaRow>
+        )}
+        {externalLinks.length > 0 && (
+          <DetailPageMetaRow icon={<LinkIcon className="size-4" />}>
+            <div className="flex items-center gap-4">
+              {externalLinks.map((link) => (
                 <a
                   key={link}
                   href={link}
@@ -90,9 +126,12 @@ export function DetailPageHeader({
                   <ExternalLink className="size-3 shrink-0" />
                 </a>
               ))}
-          </div>
-        </div>
-      )}
+            </div>
+          </DetailPageMetaRow>
+        )}
+        {extraMeta}
+      </div>
+      {children}
     </div>
   )
 }

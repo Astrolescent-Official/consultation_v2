@@ -24,11 +24,16 @@ import {
 import { ElectionNotIndexedYetError } from '@/atom/voteClient'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Skeleton } from '@/components/ui/skeleton'
 import { InlineCode } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
 import { automaticElectionRefreshDelay } from './automaticRefresh'
-import { ElectionTemperatureCheckStage } from './components/ElectionTemperatureCheckStage'
+import { ElectionTemperatureCheckVotingPanel } from './components/ElectionTemperatureCheckBallot'
+import {
+  ElectionTemperatureCheckResults,
+  ElectionTemperatureCheckStage
+} from './components/ElectionTemperatureCheckStage'
 import { MajorityJudgmentElectionView } from './components/MajorityJudgmentElectionView'
 import { MajorityJudgmentOwnerControls } from './components/MajorityJudgmentOwnerControls'
 
@@ -40,6 +45,24 @@ const NO_GRADES: ReadonlyArray<{
   readonly grade: 0 | 1 | 2 | 3 | 4
 }> = []
 const NO_CANDIDATE_IDS: ReadonlyArray<number> = []
+
+function ElectionPageSkeleton() {
+  return (
+    <div className="lg:grid lg:grid-cols-8 lg:gap-12">
+      <div className="space-y-6 lg:col-span-5">
+        <Skeleton className="h-5 w-40" />
+        <Skeleton className="h-10 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+      <div className="mt-8 space-y-6 lg:col-span-3 lg:mt-0">
+        <Skeleton className="h-56 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    </div>
+  )
+}
 
 export function Page({
   electionId
@@ -145,10 +168,10 @@ export function Page({
   )
 
   return Result.builder(electionResult)
-    .onInitial(() => <div>Loading election…</div>)
+    .onInitial(() => <ElectionPageSkeleton />)
     .onFailure((error) =>
       isIndexing ? (
-        <div className="space-y-3 py-12 text-center">
+        <div className="mx-auto max-w-lg space-y-3 border border-border bg-card p-8 text-center shadow-sm">
           <p className="font-medium">Election not available yet</p>
           <p className="text-sm text-muted-foreground">
             The election is not available in the collector yet. It may still be
@@ -195,102 +218,144 @@ export function Page({
       const majorityJudgmentVoting =
         response.election.status === 'LIVE' ||
         response.election.status === 'RERUN_LIVE'
+      const temperatureCheckStageActive =
+        response.election.status === 'TC_LIVE' ||
+        response.election.status === 'TC_FAILED'
 
       return (
-        <div className="space-y-4">
-          {automaticRefreshPaused && isAwaitingOutcomeProjection ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-4 py-3 text-sm text-muted-foreground">
-              <span>
-                The verified outcome is still pending; automatic checks have
-                paused.
-              </span>
-              <Button type="button" variant="outline" onClick={checkNow}>
-                Check now
-              </Button>
-            </div>
-          ) : null}
-          <ElectionTemperatureCheckStage
-            temperatureCheckId={response.election.temperatureCheckId}
-            electionId={electionId}
-            status={response.election.status}
-            tcVotingEnd={response.election.tcVotingEnd}
-            tcOutcome={response.election.tcOutcome}
-            tcOutcomeRecordedAt={response.election.tcOutcomeRecordedAt}
-            result={response.temperatureCheckResult}
-          />
-          {majorityJudgmentVoting && connectedAccountCount > 1 ? (
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox
-                id="mj-vote-all-accounts"
-                checked={voteAllAccounts}
-                onCheckedChange={(checked) =>
-                  setVoteAllAccounts(checked === true)
-                }
-                disabled={voteResult.waiting}
-              />
-              <label htmlFor="mj-vote-all-accounts">
-                Submit this complete ballot from all connected accounts (
-                {connectedAccountCount})
-              </label>
-            </div>
-          ) : null}
-          {majorityJudgmentVoting && mixedBallots ? (
-            <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
-              Connected accounts currently have mixed ballots. Choose grades
-              explicitly before replacing them together.
-            </p>
-          ) : null}
-          <MajorityJudgmentElectionView
-            title={response.election.title}
-            status={response.election.status}
-            candidates={response.candidates}
-            seatCount={response.election.seatCount}
-            roleId={response.election.roleId}
-            temperatureCheckId={response.election.temperatureCheckId}
-            parameterSetId={response.election.parameterSetId}
-            parameterSetVersion={response.election.parameterSetVersion}
-            tcVotingStart={response.election.tcVotingStart}
-            tcVotingEnd={response.election.tcVotingEnd}
-            votingStart={response.currentRound.votingStart}
-            votingEnd={response.currentRound.votingEnd}
-            quorumXrd={response.currentRound.quorumXrd}
-            totalVotingPower={response.result?.totalVotingPower ?? '0'}
-            minimumMedianGrade={response.currentRound.minimumMedianGrade}
-            initialGrades={mixedBallots ? NO_GRADES : currentEntry?.grades}
-            result={response.result}
-            results={response.results}
-            submitting={voteResult.waiting}
-            onSubmit={submit}
-          />
-          {isAdmin ? (
-            <MajorityJudgmentOwnerControls
+        <MajorityJudgmentElectionView
+          electionId={electionId}
+          title={response.election.title}
+          shortDescription={response.election.shortDescription}
+          description={response.election.description}
+          status={response.election.status}
+          candidates={response.candidates}
+          seatCount={response.election.seatCount}
+          roleId={response.election.roleId}
+          temperatureCheckId={response.election.temperatureCheckId}
+          parameterSetId={response.election.parameterSetId}
+          parameterSetVersion={response.election.parameterSetVersion}
+          reserveListDays={response.election.reserveListDays}
+          tcVotingStart={response.election.tcVotingStart}
+          tcVotingEnd={response.election.tcVotingEnd}
+          votingStart={response.currentRound.votingStart}
+          votingEnd={response.currentRound.votingEnd}
+          rounds={response.rounds}
+          quorumXrd={response.currentRound.quorumXrd}
+          totalVotingPower={response.result?.totalVotingPower ?? '0'}
+          minimumMedianGrade={response.currentRound.minimumMedianGrade}
+          initialGrades={mixedBallots ? NO_GRADES : currentEntry?.grades}
+          result={response.result}
+          results={response.results}
+          submitting={voteResult.waiting}
+          onSubmit={submit}
+          hiddenNotice={
+            response.election.hidden ? (
+              <div className="border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+                This election is hidden from public view.
+              </div>
+            ) : undefined
+          }
+          banner={
+            automaticRefreshPaused && isAwaitingOutcomeProjection ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 border border-border px-4 py-3 text-sm text-muted-foreground">
+                <span>
+                  The verified outcome is still pending; automatic checks have
+                  paused.
+                </span>
+                <Button type="button" variant="outline" onClick={checkNow}>
+                  Check now
+                </Button>
+              </div>
+            ) : undefined
+          }
+          temperatureCheckStage={
+            <ElectionTemperatureCheckStage
+              temperatureCheckId={response.election.temperatureCheckId}
+              electionId={electionId}
               status={response.election.status}
-              round={response.currentRound.round}
-              hidden={response.election.hidden}
-              unresolvedCandidateIds={
-                response.result?.unresolvedCandidateIds ?? NO_CANDIDATE_IDS
-              }
-              busy={
-                rerunResult.waiting ||
-                tieResult.waiting ||
-                visibilityResult.waiting
-              }
-              onStartRerun={(votingStart) =>
-                startRerun({ electionId, votingStart })
-              }
-              onRecordTieResolution={(orderedCandidateIds) =>
-                recordTieResolution({
-                  electionId,
-                  round: response.currentRound.round,
-                  orderedCandidateIds: orderedCandidateIds.map((candidateId) =>
-                    MajorityJudgmentCandidateIdSchema.make(candidateId)
-                  )
-                })
-              }
-              onToggleVisibility={() => toggleVisibility(electionId)}
+              tcVotingEnd={response.election.tcVotingEnd}
+              tcOutcome={response.election.tcOutcome}
+              tcOutcomeRecordedAt={response.election.tcOutcomeRecordedAt}
+              result={response.temperatureCheckResult}
             />
-          ) : null}
-        </div>
+          }
+          temperatureCheckResults={
+            temperatureCheckStageActive &&
+            response.temperatureCheckResult.tcParametersProjected ? (
+              <ElectionTemperatureCheckResults
+                temperatureCheckId={response.election.temperatureCheckId}
+              />
+            ) : undefined
+          }
+          temperatureCheckVoting={
+            <ElectionTemperatureCheckVotingPanel
+              temperatureCheckId={response.election.temperatureCheckId}
+              status={response.election.status}
+              tcVotingEnd={response.election.tcVotingEnd}
+              parametersProjected={
+                response.temperatureCheckResult.tcParametersProjected
+              }
+            />
+          }
+          ballotAccountsControl={
+            majorityJudgmentVoting && connectedAccountCount > 1 ? (
+              <div className="mt-4 flex items-center gap-2 text-sm">
+                <Checkbox
+                  id="mj-vote-all-accounts"
+                  checked={voteAllAccounts}
+                  onCheckedChange={(checked) =>
+                    setVoteAllAccounts(checked === true)
+                  }
+                  disabled={voteResult.waiting}
+                />
+                <label htmlFor="mj-vote-all-accounts">
+                  Submit this ballot from all connected accounts (
+                  {connectedAccountCount})
+                </label>
+              </div>
+            ) : undefined
+          }
+          ballotNotice={
+            majorityJudgmentVoting && mixedBallots ? (
+              <p className="mt-3 border border-border px-3 py-2 text-xs text-muted-foreground">
+                Connected accounts currently have mixed ballots. Choose grades
+                explicitly before replacing them together.
+              </p>
+            ) : undefined
+          }
+          adminControls={
+            isAdmin ? (
+              <MajorityJudgmentOwnerControls
+                status={response.election.status}
+                round={response.currentRound.round}
+                hidden={response.election.hidden}
+                unresolvedCandidateIds={
+                  response.result?.unresolvedCandidateIds ?? NO_CANDIDATE_IDS
+                }
+                busy={
+                  rerunResult.waiting ||
+                  tieResult.waiting ||
+                  visibilityResult.waiting
+                }
+                onStartRerun={(votingStart) =>
+                  startRerun({ electionId, votingStart })
+                }
+                onRecordTieResolution={(orderedCandidateIds) =>
+                  recordTieResolution({
+                    electionId,
+                    round: response.currentRound.round,
+                    orderedCandidateIds: orderedCandidateIds.map(
+                      (candidateId) =>
+                        MajorityJudgmentCandidateIdSchema.make(candidateId)
+                    )
+                  })
+                }
+                onToggleVisibility={() => toggleVisibility(electionId)}
+              />
+            ) : undefined
+          }
+        />
       )
     })
     .render()
