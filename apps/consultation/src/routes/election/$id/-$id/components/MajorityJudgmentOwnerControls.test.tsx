@@ -14,12 +14,10 @@ describe('majority judgment owner controls', () => {
       <MajorityJudgmentOwnerControls
         status="ROUND_1_FAILED"
         round="RoundOne"
-        hidden={false}
         unresolvedCandidateIds={[]}
         busy={false}
         onStartRerun={onStartRerun}
         onRecordTieResolution={vi.fn()}
-        onToggleVisibility={vi.fn()}
       />
     )
 
@@ -42,12 +40,10 @@ describe('majority judgment owner controls', () => {
       <MajorityJudgmentOwnerControls
         status="TIE_UNRESOLVED"
         round="Rerun"
-        hidden={true}
         unresolvedCandidateIds={[4, 2]}
         busy={false}
         onStartRerun={vi.fn()}
         onRecordTieResolution={onRecordTieResolution}
-        onToggleVisibility={vi.fn()}
       />
     )
 
@@ -58,17 +54,14 @@ describe('majority judgment owner controls', () => {
     )
 
     assert.deepStrictEqual(onRecordTieResolution.mock.calls[0], [[4, 2]])
-    assert.isNotNull(screen.getByRole('button', { name: 'Show election' }))
   })
 
   it('loads an unresolved tie group that arrives after the view mounts', () => {
     const onRecordTieResolution = vi.fn()
     const callbacks = {
       busy: false,
-      hidden: false,
       onStartRerun: vi.fn(),
-      onRecordTieResolution,
-      onToggleVisibility: vi.fn()
+      onRecordTieResolution
     }
     const view = render(
       <MajorityJudgmentOwnerControls

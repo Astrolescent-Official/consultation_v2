@@ -4,7 +4,9 @@ import { Card } from '@/components/ui/card'
 import { cn, formatXrd } from '@/lib/utils'
 import { type CandidateOutcome, candidateOutcomeCopy } from '../electionDisplay'
 
-const grades: ReadonlyArray<Grade> = [0, 1, 2, 3, 4]
+// Grades are stored ascending on-ledger but always shown best-first, so the
+// strongest option is the one a reader lands on at the top of the list.
+const gradesBestFirst: ReadonlyArray<Grade> = [4, 3, 2, 1, 0]
 
 export type Candidate = {
   readonly id: number
@@ -69,13 +71,17 @@ function GradeHistogram({
   readonly histogram: readonly [string, string, string, string, string]
   readonly majorityGrade?: Grade | null
 }) {
-  const values = grades.map((grade) => Number(histogram[grade] ?? '0'))
-  const total = values.reduce((sum, value) => sum + value, 0)
+  // Index the histogram by grade rather than by row position: the rows are
+  // ordered best-first, the tuple is stored worst-first.
+  const total = gradesBestFirst.reduce<number>(
+    (sum, grade) => sum + Number(histogram[grade] ?? '0'),
+    0
+  )
 
   return (
     <div className="space-y-1.5">
-      {grades.map((grade) => {
-        const value = values[grade] ?? 0
+      {gradesBestFirst.map((grade) => {
+        const value = Number(histogram[grade] ?? '0')
         const percentage = total > 0 ? (value / total) * 100 : 0
         return (
           <div key={grade} className="flex items-center gap-3 text-xs">
@@ -125,7 +131,7 @@ function GradeSelector({
         <span className="sr-only"> for {candidate.displayName}</span>
       </legend>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {grades.map((grade) => (
+        {gradesBestFirst.map((grade) => (
           <label
             key={grade}
             className={cn(

@@ -90,6 +90,8 @@ type MajorityJudgmentElectionViewProps = {
   readonly ballotAccountsControl?: ReactNode
   readonly ballotNotice?: ReactNode
   readonly adminControls?: ReactNode
+  /** Admin-only hide/unhide badge, rendered beside the header identifiers. */
+  readonly visibilityToggle?: ReactNode
   readonly banner?: ReactNode
   readonly hiddenNotice?: ReactNode
 }
@@ -157,6 +159,7 @@ export function MajorityJudgmentElectionView({
   ballotAccountsControl,
   ballotNotice,
   adminControls,
+  visibilityToggle,
   banner,
   hiddenNotice
 }: MajorityJudgmentElectionViewProps) {
@@ -276,16 +279,19 @@ export function MajorityJudgmentElectionView({
         ) : undefined
       }
       originBadge={
-        temperatureCheckId === undefined ? undefined : (
-          <Link
-            to="/tc/$id"
-            params={{ id: String(temperatureCheckId) }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 hover:text-foreground transition-colors"
-          >
-            <span>Candidate-list TC #{temperatureCheckId}</span>
-            <ArrowUpRight className="size-3" />
-          </Link>
-        )
+        <div className="flex items-center gap-2">
+          {temperatureCheckId === undefined ? null : (
+            <Link
+              to="/tc/$id"
+              params={{ id: String(temperatureCheckId) }}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 hover:text-foreground transition-colors"
+            >
+              <span>Candidate-list TC #{temperatureCheckId}</span>
+              <ArrowUpRight className="size-3" />
+            </Link>
+          )}
+          {visibilityToggle}
+        </div>
       }
       extraMeta={
         <DetailPageMetaRow icon={<Users className="size-4" />}>

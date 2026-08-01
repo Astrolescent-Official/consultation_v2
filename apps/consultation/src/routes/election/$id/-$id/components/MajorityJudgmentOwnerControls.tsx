@@ -11,14 +11,12 @@ import { Input } from '@/components/ui/input'
 type MajorityJudgmentOwnerControlsProps = {
   readonly status: MajorityJudgmentElectionStatus
   readonly round: MajorityJudgmentRoundId
-  readonly hidden: boolean
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly busy: boolean
   readonly onStartRerun: (votingStart: Date) => void
   readonly onRecordTieResolution: (
     orderedCandidateIds: ReadonlyArray<number>
   ) => void
-  readonly onToggleVisibility: () => void
 }
 
 const moveCandidate = (
@@ -38,12 +36,10 @@ const moveCandidate = (
 export function MajorityJudgmentOwnerControls({
   status,
   round,
-  hidden,
   unresolvedCandidateIds,
   busy,
   onStartRerun,
-  onRecordTieResolution,
-  onToggleVisibility
+  onRecordTieResolution
 }: MajorityJudgmentOwnerControlsProps) {
   const rerunStartId = useId()
   const [rerunStart, setRerunStart] = useState('')
@@ -53,6 +49,16 @@ export function MajorityJudgmentOwnerControls({
     setTieOrder([...unresolvedCandidateIds])
   }, [unresolvedCandidateIds])
 
+  const canRerun = canStartMajorityJudgmentRerun(status)
+  const canResolveTie =
+    status === 'TIE_UNRESOLVED' &&
+    tieOrder.length === unresolvedCandidateIds.length &&
+    tieOrder.length > 0
+
+  // Visibility moved to the header badge every detail page shares, so an
+  // election with nothing to adjudicate has no operator card at all.
+  if (!canRerun && !canResolveTie) return null
+
   return (
     <Card className="shadow-none">
       <CardHeader>
@@ -61,17 +67,8 @@ export function MajorityJudgmentOwnerControls({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={onToggleVisibility}
-        >
-          {hidden ? 'Show election' : 'Hide election'}
-        </Button>
-
-        {canStartMajorityJudgmentRerun(status) ? (
-          <div className="space-y-2 border-t pt-4">
+        {canRerun ? (
+          <div className="space-y-2">
             <label htmlFor={rerunStartId} className="block space-y-1 text-sm">
               <span>Rerun voting start</span>
               <Input
@@ -92,10 +89,8 @@ export function MajorityJudgmentOwnerControls({
           </div>
         ) : null}
 
-        {status === 'TIE_UNRESOLVED' &&
-        tieOrder.length === unresolvedCandidateIds.length &&
-        tieOrder.length > 0 ? (
-          <div className="space-y-3 border-t pt-4">
+        {canResolveTie ? (
+          <div className="space-y-3 first:border-t-0 first:pt-0 border-t pt-4">
             <div>
               <p className="text-sm font-medium">Recorded adjudication order</p>
               <p className="text-xs text-muted-foreground">

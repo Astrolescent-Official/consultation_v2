@@ -12,8 +12,7 @@ import {
 } from 'shared/governance/index'
 import {
   recordMajorityJudgmentTieResolutionAtom,
-  startMajorityJudgmentRerunAtom,
-  toggleMajorityJudgmentElectionHiddenAtom
+  startMajorityJudgmentRerunAtom
 } from '@/atom/adminAtom'
 import { accountsAtom } from '@/atom/dappToolkitAtom'
 import {
@@ -22,6 +21,7 @@ import {
   voteOnMajorityJudgmentBatchAtom
 } from '@/atom/majorityJudgmentAtom'
 import { ElectionNotIndexedYetError } from '@/atom/voteClient'
+import { HideToggle } from '@/components/detail/HideToggle'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -80,9 +80,6 @@ export function Page({
   const [rerunResult, startRerun] = useAtom(startMajorityJudgmentRerunAtom)
   const [tieResult, recordTieResolution] = useAtom(
     recordMajorityJudgmentTieResolutionAtom
-  )
-  const [visibilityResult, toggleVisibility] = useAtom(
-    toggleMajorityJudgmentElectionHiddenAtom
   )
   const [voteAllAccounts, setVoteAllAccounts] = useState(false)
   const [now, setNow] = useState(Date.now)
@@ -324,20 +321,22 @@ export function Page({
               </p>
             ) : undefined
           }
+          visibilityToggle={
+            <HideToggle
+              type="election"
+              id={electionId}
+              hidden={response.election.hidden}
+            />
+          }
           adminControls={
             isAdmin ? (
               <MajorityJudgmentOwnerControls
                 status={response.election.status}
                 round={response.currentRound.round}
-                hidden={response.election.hidden}
                 unresolvedCandidateIds={
                   response.result?.unresolvedCandidateIds ?? NO_CANDIDATE_IDS
                 }
-                busy={
-                  rerunResult.waiting ||
-                  tieResult.waiting ||
-                  visibilityResult.waiting
-                }
+                busy={rerunResult.waiting || tieResult.waiting}
                 onStartRerun={(votingStart) =>
                   startRerun({ electionId, votingStart })
                 }
@@ -351,7 +350,6 @@ export function Page({
                     )
                   })
                 }
-                onToggleVisibility={() => toggleVisibility(electionId)}
               />
             ) : undefined
           }
