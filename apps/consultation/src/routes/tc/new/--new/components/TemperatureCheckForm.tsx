@@ -62,9 +62,10 @@ type TemperatureCheckFormProps = {
   onSuccess?: (result: CreatedConsultation) => void
 }
 
-export type CreatedConsultation =
-  | { readonly temperature_check_id: number }
-  | { readonly election_id: number }
+export type CreatedConsultation = {
+  readonly temperature_check_id: number
+  readonly election_id?: number
+}
 
 export function TemperatureCheckForm({
   maxVoteOptions = 10,

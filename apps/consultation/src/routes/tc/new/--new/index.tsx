@@ -5,10 +5,9 @@ import {
   TemperatureCheckForm
 } from './components/TemperatureCheckForm'
 
-export const createdConsultationDestination = (result: CreatedConsultation) =>
-  'election_id' in result
-    ? { to: '/election/$id' as const, id: String(result.election_id) }
-    : { to: '/tc/$id' as const, id: String(result.temperature_check_id) }
+export const createdConsultationDestination = (
+  result: CreatedConsultation
+) => ({ to: '/tc/$id' as const, id: String(result.temperature_check_id) })
 
 export const Page: React.FC = () => {
   const navigate = useNavigate()
