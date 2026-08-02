@@ -30,7 +30,7 @@ fn add_governance_duration(
     GovernanceParameterSetRetiredEvent,
     MajorityJudgmentElectionCreatedEvent,
     MajorityJudgmentElectionVotedEvent,
-    MajorityJudgmentRerunStartedEvent,
+    MajorityJudgmentRoundStartedEvent,
     MajorityJudgmentTieResolutionRecordedEvent,
     MajorityJudgmentElectionHiddenToggledEvent
 )]
@@ -53,6 +53,7 @@ mod governance {
             make_proposal => restrict_to: [owner];
             make_majority_judgment_election => restrict_to: [owner];
             record_temperature_check_outcome => restrict_to: [owner];
+            start_majority_judgment_round_one => restrict_to: [owner];
             start_majority_judgment_rerun => restrict_to: [owner];
             record_majority_judgment_tie_resolution => restrict_to: [owner];
             add_governance_parameter_set => restrict_to: [owner];
@@ -125,6 +126,7 @@ mod governance {
                     make_proposal => Free, updatable;
                     make_majority_judgment_election => Free, updatable;
                     record_temperature_check_outcome => Free, updatable;
+                    start_majority_judgment_round_one => Free, updatable;
                     start_majority_judgment_rerun => Free, updatable;
                     record_majority_judgment_tie_resolution => Free, updatable;
                     add_governance_parameter_set => Free, updatable;
@@ -476,6 +478,58 @@ mod governance {
             }
         }
 
+        fn majority_judgment_round_context(
+            &self,
+            election_id: u64,
+        ) -> (Instant, Instant, MajorityJudgmentParameters) {
+            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
+            let parameters = match &temperature_check.parameter_set.parameters {
+                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
+                GovernanceProcessParameters::Standard { .. } => {
+                    panic!("Election does not contain Majority Judgment parameters")
+                }
+            };
+            (
+                temperature_check.snapshot,
+                temperature_check.deadline,
+                parameters,
+            )
+        }
+
+        fn open_majority_judgment_round(
+            election: &mut MajorityJudgmentElection,
+            election_id: u64,
+            round_id: MajorityJudgmentRoundId,
+            snapshot: Instant,
+            start: Instant,
+            deadline: Instant,
+            quorum: Decimal,
+            minimum_median_grade: Grade,
+        ) {
+            match round_id {
+                MajorityJudgmentRoundId::RoundOne => {
+                    assert!(election.round_one.is_none(), "Round 1 has already opened");
+                }
+                MajorityJudgmentRoundId::Rerun => {
+                    assert!(election.rerun.is_none(), "Election rerun already exists");
+                }
+            }
+            let round = Self::new_round(snapshot, start, deadline, quorum, minimum_median_grade);
+            match round_id {
+                MajorityJudgmentRoundId::RoundOne => election.round_one = Some(round),
+                MajorityJudgmentRoundId::Rerun => election.rerun = Some(round),
+            }
+            Runtime::emit_event(MajorityJudgmentRoundStartedEvent {
+                election_id,
+                round: round_id,
+                snapshot,
+                start,
+                deadline,
+                quorum,
+                minimum_median_grade,
+            });
+        }
+
         fn validate_temperature_check_draft(draft: &TemperatureCheckDraft) {
             assert!(
                 !draft.title.trim().is_empty(),
@@ -739,50 +793,22 @@ mod governance {
             author: Global<Account>,
             draft: TemperatureCheckDraft,
             parameter_set_id: String,
-            temperature_check_start: Instant,
-            temperature_check_deadline: Instant,
-            voting_start: Instant,
-            voting_deadline: Instant,
             candidate_order: Vec<MajorityJudgmentCandidateId>,
         ) -> u64 {
             Runtime::assert_access_rule(author.get_owner_role().rule);
             Self::validate_temperature_check_draft(&draft);
             let now = Clock::current_time_rounded_to_seconds();
-            assert!(
-                temperature_check_start.compare(now, TimeComparisonOperator::Gt),
-                "Temperature check voting must start in the future"
-            );
             let parameter_set = self.resolve_parameter_set(Some(parameter_set_id));
-            let election_parameters = match &parameter_set.parameters {
-                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
+            match &parameter_set.parameters {
+                GovernanceProcessParameters::MajorityJudgment { .. } => (),
                 GovernanceProcessParameters::Standard { .. } => {
                     panic!("A Majority Judgment parameter set is required for an election")
                 }
             };
-            let minimum_temperature_check_deadline = Self::checked_add_governance_duration(
-                temperature_check_start,
+            let temperature_check_deadline = Self::checked_add_governance_duration(
+                now,
                 parameter_set.parameters.temperature_check().voting_days,
-                "Minimum temperature check deadline",
-            );
-            assert!(
-                temperature_check_deadline.compare(
-                    minimum_temperature_check_deadline,
-                    TimeComparisonOperator::Gte
-                ),
-                "Temperature check voting period is shorter than the configured minimum"
-            );
-            assert!(
-                voting_start.compare(temperature_check_deadline, TimeComparisonOperator::Gte),
-                "Election voting cannot start before the temperature check ends"
-            );
-            let minimum_voting_deadline = Self::checked_add_governance_duration(
-                voting_start,
-                election_parameters.voting_days,
-                "Minimum election voting deadline",
-            );
-            assert!(
-                voting_deadline.compare(minimum_voting_deadline, TimeComparisonOperator::Gte),
-                "Election voting period is shorter than the configured minimum"
+                "Temperature check deadline",
             );
 
             let (role_id, seat_count, mut candidates) = match draft.follow_up.clone() {
@@ -823,7 +849,7 @@ mod governance {
                 follow_up,
                 parameter_set.clone(),
                 snapshot,
-                temperature_check_start,
+                now,
                 temperature_check_deadline,
                 Some(ConsultationContinuation::MajorityJudgmentElection(
                     election_id,
@@ -831,13 +857,7 @@ mod governance {
             );
             let election = MajorityJudgmentElection {
                 temperature_check_id,
-                round_one: Self::new_round(
-                    snapshot,
-                    voting_start,
-                    voting_deadline,
-                    election_parameters.quorum,
-                    election_parameters.minimum_median_grade,
-                ),
+                round_one: None,
                 rerun: None,
                 tie_resolution: None,
                 hidden: false,
@@ -850,8 +870,6 @@ mod governance {
                 role_id,
                 seat_count,
                 snapshot,
-                voting_start,
-                voting_deadline,
                 parameter_set_id: parameter_set.id,
                 parameter_set_version: parameter_set.version,
             });
@@ -1045,7 +1063,9 @@ mod governance {
                 .expect("Majority Judgment election not found");
             let normalized = Self::validate_and_normalize_ballot(&candidates, grades);
             let round = match round_id {
-                MajorityJudgmentRoundId::RoundOne => &mut election.round_one,
+                MajorityJudgmentRoundId::RoundOne => {
+                    election.round_one.as_mut().expect("Round 1 has not opened")
+                }
                 MajorityJudgmentRoundId::Rerun => election
                     .rerun
                     .as_mut()
@@ -1098,23 +1118,48 @@ mod governance {
             });
         }
 
-        pub fn start_majority_judgment_rerun(&mut self, election_id: u64, voting_start: Instant) {
+        pub fn start_majority_judgment_round_one(&mut self, election_id: u64) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
-            let parameters = match &temperature_check.parameter_set.parameters {
-                GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
-                GovernanceProcessParameters::Standard { .. } => {
-                    panic!("Election does not contain Majority Judgment parameters")
-                }
-            };
-            let snapshot = temperature_check.snapshot;
-            drop(temperature_check);
+            let (snapshot, temperature_check_deadline, parameters) =
+                self.majority_judgment_round_context(election_id);
+            assert!(
+                now.compare(temperature_check_deadline, TimeComparisonOperator::Gte),
+                "Temperature check has not ended"
+            );
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
                 .expect("Majority Judgment election not found");
+            assert!(election.round_one.is_none(), "Round 1 has already opened");
+            let deadline = Self::checked_add_governance_duration(
+                now,
+                parameters.voting_days,
+                "Election voting deadline",
+            );
+            // Hidden is a moderation flag, while rerun/tie state is unreachable until
+            // Round 1 exists; neither is an additional lifecycle gate here.
+            Self::open_majority_judgment_round(
+                &mut election,
+                election_id,
+                MajorityJudgmentRoundId::RoundOne,
+                snapshot,
+                now,
+                deadline,
+                parameters.quorum,
+                parameters.minimum_median_grade,
+            );
+        }
+
+        pub fn start_majority_judgment_rerun(&mut self, election_id: u64) {
+            let now = Clock::current_time_rounded_to_seconds();
+            let (snapshot, _, parameters) = self.majority_judgment_round_context(election_id);
+            let mut election = self
+                .majority_judgment_elections
+                .get_mut(&election_id)
+                .expect("Majority Judgment election not found");
+            let round_one = election.round_one.as_ref().expect("Round 1 has not opened");
             assert!(
-                now.compare(election.round_one.deadline, TimeComparisonOperator::Gte),
+                now.compare(round_one.deadline, TimeComparisonOperator::Gte),
                 "Round 1 has not ended"
             );
             assert!(election.rerun.is_none(), "Election rerun already exists");
@@ -1122,32 +1167,21 @@ mod governance {
                 election.tie_resolution.is_none(),
                 "An election with a recorded tie resolution cannot be rerun"
             );
-            assert!(
-                voting_start.compare(now, TimeComparisonOperator::Gte),
-                "Rerun voting cannot start in the past"
-            );
             let deadline = Self::checked_add_governance_duration(
-                voting_start,
+                now,
                 parameters.rerun_voting_days,
                 "Rerun voting deadline",
             );
-            let quorum = parameters.rerun_quorum;
-            let minimum_median_grade = parameters.rerun_minimum_median_grade;
-            election.rerun = Some(Self::new_round(
-                snapshot,
-                voting_start,
-                deadline,
-                quorum,
-                minimum_median_grade,
-            ));
-            Runtime::emit_event(MajorityJudgmentRerunStartedEvent {
+            Self::open_majority_judgment_round(
+                &mut election,
                 election_id,
+                MajorityJudgmentRoundId::Rerun,
                 snapshot,
-                start: voting_start,
+                now,
                 deadline,
-                quorum,
-                minimum_median_grade,
-            });
+                parameters.rerun_quorum,
+                parameters.rerun_minimum_median_grade,
+            );
         }
 
         pub fn record_majority_judgment_tie_resolution(
@@ -1176,7 +1210,13 @@ mod governance {
                 "Election tie resolution already exists"
             );
             let deadline = match round_id {
-                MajorityJudgmentRoundId::RoundOne => election.round_one.deadline,
+                MajorityJudgmentRoundId::RoundOne => {
+                    election
+                        .round_one
+                        .as_ref()
+                        .expect("Round 1 has not opened")
+                        .deadline
+                }
                 MajorityJudgmentRoundId::Rerun => {
                     election
                         .rerun

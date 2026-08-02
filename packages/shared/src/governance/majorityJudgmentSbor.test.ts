@@ -6,7 +6,7 @@ import {
   MajorityJudgmentElectionCreatedEvent,
   MajorityJudgmentElectionKeyValueStoreValue,
   MajorityJudgmentElectionVotedEvent,
-  MajorityJudgmentRerunStartedEvent,
+  MajorityJudgmentRoundStartedEvent,
   MajorityJudgmentTieResolutionRecordedEvent,
   MajorityJudgmentVoteKeyValueStoreValue,
   MajorityJudgmentVotersKeyValueStoreValue,
@@ -210,7 +210,13 @@ describe('majority judgment SBOR schemas', () => {
       type_name: 'MajorityJudgmentElection',
       fields: [
         number('temperature_check_id', 3, 'U64'),
-        round,
+        {
+          kind: 'Enum',
+          field_name: 'round_one',
+          variant_name: 'Some',
+          variant_id: 1,
+          fields: [round]
+        },
         {
           kind: 'Enum',
           field_name: 'rerun',
@@ -245,8 +251,6 @@ describe('majority judgment SBOR schemas', () => {
         { kind: 'String', field_name: 'role_id', value: 'rac-member' },
         number('seat_count', 1),
         instant('snapshot', 1_699_000_000),
-        instant('voting_start', 1_700_604_800),
-        instant('voting_deadline', 1_701_209_600),
         { kind: 'String', field_name: 'parameter_set_id', value: 'mj-rac' },
         number('parameter_set_version', 1)
       ]
@@ -288,11 +292,12 @@ describe('majority judgment SBOR schemas', () => {
           instant('recorded_at', 1_700_604_800)
         ]
       })
-    const rerun = MajorityJudgmentRerunStartedEvent.safeParse({
+    const rerun = MajorityJudgmentRoundStartedEvent.safeParse({
       kind: 'Tuple',
-      type_name: 'MajorityJudgmentRerunStartedEvent',
+      type_name: 'MajorityJudgmentRoundStartedEvent',
       fields: [
         number('election_id', 7, 'U64'),
+        roundId('round', 'Rerun', 1),
         instant('snapshot', 1_702_000_000),
         instant('start', 1_702_100_000),
         instant('deadline', 1_702_532_000),

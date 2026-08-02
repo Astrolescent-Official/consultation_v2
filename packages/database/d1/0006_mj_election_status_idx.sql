@@ -1,0 +1,1 @@
+CREATE INDEX `mj_election_status_idx` ON `mj_election` (`status`);

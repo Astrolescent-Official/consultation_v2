@@ -107,7 +107,7 @@ export function ElectionTemperatureCheckStage({
         })
 
   const votingOpen = status === 'TC_LIVE' && beforeDeadline
-  const showTallies = status !== 'PENDING' && status !== 'MJ_PENDING'
+  const showTallies = status !== 'PENDING'
 
   return (
     <Card className="shadow-none">

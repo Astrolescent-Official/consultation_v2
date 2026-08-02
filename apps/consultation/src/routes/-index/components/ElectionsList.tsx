@@ -26,15 +26,19 @@ export const selectVisibleElections = <T extends VisibleElection>(
       sortOrder === 'asc' ? left.id - right.id : right.id - left.id
     )
 
-const electionDates = (election: {
+export const electionDates = (election: {
   readonly tcVotingStart: Date
-  readonly roundOne: { readonly deadline: Date }
+  readonly tcVotingEnd: Date
+  readonly roundOne: Option.Option<{ readonly deadline: Date }>
   readonly rerun: Option.Option<{ readonly deadline: Date }>
 }) => {
-  const round = Option.getOrElse(election.rerun, () => election.roundOne)
+  const round = Option.orElse(election.rerun, () => election.roundOne)
   return {
     start: election.tcVotingStart,
-    deadline: round.deadline
+    deadline: Option.match(round, {
+      onNone: () => election.tcVotingEnd,
+      onSome: ({ deadline }) => deadline
+    })
   }
 }
 

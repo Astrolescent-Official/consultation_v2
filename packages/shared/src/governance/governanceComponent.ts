@@ -33,7 +33,6 @@ import {
   renderCandidateGrades,
   renderCandidateOrder,
   renderGovernanceParameterSetInput,
-  renderInstant,
   renderParameterSetIdOption,
   renderTemperatureCheckDraft
 } from './governanceManifests'
@@ -46,6 +45,8 @@ import {
   MakeMajorityJudgmentVoteInputSchema,
   type StartMajorityJudgmentRerunInput,
   StartMajorityJudgmentRerunInputSchema,
+  type StartMajorityJudgmentRoundOneInput,
+  StartMajorityJudgmentRoundOneInputSchema,
   type ToggleMajorityJudgmentElectionHiddenInput,
   ToggleMajorityJudgmentElectionHiddenInputSchema
 } from './majorityJudgment'
@@ -1254,10 +1255,6 @@ CALL_METHOD
   Address(${encodeManifestString(parsedInput.accountAddress)})
   ${draft}
   ${encodeManifestString(parsedInput.parameterSetId)}
-  ${renderInstant(parsedInput.tcVotingStart)}
-  ${renderInstant(parsedInput.tcVotingEnd)}
-  ${renderInstant(parsedInput.votingStart)}
-  ${renderInstant(parsedInput.votingEnd)}
   ${renderCandidateOrder(parsedInput.candidateOrder)}
 ;
           `)
@@ -1329,7 +1326,27 @@ CALL_METHOD
   Address(${encodeManifestString(config.componentAddress)})
   "start_majority_judgment_rerun"
   ${parsedInput.electionId}u64
-  ${renderInstant(parsedInput.votingStart)}
+;
+          `)
+        })
+
+      const startMajorityJudgmentRoundOneManifest = (
+        input: StartMajorityJudgmentRoundOneInput
+      ) =>
+        Effect.gen(function* () {
+          const parsedInput = yield* Schema.decodeUnknown(
+            StartMajorityJudgmentRoundOneInputSchema
+          )(input)
+          const adminBadgeProof = yield* makeAdminBadgeProof(
+            parsedInput.accountAddress
+          )
+
+          return TransactionManifestString.make(`
+${adminBadgeProof}
+CALL_METHOD
+  Address(${encodeManifestString(config.componentAddress)})
+  "start_majority_judgment_round_one"
+  ${parsedInput.electionId}u64
 ;
           `)
         })
@@ -1409,6 +1426,7 @@ CALL_METHOD
         makeMajorityJudgmentElectionManifest,
         recordTemperatureCheckOutcomeManifest,
         makeMajorityJudgmentVoteManifest,
+        startMajorityJudgmentRoundOneManifest,
         startMajorityJudgmentRerunManifest,
         recordMajorityJudgmentTieResolutionManifest,
         makeToggleMajorityJudgmentElectionHiddenManifest

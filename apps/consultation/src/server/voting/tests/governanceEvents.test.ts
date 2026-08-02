@@ -19,7 +19,7 @@ const governanceComponentAddress =
   'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
 
 const creationEvent = (
-  event: 'TemperatureCheckCreatedEvent' | 'ProposalCreatedEvent',
+  event: string,
   programmaticJson: ProgrammaticScryptoSborValue
 ) =>
   ({
@@ -41,6 +41,100 @@ const processorLayer = GovernanceEventProcessor.DefaultWithoutDependencies.pipe(
 )
 
 describe('governance event action routing', () => {
+  it('routes both round-start variants through live-state projection', async () => {
+    const roundStarted = (electionId: number, round: 'RoundOne' | 'Rerun') =>
+      creationEvent('MajorityJudgmentRoundStartedEvent', {
+        kind: 'Tuple',
+        type_name: 'MajorityJudgmentRoundStartedEvent',
+        fields: [
+          {
+            kind: 'U64',
+            field_name: 'election_id',
+            value: String(electionId)
+          },
+          {
+            kind: 'Enum',
+            type_name: 'MajorityJudgmentRoundId',
+            field_name: 'round',
+            variant_name: round,
+            variant_id: round === 'RoundOne' ? '0' : '1',
+            fields: []
+          },
+          {
+            kind: 'I64',
+            type_name: 'Instant',
+            field_name: 'snapshot',
+            value: '1785456000'
+          },
+          {
+            kind: 'I64',
+            type_name: 'Instant',
+            field_name: 'start',
+            value: '1786147200'
+          },
+          {
+            kind: 'I64',
+            type_name: 'Instant',
+            field_name: 'deadline',
+            value: '1786752000'
+          },
+          { kind: 'Decimal', field_name: 'quorum', value: '1000' },
+          {
+            kind: 'Enum',
+            type_name: 'Grade',
+            field_name: 'minimum_median_grade',
+            variant_name: 'Good',
+            variant_id: '2',
+            fields: []
+          }
+        ]
+      })
+
+    const actions = await Effect.runPromise(
+      Effect.gen(function* () {
+        const processor = yield* GovernanceEventProcessor
+        return yield* processor.processBatch([
+          {
+            state_version: 101,
+            round_timestamp: '2026-08-01T00:00:00.000Z',
+            receipt: { detailed_events: [roundStarted(7, 'RoundOne')] }
+          } as CommittedTransactionInfo,
+          {
+            state_version: 102,
+            round_timestamp: '2026-08-02T00:00:00.000Z',
+            receipt: { detailed_events: [roundStarted(8, 'Rerun')] }
+          } as CommittedTransactionInfo
+        ])
+      }).pipe(Effect.provide(processorLayer))
+    )
+
+    assert.deepStrictEqual(
+      actions.map((action) => {
+        assert.equal(action._tag, 'MajorityJudgmentRoundStarted')
+        if (action._tag !== 'MajorityJudgmentRoundStarted') {
+          throw new Error('Expected a Majority Judgment round-start action')
+        }
+        return {
+          _tag: action._tag,
+          electionId: action.electionId,
+          stateVersion: action.stateVersion
+        }
+      }),
+      [
+        {
+          _tag: 'MajorityJudgmentRoundStarted',
+          electionId: 7,
+          stateVersion: 101
+        },
+        {
+          _tag: 'MajorityJudgmentRoundStarted',
+          electionId: 8,
+          stateVersion: 102
+        }
+      ]
+    )
+  })
+
   it('routes standard entity creation as authoritative zero-vote initialization', async () => {
     const commonFields = [
       { kind: 'String' as const, field_name: 'title', value: 'Governance' },

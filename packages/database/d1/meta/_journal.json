@@ -43,6 +43,13 @@
       "when": 1785583104363,
       "tag": "0005_deep_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785704262107,
+      "tag": "0006_mj_election_status_idx",
+      "breakpoints": true
     }
   ]
 }

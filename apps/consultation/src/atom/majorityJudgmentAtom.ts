@@ -1,7 +1,7 @@
 import { Atom } from '@effect-atom/atom-react'
 import { AccountAddress } from '@radix-effects/shared'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import { Effect, Option } from 'effect'
+import { Data, Effect, Option } from 'effect'
 import {
   GovernanceComponent,
   type Grade,
@@ -80,6 +80,35 @@ export const majorityJudgmentElectionAtom = Atom.family(
     )
 )
 
+export class InvalidMajorityJudgmentRoundParametersError extends Data.TaggedError(
+  'InvalidMajorityJudgmentRoundParametersError'
+)<{ readonly electionId: MajorityJudgmentElectionId }> {}
+
+export const getMajorityJudgmentRoundDurations = Effect.fn(
+  'getMajorityJudgmentRoundDurations'
+)(function* (electionId: MajorityJudgmentElectionId) {
+  const governance = yield* GovernanceComponent
+  const election = yield* governance.getMajorityJudgmentElectionById(electionId)
+  const temperatureCheck = yield* governance.getTemperatureCheckById(
+    election.temperatureCheckId
+  )
+  if (temperatureCheck.parameterSet.parameters._tag !== 'MajorityJudgment') {
+    return yield* new InvalidMajorityJudgmentRoundParametersError({
+      electionId
+    })
+  }
+  return {
+    votingDays: temperatureCheck.parameterSet.parameters.election.votingDays,
+    rerunVotingDays:
+      temperatureCheck.parameterSet.parameters.election.rerunVotingDays
+  }
+})
+
+export const majorityJudgmentRoundDurationsAtom = Atom.family(
+  (electionId: MajorityJudgmentElectionId) =>
+    governanceRuntime.atom(getMajorityJudgmentRoundDurations(electionId))
+)
+
 export const majorityJudgmentVoterEntriesAtom = Atom.family(
   (electionId: MajorityJudgmentElectionId) =>
     governanceRuntime.atom(
@@ -88,10 +117,11 @@ export const majorityJudgmentVoterEntriesAtom = Atom.family(
         const governance = yield* GovernanceComponent
         const election =
           yield* governance.getMajorityJudgmentElectionById(electionId)
-        const round = Option.getOrElse(election.rerun, () => election.roundOne)
+        const round = Option.orElse(election.rerun, () => election.roundOne)
+        if (Option.isNone(round)) return []
         const entries =
           yield* governance.getMajorityJudgmentVoterEntriesByAccounts({
-            keyValueStoreAddress: round.voters,
+            keyValueStoreAddress: round.value.voters,
             accounts: accounts.map(({ address }) =>
               AccountAddress.make(address)
             )

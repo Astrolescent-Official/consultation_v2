@@ -240,16 +240,11 @@ fn standard_draft(title: &str) -> TemperatureCheckDraft {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn create_election(
     ledger: &mut TestLedger,
     component: ComponentAddress,
     owner: &Owner,
     draft: TemperatureCheckDraft,
-    tc_start: i64,
-    tc_end: i64,
-    voting_start: i64,
-    voting_end: i64,
     order: Vec<MajorityJudgmentCandidateId>,
     authorized: bool,
     should_succeed: bool,
@@ -263,16 +258,7 @@ fn create_election(
         .call_method(
             component,
             "make_majority_judgment_election",
-            manifest_args!(
-                owner.account.address,
-                draft,
-                "election".to_string(),
-                Instant::new(tc_start),
-                Instant::new(tc_end),
-                Instant::new(voting_start),
-                Instant::new(voting_end),
-                order
-            ),
+            manifest_args!(owner.account.address, draft, "election".to_string(), order),
         )
         .build();
     let receipt = ledger.execute_manifest(
@@ -429,7 +415,6 @@ fn start_rerun(
     component: ComponentAddress,
     owner: &Owner,
     election_id: u64,
-    voting_start: Instant,
     authorized: bool,
     should_succeed: bool,
 ) -> TransactionReceipt {
@@ -442,7 +427,7 @@ fn start_rerun(
         .call_method(
             component,
             "start_majority_judgment_rerun",
-            manifest_args!(election_id, voting_start),
+            manifest_args!(election_id),
         )
         .build();
     let receipt = ledger.execute_manifest(
@@ -459,6 +444,53 @@ fn start_rerun(
         receipt.expect_commit_failure();
     }
     receipt
+}
+
+fn start_round_one(
+    ledger: &mut TestLedger,
+    component: ComponentAddress,
+    owner: &Owner,
+    election_id: u64,
+    authorized: bool,
+    should_succeed: bool,
+) -> TransactionReceipt {
+    let builder = if authorized {
+        owner_builder(owner)
+    } else {
+        ManifestBuilder::new().lock_fee_from_faucet()
+    };
+    let manifest = builder
+        .call_method(
+            component,
+            "start_majority_judgment_round_one",
+            manifest_args!(election_id),
+        )
+        .build();
+    let receipt = ledger.execute_manifest(
+        manifest,
+        if authorized {
+            owner_signers(owner)
+        } else {
+            vec![]
+        },
+    );
+    if should_succeed {
+        receipt.expect_commit_success();
+    } else {
+        receipt.expect_commit_failure();
+    }
+    receipt
+}
+
+fn round_started_event(receipt: &TransactionReceipt) -> MajorityJudgmentRoundStartedEvent {
+    let event_data = receipt
+        .expect_commit_success()
+        .application_events
+        .iter()
+        .find(|(identifier, _)| identifier.1 == "MajorityJudgmentRoundStartedEvent")
+        .map(|(_, data)| data)
+        .expect("round-start event should be emitted");
+    scrypto_decode(event_data).expect("round-start event should decode")
 }
 
 fn record_tie_resolution(
@@ -551,10 +583,6 @@ fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order.clone(),
         false,
         false,
@@ -564,23 +592,6 @@ fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        86_401,
-        259_200,
-        345_600,
-        order.clone(),
-        true,
-        false,
-    );
-    create_election(
-        &mut ledger,
-        component,
-        &owner,
-        mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         vec![
             MajorityJudgmentCandidateId(0),
             MajorityJudgmentCandidateId(0),
@@ -594,10 +605,6 @@ fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order,
         true,
         true,
@@ -618,8 +625,8 @@ fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
     let election = read_election(&mut ledger, component, 0);
 
     assert_eq!(tc.snapshot, Instant::new(0));
-    assert_eq!(tc.start, Instant::new(86_400));
-    assert_eq!(tc.deadline, Instant::new(172_800));
+    assert_eq!(tc.start, Instant::new(0));
+    assert_eq!(tc.deadline, Instant::new(86_400));
     assert_eq!(
         tc.continuation,
         Some(ConsultationContinuation::MajorityJudgmentElection(0))
@@ -640,9 +647,7 @@ fn election_creation_is_atomic_and_keeps_one_canonical_temperature_check() {
         TemperatureCheckFollowUp::StandardProposal { .. } => panic!("expected MJ follow-up"),
     }
     assert_eq!(election.temperature_check_id, 0);
-    assert_eq!(election.round_one.snapshot, tc.snapshot);
-    assert_eq!(election.round_one.start, Instant::new(259_200));
-    assert_eq!(election.round_one.deadline, Instant::new(345_600));
+    assert!(election.round_one.is_none());
 }
 
 #[test]
@@ -662,10 +667,6 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order.clone(),
         true,
         true,
@@ -673,10 +674,11 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
 
     vote_mj(&mut ledger, component, &voter, 0, false);
     record_outcome(&mut ledger, component, &owner, 0, false, false);
-    advance_to(&mut ledger, 172_800);
+    start_round_one(&mut ledger, component, &owner, 0, true, false);
+    advance_to(&mut ledger, 86_400);
     record_outcome(&mut ledger, component, &owner, 0, false, true);
     record_outcome(&mut ledger, component, &owner, 0, true, false);
-    advance_to(&mut ledger, 259_200);
+    start_round_one(&mut ledger, component, &owner, 0, true, false);
     vote_mj(&mut ledger, component, &voter, 0, false);
 
     create_election(
@@ -684,41 +686,81 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
         component,
         &owner,
         mj_draft(),
-        345_600,
-        432_000,
-        518_400,
-        604_800,
         order,
         true,
         true,
     );
-    advance_to(&mut ledger, 432_000);
+    advance_to(&mut ledger, 172_800);
     record_outcome(&mut ledger, component, &owner, 1, true, true);
     vote_mj(&mut ledger, component, &voter, 1, false);
-    advance_to(&mut ledger, 518_400);
+    update_parameter_set(
+        &mut ledger,
+        component,
+        &owner,
+        "election",
+        GovernanceParameterSetInput {
+            label: "Updated current rules".to_string(),
+            parameters: mj_parameters_with(|parameters| {
+                parameters.voting_days = 2;
+                parameters.rerun_voting_days = 3;
+                parameters.quorum = dec!(9999);
+                parameters.rerun_quorum = dec!(9999);
+                parameters.minimum_median_grade = Grade::Excellent;
+                parameters.rerun_minimum_median_grade = Grade::Excellent;
+            }),
+        },
+        true,
+    );
+    let round_one_receipt = start_round_one(&mut ledger, component, &owner, 1, true, true);
     vote_mj(&mut ledger, component, &voter, 1, true);
 
     let tc = read_temperature_check(&mut ledger, component, 1);
     assert!(tc.outcome.is_some_and(TemperatureCheckOutcome::passed));
     let election = read_election(&mut ledger, component, 1);
-    assert_eq!(election.round_one.vote_count, 1);
+    let round_one = election.round_one.expect("Round 1 should exist");
+    assert_eq!(round_one.snapshot, tc.snapshot);
+    assert_eq!(round_one.start, Instant::new(172_800));
+    assert_eq!(round_one.deadline, Instant::new(259_200));
+    assert_eq!(round_one.quorum, dec!(5000));
+    assert_eq!(round_one.minimum_median_grade, Grade::Good);
+    assert_eq!(round_one.vote_count, 1);
+    let round_one_event = round_started_event(&round_one_receipt);
+    assert_eq!(round_one_event.election_id, 1);
+    assert_eq!(round_one_event.round, MajorityJudgmentRoundId::RoundOne);
+    assert_eq!(round_one_event.snapshot, tc.snapshot);
+    assert_eq!(round_one_event.start, round_one.start);
+    assert_eq!(round_one_event.deadline, round_one.deadline);
+    assert_eq!(round_one_event.quorum, round_one.quorum);
+    assert_eq!(
+        round_one_event.minimum_median_grade,
+        round_one.minimum_median_grade
+    );
 
-    advance_to(&mut ledger, 604_800);
+    advance_to(&mut ledger, 259_200);
     let rerun_manifest = owner_builder(&owner)
         .call_method(
             component,
             "start_majority_judgment_rerun",
-            manifest_args!(1u64, Instant::new(604_800)),
+            manifest_args!(1u64),
         )
         .build();
-    ledger
-        .execute_manifest(rerun_manifest, owner_signers(&owner))
-        .expect_commit_success();
+    let rerun_receipt = ledger.execute_manifest(rerun_manifest, owner_signers(&owner));
+    rerun_receipt.expect_commit_success();
     let election = read_election(&mut ledger, component, 1);
-    assert_eq!(
-        election.rerun.expect("rerun should exist").snapshot,
-        tc.snapshot
-    );
+    let rerun = election.rerun.expect("rerun should exist");
+    assert_eq!(rerun.snapshot, tc.snapshot);
+    assert_eq!(rerun.start, Instant::new(259_200));
+    assert_eq!(rerun.deadline, Instant::new(345_600));
+    assert_eq!(rerun.quorum, dec!(5000));
+    assert_eq!(rerun.minimum_median_grade, Grade::Good);
+    let rerun_event = round_started_event(&rerun_receipt);
+    assert_eq!(rerun_event.election_id, 1);
+    assert_eq!(rerun_event.round, MajorityJudgmentRoundId::Rerun);
+    assert_eq!(rerun_event.snapshot, rerun.snapshot);
+    assert_eq!(rerun_event.start, rerun.start);
+    assert_eq!(rerun_event.deadline, rerun.deadline);
+    assert_eq!(rerun_event.quorum, rerun.quorum);
+    assert_eq!(rerun_event.minimum_median_grade, rerun.minimum_median_grade);
 }
 
 #[test]
@@ -855,10 +897,6 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         component,
         &owner,
         draft_with(candidates_of(1), 1),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order_of(1),
         true,
         true,
@@ -870,10 +908,6 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         component,
         &owner,
         draft_with(candidates_of(21), 1),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order_of(21),
         true,
         false,
@@ -886,10 +920,6 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         component,
         &owner,
         draft_with(candidates_of(3), 3),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order_of(3),
         true,
         true,
@@ -902,10 +932,6 @@ fn majority_judgment_candidate_count_boundaries_are_enforced() {
         component,
         &owner,
         draft_with(candidates_of(3), 4),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order_of(3),
         true,
         true,
@@ -934,10 +960,6 @@ fn parameter_variants_candidate_rules_and_snapshots_are_enforced() {
                 owner.account.address,
                 mj_draft(),
                 DEFAULT_PARAMETER_SET_ID.to_string(),
-                Instant::new(86_400),
-                Instant::new(172_800),
-                Instant::new(259_200),
-                Instant::new(345_600),
                 order.clone()
             ),
         )
@@ -979,10 +1001,6 @@ fn parameter_variants_candidate_rules_and_snapshots_are_enforced() {
         component,
         &owner,
         duplicate_draft,
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order.clone(),
         true,
         false,
@@ -1004,10 +1022,6 @@ fn parameter_variants_candidate_rules_and_snapshots_are_enforced() {
         component,
         &owner,
         invalid_url_draft,
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order,
         true,
         false,
@@ -1052,10 +1066,6 @@ fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         vec![
             MajorityJudgmentCandidateId(0),
             MajorityJudgmentCandidateId(1),
@@ -1064,9 +1074,10 @@ fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
         true,
         true,
     );
-    advance_to(&mut ledger, 172_800);
+    advance_to(&mut ledger, 86_400);
     record_outcome(&mut ledger, component, &owner, 0, true, true);
-    advance_to(&mut ledger, 345_600);
+    start_round_one(&mut ledger, component, &owner, 0, true, true);
+    advance_to(&mut ledger, 172_800);
     record_tie_resolution(
         &mut ledger,
         component,
@@ -1094,15 +1105,7 @@ fn a_recorded_tie_resolution_cannot_be_replaced_by_a_rerun() {
         true,
         false,
     );
-    let receipt = start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(345_600),
-        true,
-        false,
-    );
+    let receipt = start_rerun(&mut ledger, component, &owner, 0, true, false);
     receipt.expect_specific_failure(|error| match error {
         RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
             message.contains("An election with a recorded tie resolution cannot be rerun")
@@ -1130,20 +1133,16 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         component,
         &owner,
         mj_draft(),
-        86_400,
-        172_800,
-        259_200,
-        345_600,
         order,
         true,
         true,
     );
 
-    advance_to(&mut ledger, 172_800);
+    advance_to(&mut ledger, 86_400);
     record_outcome(&mut ledger, component, &owner, 0, true, true);
 
     // Voting has not started yet, even with a well-formed ballot.
-    vote_mj_round(
+    let unopened_vote = vote_mj_round(
         &mut ledger,
         component,
         &voter_one,
@@ -1152,8 +1151,26 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         complete_ballot(),
         false,
     );
+    unopened_vote.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("Round 1 has not opened")
+        }
+        _ => false,
+    });
 
-    // An incomplete ballot is rejected.
+    // Starting a rerun before Round 1 has ended is rejected.
+    let unopened_rerun = start_rerun(&mut ledger, component, &owner, 0, true, false);
+    unopened_rerun.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("Round 1 has not opened")
+        }
+        _ => false,
+    });
+    start_round_one(&mut ledger, component, &owner, 0, false, false);
+    start_round_one(&mut ledger, component, &owner, 0, true, true);
+    start_round_one(&mut ledger, component, &owner, 0, true, false);
+
+    // An incomplete ballot is rejected after the round has opened.
     vote_mj_round(
         &mut ledger,
         component,
@@ -1191,19 +1208,6 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         false,
     );
 
-    // Starting a rerun before Round 1 has ended is rejected.
-    start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(345_600),
-        true,
-        false,
-    );
-
-    advance_to(&mut ledger, 259_200);
-
     vote_mj_round(
         &mut ledger,
         component,
@@ -1234,8 +1238,9 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
     );
 
     let election = read_election(&mut ledger, component, 0);
-    assert_eq!(election.round_one.vote_count, 3);
-    assert_eq!(election.round_one.revote_count, 1);
+    let round_one = election.round_one.expect("Round 1 should exist");
+    assert_eq!(round_one.vote_count, 3);
+    assert_eq!(round_one.revote_count, 1);
 
     // A tie resolution cannot be recorded before the round has ended.
     record_tie_resolution(
@@ -1252,7 +1257,7 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         false,
     );
 
-    advance_to(&mut ledger, 345_600);
+    advance_to(&mut ledger, 172_800);
 
     // Voting after the round deadline is rejected.
     vote_mj_round(
@@ -1306,50 +1311,16 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
     );
 
     // Only the owner may start a rerun.
-    start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(345_600),
-        false,
-        false,
-    );
-    // A rerun cannot be scheduled to start in the past.
-    start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(300_000),
-        true,
-        false,
-    );
+    start_rerun(&mut ledger, component, &owner, 0, false, false);
 
-    start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(345_600),
-        true,
-        true,
-    );
+    start_rerun(&mut ledger, component, &owner, 0, true, true);
     // A rerun can only be started once.
-    start_rerun(
-        &mut ledger,
-        component,
-        &owner,
-        0,
-        Instant::new(345_600),
-        true,
-        false,
-    );
+    start_rerun(&mut ledger, component, &owner, 0, true, false);
 
     let election = read_election(&mut ledger, component, 0);
     let rerun = election.rerun.expect("rerun should exist");
-    assert_eq!(rerun.start, Instant::new(345_600));
-    assert_eq!(rerun.deadline, Instant::new(432_000));
+    assert_eq!(rerun.start, Instant::new(172_800));
+    assert_eq!(rerun.deadline, Instant::new(259_200));
     assert_eq!(rerun.quorum, dec!(5000));
     assert_eq!(rerun.minimum_median_grade, Grade::Good);
 
@@ -1379,7 +1350,7 @@ fn complete_ballots_revote_rerun_tie_record_and_events_are_round_local() {
         false,
     );
 
-    advance_to(&mut ledger, 432_000);
+    advance_to(&mut ledger, 259_200);
 
     // Voting after the rerun deadline is rejected.
     vote_mj_round(
