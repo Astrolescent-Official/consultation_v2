@@ -481,7 +481,7 @@ mod governance {
         fn majority_judgment_round_context(
             &self,
             election_id: u64,
-        ) -> (Instant, Instant, MajorityJudgmentParameters) {
+        ) -> (Instant, MajorityJudgmentParameters) {
             let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
             let parameters = match &temperature_check.parameter_set.parameters {
                 GovernanceProcessParameters::MajorityJudgment { election, .. } => election.clone(),
@@ -489,11 +489,7 @@ mod governance {
                     panic!("Election does not contain Majority Judgment parameters")
                 }
             };
-            (
-                temperature_check.snapshot,
-                temperature_check.deadline,
-                parameters,
-            )
+            (temperature_check.deadline, parameters)
         }
 
         fn open_majority_judgment_round(
@@ -1131,7 +1127,7 @@ mod governance {
 
         pub fn start_majority_judgment_round_one(&mut self, election_id: u64) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (snapshot, temperature_check_deadline, parameters) =
+            let (temperature_check_deadline, parameters) =
                 self.majority_judgment_round_context(election_id);
             assert!(
                 now.compare(temperature_check_deadline, TimeComparisonOperator::Gte),
@@ -1153,7 +1149,7 @@ mod governance {
                 &mut election,
                 election_id,
                 MajorityJudgmentRoundId::RoundOne,
-                snapshot,
+                now,
                 now,
                 deadline,
                 parameters.quorum,
@@ -1163,7 +1159,7 @@ mod governance {
 
         pub fn start_majority_judgment_rerun(&mut self, election_id: u64) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (snapshot, _, parameters) = self.majority_judgment_round_context(election_id);
+            let (_, parameters) = self.majority_judgment_round_context(election_id);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
@@ -1178,6 +1174,7 @@ mod governance {
                 election.tie_resolution.is_none(),
                 "An election with a recorded tie resolution cannot be rerun"
             );
+            let snapshot = round_one.snapshot;
             let deadline = Self::checked_add_governance_duration(
                 now,
                 parameters.rerun_voting_days,

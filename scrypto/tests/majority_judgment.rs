@@ -398,7 +398,7 @@ fn vote_mj(
     voter: &TestAccount,
     election_id: u64,
     should_succeed: bool,
-) {
+) -> TransactionReceipt {
     vote_mj_round(
         ledger,
         component,
@@ -407,7 +407,7 @@ fn vote_mj(
         MajorityJudgmentRoundId::RoundOne,
         complete_ballot(),
         should_succeed,
-    );
+    )
 }
 
 fn start_rerun(
@@ -674,12 +674,30 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
 
     vote_mj(&mut ledger, component, &voter, 0, false);
     record_outcome(&mut ledger, component, &owner, 0, false, false);
-    start_round_one(&mut ledger, component, &owner, 0, true, false);
+    let unopened_round = start_round_one(&mut ledger, component, &owner, 0, true, false);
+    unopened_round.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("Election temperature check has not passed")
+        }
+        _ => false,
+    });
     advance_to(&mut ledger, 86_400);
     record_outcome(&mut ledger, component, &owner, 0, false, true);
     record_outcome(&mut ledger, component, &owner, 0, true, false);
-    start_round_one(&mut ledger, component, &owner, 0, true, false);
-    vote_mj(&mut ledger, component, &voter, 0, false);
+    let failed_round = start_round_one(&mut ledger, component, &owner, 0, true, false);
+    failed_round.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("Election temperature check has not passed")
+        }
+        _ => false,
+    });
+    let failed_election_vote = vote_mj(&mut ledger, component, &voter, 0, false);
+    failed_election_vote.expect_specific_failure(|error| match error {
+        RuntimeError::ApplicationError(ApplicationError::PanicMessage(message)) => {
+            message.contains("Round 1 has not opened")
+        }
+        _ => false,
+    });
 
     create_election(
         &mut ledger,
@@ -711,6 +729,7 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
         },
         true,
     );
+    advance_to(&mut ledger, 172_801);
     let round_one_receipt = start_round_one(&mut ledger, component, &owner, 1, true, true);
     vote_mj(&mut ledger, component, &voter, 1, true);
 
@@ -718,16 +737,17 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
     assert!(tc.outcome.is_some_and(TemperatureCheckOutcome::passed));
     let election = read_election(&mut ledger, component, 1);
     let round_one = election.round_one.expect("Round 1 should exist");
-    assert_eq!(round_one.snapshot, tc.snapshot);
-    assert_eq!(round_one.start, Instant::new(172_800));
-    assert_eq!(round_one.deadline, Instant::new(259_200));
+    assert_eq!(round_one.snapshot, Instant::new(172_801));
+    assert_ne!(round_one.snapshot, tc.snapshot);
+    assert_eq!(round_one.start, Instant::new(172_801));
+    assert_eq!(round_one.deadline, Instant::new(259_201));
     assert_eq!(round_one.quorum, dec!(5000));
     assert_eq!(round_one.minimum_median_grade, Grade::Good);
     assert_eq!(round_one.vote_count, 1);
     let round_one_event = round_started_event(&round_one_receipt);
     assert_eq!(round_one_event.election_id, 1);
     assert_eq!(round_one_event.round, MajorityJudgmentRoundId::RoundOne);
-    assert_eq!(round_one_event.snapshot, tc.snapshot);
+    assert_eq!(round_one_event.snapshot, round_one.snapshot);
     assert_eq!(round_one_event.start, round_one.start);
     assert_eq!(round_one_event.deadline, round_one.deadline);
     assert_eq!(round_one_event.quorum, round_one.quorum);
@@ -736,7 +756,7 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
         round_one.minimum_median_grade
     );
 
-    advance_to(&mut ledger, 259_200);
+    advance_to(&mut ledger, 259_201);
     let rerun_manifest = owner_builder(&owner)
         .call_method(
             component,
@@ -748,9 +768,9 @@ fn tc_outcome_and_deadlines_gate_mj_voting_and_failed_elections_stay_closed() {
     rerun_receipt.expect_commit_success();
     let election = read_election(&mut ledger, component, 1);
     let rerun = election.rerun.expect("rerun should exist");
-    assert_eq!(rerun.snapshot, tc.snapshot);
-    assert_eq!(rerun.start, Instant::new(259_200));
-    assert_eq!(rerun.deadline, Instant::new(345_600));
+    assert_eq!(rerun.snapshot, round_one.snapshot);
+    assert_eq!(rerun.start, Instant::new(259_201));
+    assert_eq!(rerun.deadline, Instant::new(345_601));
     assert_eq!(rerun.quorum, dec!(5000));
     assert_eq!(rerun.minimum_median_grade, Grade::Good);
     let rerun_event = round_started_event(&rerun_receipt);

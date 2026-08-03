@@ -26,7 +26,8 @@ below remain authoritative.
 1. Nomination and discussion happen outside the Consultation App.
 2. A Governance Operator creates one election operation. It atomically creates
    a normal Temperature Check and an MJ election over one immutable candidate
-   list, with one creation-time voting-power snapshot.
+   list. The Temperature Check takes its creation-time voting-power snapshot;
+   each MJ round carries its own snapshot.
 3. The candidate-list TC is a real For/Against vote using the existing TC vote,
    KVS, and aggregation path. It is not a passive review period.
 4. MJ Round 1 can open only after the TC deadline and an on-ledger outcome that
@@ -37,8 +38,10 @@ below remain authoritative.
    The system never schedules a rerun automatically.
 7. The RAC may deliberately open one Round 2 rerun. The collector accepts that
    transition only from a published `ROUND_1_FAILED` result.
-8. Round 2 reuses the election-creation snapshot, Round 1 quorum, and Round 1
-   minimum median grade. Its extended voting duration is the only changed rule.
+8. Round 2 reuses Round 1's snapshot, quorum, and minimum median grade. Its
+   extended voting duration is the only changed rule. This refines rather than
+   reverses the original rule: a rerun still changes only the duration, never
+   the electorate or the bar.
 9. A quorate result or recorded tie adjudication cannot be replaced by a rerun.
 
 ## Validation and calculation rules
@@ -57,7 +60,7 @@ below remain authoritative.
 
 ## Authority boundary for weighted outcomes
 
-Voting power is resolved off-ledger at the election snapshot, so the Scrypto
+Voting power is resolved off-ledger at each round's snapshot, so the Scrypto
 component cannot independently reproduce a weighted TC or MJ tally. The
 Governance Operator records the TC outcome on-ledger, but that record is not the
 public application's sole source of truth:
