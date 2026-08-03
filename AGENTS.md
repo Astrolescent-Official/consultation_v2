@@ -8,24 +8,35 @@ keep everything here agent-agnostic rather than adding tool-specific forks.
 ## Task Isolation
 
 Every implementation task must use its own linked Git worktree and a branch
-named `codex/<task-name>` — this branch namespace is the repository's
-convention regardless of which agent is doing the work, not something
-specific to the Codex tool. Do not edit, commit, or push implementation work
-from the primary checkout or from `main`.
+named `task/<task-name>` — this branch namespace is the repository's
+convention regardless of which agent is doing the work, and regardless of
+whether the task is a feature, fix, chore, or anything else. Do not edit,
+commit, or push implementation work from the primary checkout or from
+`main`.
 
 Create a task worktree with:
 
 ```sh
-pnpm worktree:codex <task-name> [base-ref]
+pnpm worktree:task <task-name> [base-ref]
 ```
 
-Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `codex/*` branch and rejects commits from the primary checkout.
+Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `task/*` branch (it also still accepts pre-existing `codex/*` branches during the migration — see [Migrating from codex/* branches](#migrating-from-codex-branches)) and rejects commits from the primary checkout.
 
 ## Completion Contract
 
-An implementation task is complete only after its changes are committed on its dedicated `codex/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
+An implementation task is complete only after its changes are committed on its dedicated `task/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
 
 `pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, the Workerd/D1 integration tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
+
+## Migrating from codex/* branches
+
+`task/*` replaces the previous `codex/*` branch convention (renamed because
+not every task is a "codex" or a feature). `pnpm worktree:task` is the
+command to use for all new tasks. `pnpm worktree:codex` and the `codex/*`
+prefix still work for now purely so branches already in flight aren't
+blocked mid-task — don't start new work on `codex/*`. Once no active
+worktree uses it, remove `codex/*` support from the pre-commit hook and
+delete `scripts/new-codex-worktree.sh` and the `worktree:codex` script.
 
 ## Post-task PR handoff
 
@@ -34,7 +45,7 @@ After completing an implementation task, push the branch and open a pull request
 1. Wait for the `Claude Code Review` GitHub Actions check on the PR to finish. It runs automatically on open and on every push, and typically completes within a few minutes — don't merge before it's done.
 2. If it posted review comments, address the findings, push fixes, and wait for the check to re-run before proceeding.
 3. If it posted no comment and every required CI check (the `Verify` workflow and any others) is green, the PR may be merged into `main`.
-4. Merge with **squash and merge**, not a merge commit or rebase — every `codex/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `main`'s history. `main` should read as one commit per task.
+4. Merge with **squash and merge**, not a merge commit or rebase — every `task/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `main`'s history. `main` should read as one commit per task.
 5. After merging, monitor the resulting `main` CI run and automatic deployment, and verify the production result.
 6. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
 
