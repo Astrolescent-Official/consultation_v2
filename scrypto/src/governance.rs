@@ -1039,6 +1039,26 @@ mod governance {
             (temperature_check_id, temperature_check)
         }
 
+        fn majority_judgment_candidates(&self, election_id: u64) -> Vec<MajorityJudgmentCandidate> {
+            let temperature_check_id = self
+                .majority_judgment_elections
+                .get(&election_id)
+                .expect("Majority Judgment election not found")
+                .temperature_check_id;
+            let temperature_check = self
+                .temperature_checks
+                .get(&temperature_check_id)
+                .expect("Election temperature check not found");
+            match &temperature_check.follow_up {
+                TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
+                    candidates.clone()
+                }
+                TemperatureCheckFollowUp::StandardProposal { .. } => {
+                    panic!("Election is linked to a Standard temperature check")
+                }
+            }
+        }
+
         pub fn vote_on_majority_judgment_election(
             &mut self,
             account: Global<Account>,
@@ -1047,16 +1067,7 @@ mod governance {
             grades: Vec<CandidateGrade>,
         ) {
             Runtime::assert_access_rule(account.get_owner_role().rule);
-            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
-            let candidates = match &temperature_check.follow_up {
-                TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
-                    candidates.clone()
-                }
-                TemperatureCheckFollowUp::StandardProposal { .. } => {
-                    panic!("Election is linked to a Standard temperature check")
-                }
-            };
-            drop(temperature_check);
+            let candidates = self.majority_judgment_candidates(election_id);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
@@ -1191,16 +1202,7 @@ mod governance {
             ordered_candidate_ids: Vec<MajorityJudgmentCandidateId>,
         ) {
             let now = Clock::current_time_rounded_to_seconds();
-            let (_, temperature_check) = self.passed_temperature_check_for_election(election_id);
-            let candidates = match &temperature_check.follow_up {
-                TemperatureCheckFollowUp::MajorityJudgmentElection { candidates, .. } => {
-                    candidates.clone()
-                }
-                TemperatureCheckFollowUp::StandardProposal { .. } => {
-                    panic!("Election is linked to a Standard temperature check")
-                }
-            };
-            drop(temperature_check);
+            let candidates = self.majority_judgment_candidates(election_id);
             let mut election = self
                 .majority_judgment_elections
                 .get_mut(&election_id)
