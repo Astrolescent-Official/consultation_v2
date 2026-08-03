@@ -17,7 +17,7 @@ import {
   MajorityJudgmentElectionCreatedEvent,
   MajorityJudgmentElectionHiddenToggledEvent,
   MajorityJudgmentElectionVotedEvent,
-  MajorityJudgmentRerunStartedEvent,
+  MajorityJudgmentRoundStartedEvent,
   MajorityJudgmentTieResolutionRecordedEvent,
   ProposalCreatedEvent,
   ProposalVotedEvent,
@@ -54,7 +54,7 @@ export type GovernanceAction =
       readonly stateVersion: number
     }
   | {
-      readonly _tag: 'MajorityJudgmentRerunStarted'
+      readonly _tag: 'MajorityJudgmentRoundStarted'
       readonly electionId: number
       readonly observedAt: Date
       readonly stateVersion: number
@@ -251,13 +251,13 @@ export class GovernanceEventProcessor extends Effect.Service<GovernanceEventProc
                 stateVersion
               })
             }
-            case 'MajorityJudgmentRerunStartedEvent': {
+            case 'MajorityJudgmentRoundStartedEvent': {
               const payload = yield* decodePayload(
                 event,
-                MajorityJudgmentRerunStartedEvent
+                MajorityJudgmentRoundStartedEvent
               )
               return Option.some<GovernanceAction>({
-                _tag: 'MajorityJudgmentRerunStarted',
+                _tag: 'MajorityJudgmentRoundStarted',
                 electionId: payload.election_id,
                 observedAt,
                 stateVersion

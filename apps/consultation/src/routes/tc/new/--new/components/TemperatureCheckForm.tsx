@@ -40,14 +40,13 @@ import { secureShuffleCandidateIds } from '@/routes/tc/$id/-$id/components/candi
 import { useAppForm } from '../formHook'
 import {
   getProposalVoteOptionLabels,
-  makeMajorityJudgmentSchedule,
   temperatureCheckFormOpts
 } from '../formOptions'
 import {
   effectSchemaValidator,
-  makeTemperatureCheckFormSchema,
   RadixTalkUrlSchema,
   ShortDescriptionSchema,
+  TemperatureCheckFormSchema,
   TitleSchema
 } from '../schema'
 import { CandidatesField } from './CandidatesField'
@@ -90,29 +89,13 @@ export function TemperatureCheckForm({
   const form = useAppForm({
     ...temperatureCheckFormOpts,
     validators: {
-      // Built per-submission from the actually-selected parameter set's own
-      // voting-window minimums, since the contract's minimum durations are
-      // parameter-set- and network-specific rather than a fixed constant.
-      onSubmit: ({ value }) => {
-        const matchedParameterSet = activeParameterSets.find(
-          ({ id }) => id === value.parameterSetId
-        )
-        const minimums =
-          matchedParameterSet?.parameters._tag === 'MajorityJudgment'
-            ? {
-                temperatureCheckVotingUnits:
-                  matchedParameterSet.parameters.temperatureCheck.votingDays,
-                electionVotingUnits:
-                  matchedParameterSet.parameters.election.votingDays
-              }
-            : undefined
-        return effectSchemaValidator(makeTemperatureCheckFormSchema(minimums))({
+      onSubmit: ({ value }) =>
+        effectSchemaValidator(TemperatureCheckFormSchema)({
           value:
             value.processType === 'Standard' && !isAdmin
               ? { ...value, includeAbstain: true }
               : value
         })
-      }
     },
     onSubmit: ({ value }) => {
       const allLinks = [
@@ -157,10 +140,6 @@ export function TemperatureCheckForm({
         roleId: value.roleId,
         seatCount: value.seatCount,
         candidates,
-        tcVotingStart: new Date(value.tcVotingStart),
-        tcVotingEnd: new Date(value.tcVotingEnd),
-        votingStart: new Date(value.votingStart),
-        votingEnd: new Date(value.votingEnd),
         candidateOrder: secureShuffleCandidateIds(candidateIds).map(
           (candidateId) => MajorityJudgmentCandidateIdSchema.make(candidateId)
         )
@@ -202,9 +181,6 @@ export function TemperatureCheckForm({
 
   // Track if onSuccess has been called to prevent duplicate calls
   const hasCalledSuccess = useRef(false)
-  const scheduledMajorityJudgmentParameterSetId = useRef<string | undefined>(
-    undefined
-  )
 
   const hasAccounts =
     Result.isSuccess(accountsResult) && accountsResult.value.length > 0
@@ -261,26 +237,6 @@ export function TemperatureCheckForm({
       isMajorityJudgment ? 'MajorityJudgment' : 'Standard'
     )
   }, [form, isMajorityJudgment])
-
-  useEffect(() => {
-    if (
-      selectedParameterSet?.parameters._tag !== 'MajorityJudgment' ||
-      scheduledMajorityJudgmentParameterSetId.current ===
-        selectedParameterSet.id
-    )
-      return
-
-    const schedule = makeMajorityJudgmentSchedule({
-      temperatureCheckVotingUnits:
-        selectedParameterSet.parameters.temperatureCheck.votingDays,
-      electionVotingUnits: selectedParameterSet.parameters.election.votingDays
-    })
-    form.setFieldValue('tcVotingStart', schedule.tcVotingStart)
-    form.setFieldValue('tcVotingEnd', schedule.tcVotingEnd)
-    form.setFieldValue('votingStart', schedule.votingStart)
-    form.setFieldValue('votingEnd', schedule.votingEnd)
-    scheduledMajorityJudgmentParameterSetId.current = selectedParameterSet.id
-  }, [form, selectedParameterSet])
 
   return (
     <form
@@ -551,51 +507,29 @@ export function TemperatureCheckForm({
                 </p>
               ) : null}
               <CandidatesField form={form} />
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium">Election schedule</p>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedParameterSet?.parameters._tag ===
-                    'MajorityJudgment'
-                      ? `The Temperature Check lasts at least ${formatGovernanceDuration(
-                          selectedParameterSet.parameters.temperatureCheck
-                            .votingDays
-                        )} and the election at least ${formatGovernanceDuration(
-                          selectedParameterSet.parameters.election.votingDays
-                        )}.`
-                      : 'The Temperature Check schedule length is set by the selected governance rules.'}{' '}
-                    MJ grading opens only after its outcome has been recorded as
-                    passed.
+              <div className="border-l-2 border-border pl-3 text-sm text-muted-foreground">
+                {selectedParameterSet?.parameters._tag ===
+                'MajorityJudgment' ? (
+                  <p>
+                    Candidate-list voting opens immediately on creation and runs
+                    for{' '}
+                    {formatGovernanceDuration(
+                      selectedParameterSet.parameters.temperatureCheck
+                        .votingDays
+                    )}
+                    . Grading opens when a Governance Operator starts it after
+                    the outcome is recorded, and runs for{' '}
+                    {formatGovernanceDuration(
+                      selectedParameterSet.parameters.election.votingDays
+                    )}
+                    .
                   </p>
-                </div>
-                <div className="grid gap-x-4 gap-y-8 sm:grid-cols-2">
-                  {(
-                    [
-                      ['tcVotingStart', 'TC voting starts'],
-                      ['tcVotingEnd', 'TC voting ends'],
-                      ['votingStart', 'MJ grading starts'],
-                      ['votingEnd', 'MJ grading ends']
-                    ] as const
-                  ).map(([name, label]) => (
-                    <form.Field key={name} name={name}>
-                      {(field) => (
-                        <Field>
-                          <FieldLabel htmlFor={`${formId}-${name}`}>
-                            {label}
-                          </FieldLabel>
-                          <Input
-                            id={`${formId}-${name}`}
-                            type="datetime-local"
-                            value={field.state.value}
-                            onChange={(event) =>
-                              field.handleChange(event.target.value)
-                            }
-                          />
-                        </Field>
-                      )}
-                    </form.Field>
-                  ))}
-                </div>
+                ) : (
+                  <p>
+                    The election timeline is derived from the selected
+                    governance rules.
+                  </p>
+                )}
               </div>
             </div>
           ) : (

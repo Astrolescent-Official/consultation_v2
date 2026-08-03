@@ -143,6 +143,7 @@ export const mjElection = sqliteTable(
     uniqueIndex('mj_election_temperature_check_unique').on(
       table.temperatureCheckId
     ),
+    index('mj_election_status_idx').on(table.status),
     check('mj_election_seat_count_positive', sql`${table.seatCount} > 0`),
     check(
       'mj_election_parameter_version_positive',

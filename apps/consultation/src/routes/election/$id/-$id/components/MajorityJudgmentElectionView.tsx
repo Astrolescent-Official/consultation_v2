@@ -65,7 +65,7 @@ type MajorityJudgmentElectionViewProps = {
   readonly votingStart?: Date
   readonly votingEnd?: Date
   readonly rounds?: ReadonlyArray<RoundWindow>
-  readonly quorumXrd: string
+  readonly quorumXrd?: string
   readonly totalVotingPower: string
   readonly minimumMedianGrade?: Grade
   readonly initialGrades?: ReadonlyArray<{
@@ -199,9 +199,11 @@ export function MajorityJudgmentElectionView({
   const currentStatusCopy =
     status === 'TC_LIVE' && !tcVotingOpen
       ? 'Candidate-list voting closed; awaiting the verified outcome'
-      : liveStatus && !votingOpen
-        ? 'Voting closed; finalizing result'
-        : electionStatusCopy(status)
+      : status === 'MJ_PENDING'
+        ? 'Awaiting the Governance Operator to open grading'
+        : liveStatus && !votingOpen
+          ? 'Voting closed; finalizing result'
+          : electionStatusCopy(status)
   const priorBallot = initialGrades.length > 0
   const historicalResults = results.filter(
     (historicalResult) =>
@@ -210,7 +212,8 @@ export function MajorityJudgmentElectionView({
   // Turnout is only meaningful once a round is open or has been tallied.
   // Before voting opens there are no ballots, and rendering "0 / quorum" would
   // read as zero participation rather than as voting not having started.
-  const showTurnout = votingOpen || result !== undefined
+  const showTurnout =
+    quorumXrd !== undefined && (votingOpen || result !== undefined)
   // Once the election has reached a terminal state a blank grade picker is
   // noise, but before that it shows voters what they will be asked to do.
   const gradingRelevant =
@@ -253,12 +256,8 @@ export function MajorityJudgmentElectionView({
   }
 
   const countdown =
-    status === 'PENDING' && tcVotingStart !== undefined ? (
-      <Countdown label="Candidate-list voting opens" target={tcVotingStart} />
-    ) : tcVotingOpen && tcVotingEnd !== undefined ? (
+    tcVotingOpen && tcVotingEnd !== undefined ? (
       <Countdown label="TC voting closes" target={tcVotingEnd} />
-    ) : status === 'MJ_PENDING' && votingStart !== undefined ? (
-      <Countdown label="MJ grading opens" target={votingStart} />
     ) : votingOpen && votingEnd !== undefined ? (
       <Countdown label="Voting closes" target={votingEnd} />
     ) : undefined
@@ -271,7 +270,7 @@ export function MajorityJudgmentElectionView({
       title={title}
       schedule={schedule}
       quorumBadge={
-        showTurnout ? (
+        showTurnout && quorumXrd !== undefined ? (
           <ElectionQuorumBadge
             totalVotingPower={totalVotingPower}
             quorumXrd={quorumXrd}
@@ -385,18 +384,19 @@ export function MajorityJudgmentElectionView({
       countdown={countdown}
     />
   )
-  const turnoutCard = showTurnout ? (
-    <ElectionTurnoutCard
-      totalVotingPower={totalVotingPower}
-      quorumXrd={quorumXrd}
-      minimumMedianGrade={minimumMedianGrade}
-      roundLabel={
-        result?.round === 'Rerun' || status === 'RERUN_LIVE'
-          ? 'Round 2 rerun'
-          : 'Round 1'
-      }
-    />
-  ) : null
+  const turnoutCard =
+    showTurnout && quorumXrd !== undefined ? (
+      <ElectionTurnoutCard
+        totalVotingPower={totalVotingPower}
+        quorumXrd={quorumXrd}
+        minimumMedianGrade={minimumMedianGrade}
+        roundLabel={
+          result?.round === 'Rerun' || status === 'RERUN_LIVE'
+            ? 'Round 2 rerun'
+            : 'Round 1'
+        }
+      />
+    ) : null
   const outcomeCard = result ? (
     <ElectionOutcomeCard
       candidates={candidates}

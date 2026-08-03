@@ -151,7 +151,7 @@ export class PollService extends Effect.Service<PollService>()('PollService', {
                     yield* calculateVotes(action.payload)
                     break
                   case 'MajorityJudgmentCreated':
-                  case 'MajorityJudgmentRerunStarted':
+                  case 'MajorityJudgmentRoundStarted':
                   case 'MajorityJudgmentVisibilityChanged':
                     yield* projectMajorityJudgment(
                       action.electionId,

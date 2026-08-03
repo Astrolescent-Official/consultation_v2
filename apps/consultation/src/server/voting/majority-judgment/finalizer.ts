@@ -10,7 +10,8 @@ import {
 import {
   deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
-  deriveMajorityJudgmentRerunPhase
+  deriveMajorityJudgmentRerunPhase,
+  deriveMajorityJudgmentTemperatureCheckPhase
 } from './projection'
 import {
   isClosedMajorityJudgmentResult,
@@ -134,9 +135,84 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
         }
       )
 
+      const resolveTemperatureCheckGate = Effect.fn(
+        'MajorityJudgmentFinalizer.resolveTemperatureCheckGate'
+      )(function* (now: Date) {
+        const elections = yield* repo.getElectionsAwaitingTemperatureCheckGate()
+        yield* Effect.forEach(
+          elections,
+          Effect.fn(
+            'MajorityJudgmentFinalizer.resolveElectionTemperatureCheck'
+          )(function* (election) {
+            const recordedTcOutcome =
+              election.tcOutcome === 'FAILED'
+                ? ('FAILED' as const)
+                : election.tcOutcome === 'PASSED'
+                  ? ('PASSED' as const)
+                  : ('PENDING' as const)
+            if (now < election.tcVotingEnd) {
+              yield* repo.setPhaseStatus(
+                election.id,
+                1,
+                deriveMajorityJudgmentTemperatureCheckPhase(now, {
+                  tcVotingStart: election.tcVotingStart,
+                  tcVotingEnd: election.tcVotingEnd,
+                  tcOutcome: recordedTcOutcome
+                })
+              )
+              return
+            }
+
+            if (election.tcQuorumXrd === UNPROJECTED_TC_QUORUM_XRD) {
+              yield* Effect.logWarning(
+                'Deferring candidate-list verdict until legacy election parameters are projected',
+                { electionId: election.id }
+              )
+              return
+            }
+            const tcVerdict = yield* repo.getTemperatureCheckVerdict({
+              temperatureCheckId: election.temperatureCheckId,
+              quorumXrd: election.tcQuorumXrd,
+              approvalThreshold: election.tcApprovalThreshold,
+              recordedOutcome:
+                election.tcOutcome === 'PASSED'
+                  ? 'PASSED'
+                  : election.tcOutcome === 'FAILED'
+                    ? 'FAILED'
+                    : null
+            })
+            if (!tcVerdict.cacheAvailable) {
+              yield* Effect.logWarning(
+                'Deferring candidate-list verdict until the component-scoped vote cache is available',
+                {
+                  electionId: election.id,
+                  temperatureCheckId: election.temperatureCheckId
+                }
+              )
+              return
+            }
+            const tcOutcome = deriveAuthoritativeTemperatureCheckOutcome(
+              recordedTcOutcome,
+              tcVerdict.calculatedPassed
+            )
+            yield* repo.setPhaseStatus(
+              election.id,
+              1,
+              deriveMajorityJudgmentTemperatureCheckPhase(now, {
+                tcVotingStart: election.tcVotingStart,
+                tcVotingEnd: election.tcVotingEnd,
+                tcOutcome
+              })
+            )
+          }),
+          { concurrency: 1 }
+        )
+      })
+
       const finalize = Effect.fn('MajorityJudgmentFinalizer.finalize')(
         function* (watermark: MajorityJudgmentLedgerWatermark) {
           const now = watermark.proposerRoundTimestamp
+          yield* resolveTemperatureCheckGate(now)
           const projected = yield* repo.getActiveElectionRounds()
           const roundsByElection = new Map<
             number,
@@ -163,86 +239,11 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                 const latest = rounds[rounds.length - 1]
                 if (latest === undefined) return
                 const { election, round } = latest
-                const tcGatePending =
+                if (
                   election.status === 'PENDING' ||
-                  election.status === 'TC_LIVE' ||
-                  election.status === 'MJ_PENDING'
-                if (tcGatePending) {
-                  const recordedTcOutcome =
-                    election.tcOutcome === 'FAILED'
-                      ? ('FAILED' as const)
-                      : election.tcOutcome === 'PASSED'
-                        ? ('PASSED' as const)
-                        : ('PENDING' as const)
-                  if (now < election.tcVotingEnd) {
-                    yield* repo.setPhaseStatus(
-                      election.id,
-                      round.round,
-                      deriveMajorityJudgmentPhase(now, {
-                        tcVotingStart: election.tcVotingStart,
-                        tcVotingEnd: election.tcVotingEnd,
-                        votingStart: round.votingStart,
-                        votingEnd: round.votingEnd,
-                        tcOutcome: recordedTcOutcome
-                      })
-                    )
-                    return
-                  }
-
-                  if (election.tcQuorumXrd === UNPROJECTED_TC_QUORUM_XRD) {
-                    yield* Effect.logWarning(
-                      'Deferring candidate-list verdict until legacy election parameters are projected',
-                      { electionId: election.id }
-                    )
-                    return
-                  }
-                  const tcVerdict = yield* repo.getTemperatureCheckVerdict({
-                    temperatureCheckId: election.temperatureCheckId,
-                    quorumXrd: election.tcQuorumXrd,
-                    approvalThreshold: election.tcApprovalThreshold,
-                    recordedOutcome:
-                      election.tcOutcome === 'PASSED'
-                        ? 'PASSED'
-                        : election.tcOutcome === 'FAILED'
-                          ? 'FAILED'
-                          : null
-                  })
-                  if (!tcVerdict.cacheAvailable) {
-                    yield* Effect.logWarning(
-                      'Deferring candidate-list verdict until the component-scoped vote cache is available',
-                      {
-                        electionId: election.id,
-                        temperatureCheckId: election.temperatureCheckId
-                      }
-                    )
-                    return
-                  }
-                  const tcOutcome = deriveAuthoritativeTemperatureCheckOutcome(
-                    recordedTcOutcome,
-                    tcVerdict.calculatedPassed
-                  )
-                  if (tcOutcome === 'FAILED') {
-                    yield* repo.setPhaseStatus(
-                      election.id,
-                      round.round,
-                      'TC_FAILED'
-                    )
-                    return
-                  }
-                  if (tcOutcome === 'PENDING') {
-                    yield* repo.setPhaseStatus(
-                      election.id,
-                      round.round,
-                      deriveMajorityJudgmentPhase(now, {
-                        tcVotingStart: election.tcVotingStart,
-                        tcVotingEnd: election.tcVotingEnd,
-                        votingStart: round.votingStart,
-                        votingEnd: round.votingEnd,
-                        tcOutcome
-                      })
-                    )
-                    return
-                  }
+                  election.status === 'TC_LIVE'
+                ) {
+                  return
                 }
 
                 for (const {
