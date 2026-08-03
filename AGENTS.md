@@ -1,8 +1,17 @@
 # Agent Context Hub
 
-## Codex Task Isolation
+This file is the shared instruction set for every AI coding agent working in
+this repository — Codex, Claude Code, or any other tool. `CLAUDE.md` is a
+symlink to this file, so Claude Code reads the same content automatically;
+keep everything here agent-agnostic rather than adding tool-specific forks.
 
-Every implementation task must use its own linked Git worktree and a branch named `codex/<task-name>`. Do not edit, commit, or push implementation work from the primary checkout or from `main`.
+## Task Isolation
+
+Every implementation task must use its own linked Git worktree and a branch
+named `codex/<task-name>` — this branch namespace is the repository's
+convention regardless of which agent is doing the work, not something
+specific to the Codex tool. Do not edit, commit, or push implementation work
+from the primary checkout or from `main`.
 
 Create a task worktree with:
 
@@ -12,7 +21,7 @@ pnpm worktree:codex <task-name> [base-ref]
 
 Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `codex/*` branch and rejects commits from the primary checkout.
 
-## Codex Completion Contract
+## Completion Contract
 
 An implementation task is complete only after its changes are committed on its dedicated `codex/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
 
@@ -20,7 +29,13 @@ An implementation task is complete only after its changes are committed on its d
 
 ## Post-task PR handoff
 
-After completing an implementation task, create a separate Codex project task using `gpt-5.6-luna` with maximum reasoning. Instruct that task to review and merge the implementation PR from `origin` into `main`, monitor the exact-main CI and automatic deployment, and verify the production result. Follow the delegated task until it finishes and report its outcome in the originating task. The delegated task must not create further handoffs or otherwise recurse.
+After completing an implementation task, push the branch and open a pull request. The agent that opened the PR is responsible for seeing it through to merge — either directly, or by delegating to a follow-up task if your tool supports that (use the most capable model and reasoning/effort setting available; a delegated task must not create further handoffs or otherwise recurse). Whoever owns this step should:
+
+1. Wait for the `Claude Code Review` GitHub Actions check on the PR to finish. It runs automatically on open and on every push, and typically completes within a few minutes — don't merge before it's done.
+2. If it posted review comments, address the findings, push fixes, and wait for the check to re-run before proceeding.
+3. If it posted no comment and every required CI check (the `Verify` workflow and any others) is green, the PR may be merged into `main`.
+4. After merging, monitor the resulting `main` CI run and automatic deployment, and verify the production result.
+5. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
 
 ## Scrypto Verification
 
