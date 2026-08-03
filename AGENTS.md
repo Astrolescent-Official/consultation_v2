@@ -18,6 +18,10 @@ An implementation task is complete only after its changes are committed on its d
 
 `pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, the Workerd/D1 integration tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
 
+## Post-task PR handoff
+
+After completing an implementation task, create a separate Codex project task using `gpt-5.6-luna` with maximum reasoning. Instruct that task to review and merge the implementation PR from `origin` into `main`, monitor the exact-main CI and automatic deployment, and verify the production result. Follow the delegated task until it finishes and report its outcome in the originating task. The delegated task must not create further handoffs or otherwise recurse.
+
 ## Scrypto Verification
 
 Do not use `cargo test` to verify the Scrypto package. Use the Scrypto CLI and
