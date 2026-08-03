@@ -14,6 +14,11 @@ case "$TARGET" in
     # those preview cache rows: a component redeployment restarts IDs, so they
     # cannot safely be attributed to the current component.
     pnpm --filter consultation-dapp exec wrangler d1 execute DB --remote --env preview --command "DELETE FROM vote_calculation_account_votes WHERE state_id IN (SELECT id FROM vote_calculation_state WHERE governance_component_address = ''); DELETE FROM vote_calculation_results WHERE state_id IN (SELECT id FROM vote_calculation_state WHERE governance_component_address = ''); DELETE FROM vote_calculation_state WHERE governance_component_address = '';"
+    # mj_election has no governance_component_address column, so entity IDs
+    # from a prior component can collide with the poller's upserts after a
+    # redeployment restarts ID numbering. Clear it on every preview deploy;
+    # the poller re-derives it from the ledger on its next run.
+    pnpm --filter consultation-dapp exec wrangler d1 execute DB --remote --env preview --command "DELETE FROM mj_election;"
     ;;
   production)
     pnpm --filter consultation-dapp d1:migrate:production
