@@ -9,7 +9,7 @@
 | Radix network | Mainnet (`1`) | Stokenet (`2`) |
 | Governance config | `GovernanceConfig.MainnetLive` | `GovernanceConfig.StokenetLive` |
 | Governance component | `component_rdx1cz8...de89k9y` | `component_tdx_2_1cr...e4d3j` |
-| Poll schedule | Every 5 minutes | Every 10 minutes |
+| Poll schedule | Every minute | Every minute |
 | Initial cursor | Current ledger state | Current ledger state |
 
 The databases start empty by design. There is no PostgreSQL data migration because the dApp had no users when this platform change was approved.
