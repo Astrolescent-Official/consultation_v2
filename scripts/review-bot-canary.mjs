@@ -5,7 +5,7 @@ export function isWithinQuorum(votesCast, quorumThreshold) {
   // Bug: comparison is inverted — this returns true when votes are BELOW
   // quorum instead of at or above it.
   if (votesCast < quorumThreshold) {
-    return true;
+    return true
   }
-  return false;
+  return false
 }
