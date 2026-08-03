@@ -34,8 +34,9 @@ After completing an implementation task, push the branch and open a pull request
 1. Wait for the `Claude Code Review` GitHub Actions check on the PR to finish. It runs automatically on open and on every push, and typically completes within a few minutes — don't merge before it's done.
 2. If it posted review comments, address the findings, push fixes, and wait for the check to re-run before proceeding.
 3. If it posted no comment and every required CI check (the `Verify` workflow and any others) is green, the PR may be merged into `main`.
-4. After merging, monitor the resulting `main` CI run and automatic deployment, and verify the production result.
-5. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
+4. Merge with **squash and merge**, not a merge commit or rebase — every `codex/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `main`'s history. `main` should read as one commit per task.
+5. After merging, monitor the resulting `main` CI run and automatic deployment, and verify the production result.
+6. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
 
 ## Scrypto Verification
 
