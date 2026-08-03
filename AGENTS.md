@@ -1,26 +1,77 @@
 # Agent Context Hub
 
-## Codex Task Isolation
+This file is the shared instruction set for every AI coding agent working in
+this repository — Codex, Claude Code, or any other tool. `CLAUDE.md` is a
+symlink to this file, so Claude Code reads the same content automatically;
+keep everything here agent-agnostic rather than adding tool-specific forks.
 
-Every implementation task must use its own linked Git worktree and a branch named `codex/<task-name>`. Do not edit, commit, or push implementation work from the primary checkout or from `main`.
+## Task Isolation
+
+Every implementation task must use its own linked Git worktree and a branch
+named `task/<task-name>` — this branch namespace is the repository's
+convention regardless of which agent is doing the work, and regardless of
+whether the task is a feature, fix, chore, or anything else. Do not edit,
+commit, or push implementation work from the primary checkout or from
+`main` or `staging` — both are shared branches, not task branches.
 
 Create a task worktree with:
 
 ```sh
-pnpm worktree:codex <task-name> [base-ref]
+pnpm worktree:task <task-name> [base-ref]
 ```
 
-Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `codex/*` branch and rejects commits from the primary checkout.
+Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `task/*` branch (it also still accepts pre-existing `codex/*` branches during the migration — see [Migrating from codex/* branches](#migrating-from-codex-branches)) and rejects commits from the primary checkout.
 
-## Codex Completion Contract
+## Completion Contract
 
-An implementation task is complete only after its changes are committed on its dedicated `codex/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
+An implementation task is complete only after its changes are committed on its dedicated `task/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
 
 `pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, the Workerd/D1 integration tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
 
+## Migrating from codex/* branches
+
+`task/*` replaces the previous `codex/*` branch convention (renamed because
+not every task is a "codex" or a feature). `pnpm worktree:task` is the
+command to use for all new tasks. `pnpm worktree:codex` and the `codex/*`
+prefix still work for now purely so branches already in flight aren't
+blocked mid-task — don't start new work on `codex/*`. Once no active
+worktree uses it, remove `codex/*` support from the pre-commit hook and
+delete `scripts/new-codex-worktree.sh` and the `worktree:codex` script.
+
+## Branches and environments
+
+`staging` is the default branch and the target for every task PR. Merging
+into it deploys the shared preview Cloudflare Worker directly (the plain,
+unaliased deploy — not the per-PR `pr-<number>` versioned aliases, which
+are a separate, additional preview deployed per open PR for reviewing that
+PR in isolation before it merges). `main` is production. Production deploys
+are manual and batched: `staging` is promoted to `main` only via a
+deliberate PR when a release is ready, not automatically on every task
+merge — see [Promoting staging to production](#promoting-staging-to-production).
+
 ## Post-task PR handoff
 
-After completing an implementation task, create a separate Codex project task using `gpt-5.6-luna` with maximum reasoning. Instruct that task to review and merge the implementation PR from `origin` into `main`, monitor the exact-main CI and automatic deployment, and verify the production result. Follow the delegated task until it finishes and report its outcome in the originating task. The delegated task must not create further handoffs or otherwise recurse.
+After completing an implementation task, push the branch and open a pull request against `staging`. The agent that opened the PR is responsible for seeing it through to merge — either directly, or by delegating to a follow-up task if your tool supports that (use the most capable model and reasoning/effort setting available; a delegated task must not create further handoffs or otherwise recurse). Whoever owns this step should:
+
+1. Wait for the `Claude Code Review` GitHub Actions check on the PR to finish. It runs automatically on open and on every push, and typically completes within a few minutes — don't merge before it's done.
+2. If it posted review comments, address the findings, push fixes, and wait for the check to re-run before proceeding.
+3. If it posted no comment and every required CI check (the `Verify` workflow and any others) is green, the PR may be merged into `staging`.
+4. Merge with **squash and merge**, not a merge commit or rebase — every `task/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `staging`'s history. `staging` should read as one commit per task.
+5. After merging, monitor the resulting `staging` CI run and automatic deployment to the preview Worker, and verify the result there.
+6. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
+
+## Promoting staging to production
+
+When `staging` has been verified on the preview Worker and a release is
+ready, open a PR from `staging` into `main`. A human reviews and merges it
+— this step is not automated and not something a task agent should do as
+part of routine task handoffs. Unlike task PRs, merge this one with a
+**regular merge commit, not squash**: `staging`'s history is already one
+clean commit per task from the squash-merge policy above, and squashing
+again here would collapse that back into one giant commit and lose the
+per-task granularity in `main`'s history. Merging into `main` triggers the
+production Worker deploy automatically; monitor it the same way as any
+other deployment.
 
 ## Scrypto Verification
 
