@@ -36,10 +36,11 @@ The app and all three vote APIs are available on `http://localhost:3000`.
 ## Verification
 
 ```sh
+pnpm check
 pnpm check-types
-pnpm --filter consultation-dapp test
-pnpm --filter consultation-dapp test:worker
-pnpm --filter consultation-dapp build
+pnpm test:unit
+pnpm test:worker
+pnpm test:scrypto
 ```
 
 The Worker test suite runs against local workerd and D1. It covers exact decimal persistence, revotes, atomic rollback, numeric ordering, and poll-lease ownership.
