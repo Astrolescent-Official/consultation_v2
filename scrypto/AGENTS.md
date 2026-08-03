@@ -1,6 +1,6 @@
 # Scrypto Task Requirements
 
-The repository-level Codex Task Isolation and Completion Contract apply to every Scrypto change. Work only from a dedicated linked worktree on a `codex/<task-name>` branch.
+The repository-level Task Isolation and Completion Contract apply to every Scrypto change. Work only from a dedicated linked worktree on a `task/<task-name>` branch.
 
 For changes under `scrypto/`:
 

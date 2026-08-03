@@ -15,6 +15,7 @@
 		"test": "turbo run test",
 		"verify": "pnpm check && pnpm check-types && pnpm test:unit && pnpm test:worker && pnpm test:scrypto",
 		"setup:git-hooks": "./scripts/setup-git-hooks.sh",
+		"worktree:task": "./scripts/new-task-worktree.sh",
 		"worktree:codex": "./scripts/new-codex-worktree.sh",
 		"deploy:preview-version": "./scripts/upload-preview-worker.sh",
 		"prepare": "./scripts/prepare-effect.sh && ./scripts/setup-git-hooks.sh",
