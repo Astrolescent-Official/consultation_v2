@@ -352,6 +352,7 @@ export function Page({
                 status={response.election.status}
                 round={currentRound?.round}
                 roundDurations={roundDurations}
+                candidates={response.candidates}
                 unresolvedCandidateIds={
                   response.result?.unresolvedCandidateIds ?? NO_CANDIDATE_IDS
                 }
