@@ -19,10 +19,15 @@ export type Candidate = {
 export type CandidateResult = {
   readonly candidateId: number
   readonly histogram?: readonly [string, string, string, string, string]
-  readonly majorityGrade?: Grade | null
-  readonly finalMajorityGrade?: Grade | null
+  readonly median?: Grade | null
+  readonly powerAbove?: string
+  readonly powerBelow?: string
+  readonly p?: string
+  readonly q?: string
+  readonly band?: 'A' | 'B' | 'C' | null
   readonly electable?: boolean
   readonly rank?: number | null
+  readonly tieGroupId?: number | null
   readonly outcome?: CandidateOutcome
 }
 
@@ -66,10 +71,10 @@ export function CandidateOutcomeBadge({
  */
 function GradeHistogram({
   histogram,
-  majorityGrade
+  median
 }: {
   readonly histogram: readonly [string, string, string, string, string]
-  readonly majorityGrade?: Grade | null
+  readonly median?: Grade | null
 }) {
   // Index the histogram by grade rather than by row position: the rows are
   // ordered best-first, the tuple is stored worst-first.
@@ -88,7 +93,7 @@ function GradeHistogram({
             <span
               className={cn(
                 'w-20 shrink-0',
-                grade === majorityGrade
+                grade === median
                   ? 'font-medium text-foreground'
                   : 'text-muted-foreground'
               )}
@@ -185,8 +190,7 @@ export function CandidateCard({
 }) {
   const rank =
     showRank && candidateResult?.rank ? candidateResult.rank : undefined
-  const majorityGrade = candidateResult?.majorityGrade
-  const finalMajorityGrade = candidateResult?.finalMajorityGrade
+  const median = candidateResult?.median
 
   return (
     <Card className="gap-5 p-6 shadow-none">
@@ -255,17 +259,12 @@ export function CandidateCard({
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                Majority grade
+                Median grade
               </dt>
               <dd className="mt-0.5 font-medium">
-                {majorityGrade === null || majorityGrade === undefined
+                {median === null || median === undefined
                   ? 'None'
-                  : gradeName(majorityGrade)}
-                {finalMajorityGrade !== null &&
-                finalMajorityGrade !== undefined &&
-                finalMajorityGrade !== majorityGrade
-                  ? ` · tie-adjusted ${gradeName(finalMajorityGrade)}`
-                  : ''}
+                  : gradeName(median)}
               </dd>
             </div>
             <div>
@@ -287,11 +286,46 @@ export function CandidateCard({
                 </span>
               </dd>
             </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                Majority gauge
+              </dt>
+              <dd className="mt-0.5 font-medium tabular-nums">
+                {candidateResult.band === null ||
+                candidateResult.band === undefined
+                  ? 'Not ranked'
+                  : `Band ${candidateResult.band} · p ${candidateResult.p} · q ${candidateResult.q}`}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                Exact gauge power
+              </dt>
+              <dd className="mt-0.5 break-words font-mono text-xs">
+                Above {candidateResult.powerAbove ?? '0'} XRD · Below{' '}
+                {candidateResult.powerBelow ?? '0'} XRD
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                Published standing
+              </dt>
+              <dd className="mt-0.5 font-medium">
+                {candidateResult.rank === null ||
+                candidateResult.rank === undefined
+                  ? 'Not ranked'
+                  : `Rank ${candidateResult.rank}`}
+                {candidateResult.tieGroupId === null ||
+                candidateResult.tieGroupId === undefined
+                  ? ''
+                  : ` · Tie group ${candidateResult.tieGroupId}`}
+              </dd>
+            </div>
           </dl>
           {candidateResult.histogram ? (
             <GradeHistogram
               histogram={candidateResult.histogram}
-              majorityGrade={majorityGrade}
+              median={median}
             />
           ) : null}
         </div>

@@ -28,7 +28,6 @@ import { RoundAuditHistory } from './RoundAuditHistory'
 type ElectionResult = {
   readonly round?: 'RoundOne' | 'Rerun'
   readonly candidateResults: ReadonlyArray<CandidateResult>
-  readonly tieBreakIterations: number
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly quorumMet?: boolean
 }
@@ -466,13 +465,9 @@ function ElectionResultNotes({
       .length < seatCount
 
   const notes: Array<string> = []
-  if (result.tieBreakIterations > 0) {
-    notes.push(
-      `Deterministic tie-break used ${result.tieBreakIterations} ${
-        result.tieBreakIterations === 1 ? 'iteration' : 'iterations'
-      }.`
-    )
-  }
+  notes.push(
+    'Candidates are ordered by the majority gauge. Equal ranks remain published as ties.'
+  )
   if (status === 'TIE_UNRESOLVED') {
     notes.push(
       'The consequential tie must be resolved under the adopted governance process and recorded on-ledger.'

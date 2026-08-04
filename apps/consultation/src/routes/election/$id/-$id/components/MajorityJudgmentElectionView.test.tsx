@@ -180,7 +180,6 @@ describe('majority judgment election view', () => {
         minimumMedianGrade={3}
         result={{
           candidateResults: [],
-          tieBreakIterations: 2,
           unresolvedCandidateIds: []
         }}
       />
@@ -189,6 +188,45 @@ describe('majority judgment election view', () => {
     assert.isNotNull(first('Provisional results'))
     assert.isNotNull(first(/rerun/i))
     assert.isNotNull(first(/minimum majority grade: Very Good/i))
+  })
+
+  it('publishes the majority-gauge evidence and visible tied rank', () => {
+    render(
+      <MajorityJudgmentElectionView
+        electionId={7}
+        title="RAC election"
+        status="FINAL"
+        candidates={candidates}
+        seatCount={1}
+        quorumXrd="10"
+        totalVotingPower="10"
+        minimumMedianGrade={2}
+        result={{
+          quorumMet: true,
+          candidateResults: candidates.map(({ id }) => ({
+            candidateId: id,
+            histogram: ['1', '0', '5', '0', '4'],
+            median: 2,
+            powerAbove: '4',
+            powerBelow: '1',
+            p: '0.4',
+            q: '0.1',
+            band: 'A' as const,
+            electable: true,
+            rank: 2,
+            tieGroupId: 1,
+            outcome: 'RESERVE' as const
+          })),
+          unresolvedCandidateIds: []
+        }}
+      />
+    )
+
+    assert.isNotNull(first('Band A · p 0.4 · q 0.1'))
+    assert.isNotNull(first(/Above 4 XRD · Below 1 XRD/))
+    assert.isNotNull(first('Rank 2 · Tie group 1'))
+    assert.isNotNull(first('Tied rank · group 1 · 2 candidates · Reserve list'))
+    assert.isNotNull(first(/Equal ranks remain published as ties/))
   })
 
   it('renders unresolved, failed, and final terminal explanations', () => {
@@ -211,7 +249,6 @@ describe('majority judgment election view', () => {
           totalVotingPower="300000"
           result={{
             candidateResults: [],
-            tieBreakIterations: 0,
             unresolvedCandidateIds: status === 'TIE_UNRESOLVED' ? [0, 1] : []
           }}
         />

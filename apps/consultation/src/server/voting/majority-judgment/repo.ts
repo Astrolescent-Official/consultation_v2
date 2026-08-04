@@ -1,3 +1,4 @@
+import BigNumber from 'bignumber.js'
 import {
   type MajorityJudgmentCandidateGradeJson,
   type MajorityJudgmentCandidateResultJson,
@@ -41,9 +42,95 @@ const StoredCandidateGradesSchema = Schema.Array(
 const StoredCandidateLinksSchema = Schema.Array(
   CandidateHttpUrlStringSchema
 ).pipe(Schema.maxItems(5))
+const StoredLegacyCandidateResultSchema = Schema.Struct({
+  candidateId: MajorityJudgmentCandidateIdSchema,
+  histogram: Schema.Tuple(
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String
+  ),
+  majorityGrade: Schema.NullOr(GradeSchema),
+  finalMajorityGrade: Schema.NullOr(GradeSchema),
+  electable: Schema.Boolean,
+  rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
+  outcome: Schema.Literal('SEATED', 'RESERVE', 'NOT_ELECTABLE', 'UNRESOLVED')
+})
+type StoredCandidateResult =
+  | MajorityJudgmentCandidateResult
+  | typeof StoredLegacyCandidateResultSchema.Type
+
+const normalizeStoredCandidateResult = (
+  candidate: StoredCandidateResult,
+  totalVotingPower: string
+): MajorityJudgmentCandidateResult => {
+  if ('median' in candidate) return candidate
+
+  const weights = candidate.histogram.map((value) => new BigNumber(value))
+  const total = weights.reduce(
+    (sum, value) => sum.plus(value),
+    new BigNumber(0)
+  )
+  let median: 0 | 1 | 2 | 3 | 4 | null = null
+  let cumulative = new BigNumber(0)
+  for (const grade of [4, 3, 2, 1, 0] as const) {
+    cumulative = cumulative.plus(weights[grade])
+    if (
+      !total.isZero() &&
+      cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)
+    ) {
+      median = grade
+      break
+    }
+  }
+  const powerAbove = weights.reduce(
+    (sum, value, grade) =>
+      median !== null && grade > median ? sum.plus(value) : sum,
+    new BigNumber(0)
+  )
+  const powerBelow = weights.reduce(
+    (sum, value, grade) =>
+      median !== null && grade < median ? sum.plus(value) : sum,
+    new BigNumber(0)
+  )
+  const denominator = new BigNumber(totalVotingPower)
+  const share = (power: BigNumber) =>
+    denominator.isZero() ? '0' : power.dividedBy(denominator).toFixed()
+  const comparison = powerAbove.comparedTo(powerBelow) ?? 0
+
+  return new MajorityJudgmentCandidateResult({
+    candidateId: candidate.candidateId,
+    histogram: candidate.histogram,
+    median,
+    powerAbove: powerAbove.toFixed(),
+    powerBelow: powerBelow.toFixed(),
+    p: share(powerAbove),
+    q: share(powerBelow),
+    band:
+      candidate.electable && median !== null
+        ? comparison > 0
+          ? 'A'
+          : comparison < 0
+            ? 'C'
+            : 'B'
+        : null,
+    electable: candidate.electable,
+    rank: candidate.rank,
+    // Historical removal-based ranks remain frozen; legacy rows are marked as
+    // having no majority-gauge tie group rather than silently rewriting them.
+    tieGroupId: null,
+    outcome: candidate.outcome
+  })
+}
 const StoredResultJsonSchema = Schema.Struct({
   minimumMedianGrade: GradeSchema,
-  candidateResults: Schema.Array(MajorityJudgmentCandidateResult),
+  candidateResults: Schema.Array(
+    Schema.Union(
+      MajorityJudgmentCandidateResult,
+      StoredLegacyCandidateResultSchema
+    )
+  ),
   seatedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   reserveCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   unresolvedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
@@ -377,7 +464,16 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             status: result.value.status
           }
         )
-        return Option.some({ ...result.value, ...decodedJson })
+        return Option.some({
+          ...result.value,
+          ...decodedJson,
+          candidateResults: decodedJson.candidateResults.map((candidate) =>
+            normalizeStoredCandidateResult(
+              candidate,
+              result.value.totalVotingPower
+            )
+          )
+        })
       })
 
       const getTemperatureCheckVerdict = Effect.fn(
@@ -779,13 +875,17 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           quorumXrd: storedResult.quorumXrd,
           quorumMet: storedResult.quorumMet,
           minimumMedianGrade: storedResult.minimumMedianGrade,
-          candidateResults: storedResult.candidateResults,
+          candidateResults: storedResult.candidateResults.map((candidate) =>
+            normalizeStoredCandidateResult(
+              candidate as StoredCandidateResult,
+              storedResult.totalVotingPower
+            )
+          ),
           seatedCandidateIds: storedResult.seatedCandidateIds,
           reserveCandidateIds: storedResult.reserveCandidateIds,
           reserveExpiresAt:
             storedResult.reserveExpiresAt?.toISOString() ?? null,
           referredSeats: storedResult.referredSeats,
-          tieBreakIterations: storedResult.tieBreakIterations,
           unresolvedCandidateIds: storedResult.unresolvedCandidateIds
         })
 

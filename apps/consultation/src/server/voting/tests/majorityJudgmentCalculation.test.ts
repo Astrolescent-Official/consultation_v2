@@ -2,8 +2,7 @@ import { assert, describe, it } from 'vitest'
 import {
   applyMajorityJudgmentTieResolution,
   calculateMajorityJudgment,
-  majorityGrade,
-  selectMedianContribution
+  majorityGrade
 } from '../majority-judgment/calculator'
 
 const candidate = (id: number) => ({ id })
@@ -115,67 +114,342 @@ describe('majority judgment weighted calculation', () => {
     }
   })
 
-  it('breaks a consequential tie with candidate-local removals', () => {
-    const result = calculate([
-      ballot('account-a', 0, '1', [
-        [0, 4],
-        [1, 3],
-        [2, 0]
-      ]),
-      ballot('account-b', 1, '5', [
-        [0, 3],
-        [1, 3],
-        [2, 0]
-      ]),
-      ballot('account-c', 2, '6', [
-        [0, 4],
-        [1, 4],
-        [2, 0]
-      ])
-    ])
-
-    assert.deepStrictEqual(result.seatedCandidateIds, [0])
-    assert.strictEqual(result.tieBreakIterations, 1)
-    assert.deepStrictEqual(result.unresolvedCandidateIds, [])
-  })
-
-  it('uses voting power, account address, then vote id to select a removal', () => {
-    const selected = selectMedianContribution(
-      [
-        {
-          accountAddress: 'account-c',
-          voteId: 1,
-          grade: 3,
-          votingPower: '2'
-        },
-        {
-          accountAddress: 'account-b',
-          voteId: 2,
-          grade: 3,
-          votingPower: '1'
-        },
-        {
-          accountAddress: 'account-a',
-          voteId: 9,
-          grade: 3,
-          votingPower: '1'
-        },
-        {
-          accountAddress: 'account-a',
-          voteId: 3,
-          grade: 3,
-          votingPower: '1'
-        }
-      ],
-      3
+  it('orders equal medians by majority-gauge band', () => {
+    const grades = [
+      [4, 4, 4, 4, 2, 2, 2, 2, 2, 0],
+      [4, 4, 2, 2, 2, 2, 2, 2, 0, 0],
+      [4, 2, 2, 2, 2, 2, 0, 0, 0, 0]
+    ] as const
+    const result = calculate(
+      Array.from({ length: 10 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          '1',
+          grades.map((candidateGrades, candidateId) => [
+            candidateId,
+            candidateGrades[voteId] ?? 0
+          ])
+        )
+      ),
+      { seatCount: 3 }
     )
 
-    assert.deepStrictEqual(selected, {
-      accountAddress: 'account-a',
-      voteId: 3,
-      grade: 3,
-      votingPower: '1'
-    })
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ median, band, rank }) => ({
+        median,
+        band,
+        rank
+      })),
+      [
+        { median: 2, band: 'A', rank: 1 },
+        { median: 2, band: 'B', rank: 2 },
+        { median: 2, band: 'C', rank: 3 }
+      ]
+    )
+  })
+
+  it('orders within band A by higher exact power above', () => {
+    const result = calculate(
+      [
+        ballot('account-a', 0, '1', [
+          [0, 4],
+          [1, 2],
+          [2, 0]
+        ]),
+        ballot('account-b', 1, '2', [
+          [0, 4],
+          [1, 4],
+          [2, 0]
+        ]),
+        ballot('account-c', 2, '1', [
+          [0, 0],
+          [1, 0],
+          [2, 0]
+        ]),
+        ballot('account-d', 3, '6', [
+          [0, 2],
+          [1, 2],
+          [2, 0]
+        ])
+      ],
+      { seatCount: 2 }
+    )
+
+    assert.deepStrictEqual(result.seatedCandidateIds, [0, 1])
+    assert.deepStrictEqual(
+      result.candidateResults.slice(0, 2).map(({ band, powerAbove, rank }) => ({
+        band,
+        powerAbove,
+        rank
+      })),
+      [
+        { band: 'A', powerAbove: '3', rank: 1 },
+        { band: 'A', powerAbove: '2', rank: 2 }
+      ]
+    )
+  })
+
+  it('leaves band B inseparable regardless of p/q magnitude', () => {
+    const grades = [
+      [4, 2, 2, 2, 2, 2, 2, 2, 2, 0],
+      [4, 4, 4, 4, 2, 2, 0, 0, 0, 0]
+    ] as const
+    const result = calculate(
+      Array.from({ length: 10 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          '1',
+          grades.map((candidateGrades, candidateId) => [
+            candidateId,
+            candidateGrades[voteId] ?? 0
+          ])
+        )
+      ),
+      { candidates: [candidate(0), candidate(1)] }
+    )
+
+    assert.strictEqual(result.status, 'TIE_UNRESOLVED')
+    assert.deepStrictEqual(result.unresolvedCandidateIds, [0, 1])
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ rank }) => rank),
+      [1, 1]
+    )
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ p, q }) => [p, q]),
+      [
+        ['0.1', '0.1'],
+        ['0.4', '0.4']
+      ]
+    )
+    assert.isNotNull(result.candidateResults[0]?.tieGroupId)
+    assert.strictEqual(
+      result.candidateResults[0]?.tieGroupId,
+      result.candidateResults[1]?.tieGroupId
+    )
+  })
+
+  it('leaves equal-p band A candidates inseparable', () => {
+    const grades = [
+      [4, 4, 4, 4, 2, 2, 2, 2, 2, 0],
+      [4, 4, 4, 4, 2, 2, 2, 2, 2, 2]
+    ] as const
+    const result = calculate(
+      Array.from({ length: 10 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          '1',
+          grades.map((candidateGrades, candidateId) => [
+            candidateId,
+            candidateGrades[voteId] ?? 0
+          ])
+        )
+      ),
+      { candidates: [candidate(0), candidate(1)] }
+    )
+
+    assert.strictEqual(result.status, 'TIE_UNRESOLVED')
+    assert.deepStrictEqual(result.unresolvedCandidateIds, [0, 1])
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ band, p }) => [band, p]),
+      [
+        ['A', '0.4'],
+        ['A', '0.4']
+      ]
+    )
+  })
+
+  it('compares exact power sums beyond normalized-share precision', () => {
+    const epsilon = '1.0000000000000000000001'
+    const result = calculate(
+      [
+        ballot('account-a', 0, epsilon, [
+          [0, 4],
+          [1, 0]
+        ]),
+        ballot('account-b', 1, '1', [
+          [0, 0],
+          [1, 4]
+        ]),
+        ballot('account-c', 2, '1', [
+          [0, 2],
+          [1, 2]
+        ])
+      ],
+      { candidates: [candidate(0), candidate(1)] }
+    )
+
+    assert.strictEqual(result.status, 'FINAL')
+    assert.deepStrictEqual(result.seatedCandidateIds, [0])
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ powerAbove, powerBelow, band }) => ({
+        powerAbove,
+        powerBelow,
+        band
+      })),
+      [
+        { powerAbove: epsilon, powerBelow: '1', band: 'A' },
+        { powerAbove: '1', powerBelow: epsilon, band: 'C' }
+      ]
+    )
+  })
+
+  it('publishes competition ranks and standing reserve tie groups', () => {
+    const grades = [
+      [4, 4, 4, 4, 2, 2, 2, 2, 2, 0],
+      [4, 2, 2, 2, 2, 2, 2, 2, 2, 0],
+      [4, 4, 4, 4, 2, 2, 0, 0, 0, 0],
+      [4, 2, 2, 2, 2, 2, 0, 0, 0, 0]
+    ] as const
+    const result = calculate(
+      Array.from({ length: 10 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          '1',
+          grades.map((candidateGrades, candidateId) => [
+            candidateId,
+            candidateGrades[voteId] ?? 0
+          ])
+        )
+      ),
+      {
+        candidates: [candidate(0), candidate(1), candidate(2), candidate(3)],
+        seatCount: 1
+      }
+    )
+
+    assert.strictEqual(result.status, 'FINAL')
+    assert.deepStrictEqual(result.unresolvedCandidateIds, [])
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ rank }) => rank),
+      [1, 2, 2, 4]
+    )
+    assert.strictEqual(
+      result.candidateResults[1]?.tieGroupId,
+      result.candidateResults[2]?.tieGroupId
+    )
+    assert.isNotNull(result.candidateResults[1]?.tieGroupId)
+    assert.deepStrictEqual(result.reserveCandidateIds, [1, 2, 3])
+  })
+
+  it('halts identically for every seat-boundary tie-group size', () => {
+    for (const size of [2, 5]) {
+      const candidates = Array.from({ length: size }, (_, id) => candidate(id))
+      const result = calculate(
+        [
+          ballot(
+            'account-a',
+            0,
+            '10',
+            candidates.map(({ id }) => [id, 4])
+          )
+        ],
+        { candidates, seatCount: 1 }
+      )
+
+      assert.strictEqual(result.status, 'TIE_UNRESOLVED')
+      assert.deepStrictEqual(
+        result.unresolvedCandidateIds,
+        candidates.map(({ id }) => id)
+      )
+      assert.deepStrictEqual(result.seatedCandidateIds, [])
+      assert.notMatch(JSON.stringify(result), /RUNOFF|governanceRoute|route/)
+    }
+  })
+
+  it('excludes an incomplete ballot from the entire tally', () => {
+    const result = calculate(
+      [
+        ballot('valid', 0, '10', [
+          [0, 4],
+          [1, 2]
+        ]),
+        ballot('incomplete', 1, '100', [[0, 0]])
+      ],
+      { candidates: [candidate(0), candidate(1)], seatCount: 2 }
+    )
+
+    assert.strictEqual(result.totalVotingPower, '10')
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ median }) => median),
+      [4, 2]
+    )
+  })
+
+  it('applies the median floor before a stronger gauge can affect seating', () => {
+    const grades = [
+      [4, 4, 4, 4, 1, 1, 1, 1, 1, 0],
+      [2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+    ] as const
+    const result = calculate(
+      Array.from({ length: 10 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          '1',
+          grades.map((candidateGrades, candidateId) => [
+            candidateId,
+            candidateGrades[voteId] ?? 0
+          ])
+        )
+      ),
+      {
+        candidates: [candidate(0), candidate(1)],
+        minimumMedianGrade: 2
+      }
+    )
+
+    assert.deepStrictEqual(result.seatedCandidateIds, [1])
+    assert.deepStrictEqual(
+      result.candidateResults.map(({ median, band, rank }) => ({
+        median,
+        band,
+        rank
+      })),
+      [
+        { median: 1, band: null, rank: null },
+        { median: 2, band: 'B', rank: 1 }
+      ]
+    )
+  })
+
+  it('finds at most one straddling tie group across random histograms', () => {
+    let state = 0x1234abcd
+    const random = () => {
+      state = (state * 1664525 + 1013904223) >>> 0
+      return state
+    }
+
+    for (let fixture = 0; fixture < 100; fixture += 1) {
+      const candidates = Array.from({ length: 8 }, (_, id) => candidate(id))
+      const ballots = Array.from({ length: 25 }, (_, voteId) =>
+        ballot(
+          `account-${voteId}`,
+          voteId,
+          String((random() % 10) + 1),
+          candidates.map(({ id }) => [id, random() % 5])
+        )
+      )
+      const seatCount = (random() % candidates.length) + 1
+      const result = calculate(ballots, { candidates, seatCount })
+
+      if (result.unresolvedCandidateIds.length > 0) {
+        const unresolved = result.candidateResults.filter(({ candidateId }) =>
+          result.unresolvedCandidateIds.includes(candidateId)
+        )
+        assert.strictEqual(
+          new Set(unresolved.map(({ tieGroupId }) => tieGroupId)).size,
+          1
+        )
+        const rank = unresolved[0]?.rank
+        assert.isNumber(rank)
+        assert.isBelow(rank as number, seatCount + 1)
+        assert.isAbove((rank as number) + unresolved.length, seatCount)
+      }
+    }
   })
 
   it('records an unresolved consequential tie without choosing by candidate id', () => {
@@ -293,7 +567,7 @@ describe('majority judgment weighted calculation', () => {
 
     assert.strictEqual(result.status, 'TIE_UNRESOLVED')
     assert.deepStrictEqual(
-      result.candidateResults.map(({ majorityGrade }) => majorityGrade),
+      result.candidateResults.map(({ median }) => median),
       [4, 4, 4]
     )
     assert.deepStrictEqual(result.unresolvedCandidateIds, [1, 2])

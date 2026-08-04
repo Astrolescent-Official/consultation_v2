@@ -25,6 +25,12 @@ export function ElectionOutcomeCard({
   const resultByCandidate = new Map(
     candidateResults.map((result) => [result.candidateId, result])
   )
+  const tieGroupSizes = candidateResults.reduce((sizes, result) => {
+    if (result.tieGroupId !== null && result.tieGroupId !== undefined) {
+      sizes.set(result.tieGroupId, (sizes.get(result.tieGroupId) ?? 0) + 1)
+    }
+    return sizes
+  }, new Map<number, number>())
   const ranked = [...candidates].sort(
     (left, right) =>
       rankOrder(resultByCandidate.get(left.id)) -
@@ -39,12 +45,25 @@ export function ElectionOutcomeCard({
       <ol className="space-y-3">
         {ranked.map((candidate) => {
           const result = resultByCandidate.get(candidate.id)
-          const grade: Grade | null | undefined =
-            result?.finalMajorityGrade ?? result?.majorityGrade
+          const grade: Grade | null | undefined = result?.median
+          const tieGroupSize =
+            result?.tieGroupId === null || result?.tieGroupId === undefined
+              ? 0
+              : (tieGroupSizes.get(result.tieGroupId) ?? 0)
+          const tieLocation =
+            result?.outcome === 'UNRESOLVED'
+              ? 'Seat boundary'
+              : result?.outcome === 'RESERVE'
+                ? 'Reserve list'
+                : 'Seated positions'
           return (
             <li
               key={candidate.id}
-              className="flex items-center justify-between gap-3 border-b border-border/50 pb-3 last:border-0 last:pb-0"
+              className={`flex items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0 ${
+                result?.tieGroupId === null || result?.tieGroupId === undefined
+                  ? 'border-border/50'
+                  : 'border-amber-400/70 bg-amber-50/60 px-2 pt-2 dark:bg-amber-950/20'
+              }`}
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
@@ -55,6 +74,13 @@ export function ElectionOutcomeCard({
                     ? 'No majority grade'
                     : gradeName(grade)}
                 </p>
+                {result?.tieGroupId === null ||
+                result?.tieGroupId === undefined ? null : (
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Tied rank · group {result.tieGroupId} · {tieGroupSize}{' '}
+                    candidates · {tieLocation}
+                  </p>
+                )}
               </div>
               <CandidateOutcomeBadge
                 outcome={result?.outcome}

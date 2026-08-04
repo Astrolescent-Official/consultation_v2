@@ -385,10 +385,17 @@ export class MajorityJudgmentCandidateResult extends Schema.Class<MajorityJudgme
     DecimalStringSchema,
     DecimalStringSchema
   ),
-  majorityGrade: Schema.NullOr(GradeSchema),
-  finalMajorityGrade: Schema.NullOr(GradeSchema),
+  median: Schema.NullOr(GradeSchema),
+  powerAbove: DecimalStringSchema,
+  powerBelow: DecimalStringSchema,
+  p: DecimalStringSchema,
+  q: DecimalStringSchema,
+  band: Schema.NullOr(Schema.Literal('A', 'B', 'C')),
   electable: Schema.Boolean,
   rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
+  tieGroupId: Schema.NullOr(
+    Schema.Number.pipe(Schema.int(), Schema.nonNegative())
+  ),
   outcome: MajorityJudgmentCandidateOutcomeSchema
 }) {}
 
@@ -407,7 +414,6 @@ export class MajorityJudgmentResultResponse extends Schema.Class<MajorityJudgmen
   reserveCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   reserveExpiresAt: Schema.NullOr(Schema.Date),
   referredSeats: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
-  tieBreakIterations: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
   unresolvedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema)
 }) {}
 

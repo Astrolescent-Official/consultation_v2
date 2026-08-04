@@ -59,7 +59,8 @@ export function ElectionRulesCard({
             Grade floor: {gradeName(minimumMedianGrade)}
           </dd>
           <dd className="text-muted-foreground">
-            Seats go to the highest median grade, ties broken deterministically.
+            Equal medians are ordered by the majority gauge; equal gauge ranks
+            remain ties.
           </dd>
         </dl>
       </CardContent>

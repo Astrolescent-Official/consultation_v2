@@ -254,10 +254,15 @@ describe('majority judgment shared schemas', () => {
           {
             candidateId: 0,
             histogram: ['0', '0', '100000', '200000', '200000'],
-            majorityGrade: 3,
-            finalMajorityGrade: 3,
+            median: 3,
+            powerAbove: '200000',
+            powerBelow: '100000',
+            p: '0.4',
+            q: '0.2',
+            band: 'A',
             electable: true,
             rank: 1,
+            tieGroupId: null,
             outcome: 'SEATED'
           }
         ],
@@ -265,7 +270,6 @@ describe('majority judgment shared schemas', () => {
         reserveCandidateIds: [],
         reserveExpiresAt: null,
         referredSeats: 1,
-        tieBreakIterations: 0,
         unresolvedCandidateIds: []
       }
     }
