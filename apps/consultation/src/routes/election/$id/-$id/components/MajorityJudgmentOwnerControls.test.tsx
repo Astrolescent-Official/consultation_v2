@@ -3,11 +3,24 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, assert, describe, it, vi } from 'vitest'
 import { formatGovernanceDuration } from '@/lib/governanceDuration'
+import type { Candidate } from './CandidateCard'
 import { MajorityJudgmentOwnerControls } from './MajorityJudgmentOwnerControls'
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+})
+
+const candidate = (
+  id: number,
+  reference: string,
+  displayName: string
+): Candidate => ({
+  id,
+  reference,
+  displayName,
+  description: '',
+  links: []
 })
 
 describe('majority judgment owner controls', () => {
@@ -19,6 +32,7 @@ describe('majority judgment owner controls', () => {
       <MajorityJudgmentOwnerControls
         status="ROUND_1_FAILED"
         round="RoundOne"
+        candidates={[]}
         unresolvedCandidateIds={[]}
         roundDurations={{ votingDays: 3, rerunVotingDays: 2 }}
         busy={false}
@@ -47,6 +61,10 @@ describe('majority judgment owner controls', () => {
       <MajorityJudgmentOwnerControls
         status="TIE_UNRESOLVED"
         round="Rerun"
+        candidates={[
+          candidate(4, 'alice', 'Alice Smith'),
+          candidate(2, 'bob', 'Bob Jones')
+        ]}
         unresolvedCandidateIds={[4, 2]}
         busy={false}
         onOpenRoundOne={vi.fn()}
@@ -55,8 +73,10 @@ describe('majority judgment owner controls', () => {
       />
     )
 
-    assert.isNotNull(screen.getByText('Candidate 4'))
-    assert.isNotNull(screen.getByText('Candidate 2'))
+    assert.isNotNull(screen.getByText('Alice Smith'))
+    assert.isNotNull(screen.getByText('alice'))
+    assert.isNotNull(screen.getByText('Bob Jones'))
+    assert.isNotNull(screen.getByText('bob'))
     fireEvent.click(
       screen.getByRole('button', { name: 'Record tie resolution' })
     )
@@ -72,11 +92,16 @@ describe('majority judgment owner controls', () => {
       onStartRerun: vi.fn(),
       onRecordTieResolution
     }
+    const candidates = [
+      candidate(7, 'carol', 'Carol Diaz'),
+      candidate(3, 'dave', 'Dave Lee')
+    ]
     const view = render(
       <MajorityJudgmentOwnerControls
         {...callbacks}
         status="LIVE"
         round="RoundOne"
+        candidates={candidates}
         unresolvedCandidateIds={[]}
       />
     )
@@ -86,12 +111,13 @@ describe('majority judgment owner controls', () => {
         {...callbacks}
         status="TIE_UNRESOLVED"
         round="RoundOne"
+        candidates={candidates}
         unresolvedCandidateIds={[7, 3]}
       />
     )
 
-    assert.isNotNull(screen.getByText('Candidate 7'))
-    assert.isNotNull(screen.getByText('Candidate 3'))
+    assert.isNotNull(screen.getByText('Carol Diaz'))
+    assert.isNotNull(screen.getByText('Dave Lee'))
     fireEvent.click(
       screen.getByRole('button', { name: 'Record tie resolution' })
     )
@@ -104,6 +130,7 @@ describe('majority judgment owner controls', () => {
     render(
       <MajorityJudgmentOwnerControls
         status="MJ_PENDING"
+        candidates={[]}
         unresolvedCandidateIds={[]}
         roundDurations={{ votingDays: 3, rerunVotingDays: 2 }}
         busy={false}
@@ -133,6 +160,7 @@ describe('majority judgment owner controls', () => {
     render(
       <MajorityJudgmentOwnerControls
         status="MJ_PENDING"
+        candidates={[]}
         unresolvedCandidateIds={[]}
         busy={false}
         onOpenRoundOne={vi.fn()}
