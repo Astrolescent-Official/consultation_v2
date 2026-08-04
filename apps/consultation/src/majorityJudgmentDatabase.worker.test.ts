@@ -131,6 +131,82 @@ beforeEach(async () => {
 })
 
 describe('D1 majority judgment persistence', () => {
+  it('derives gauge evidence for historical removal-era result rows without rewriting rank', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection(projection)
+        yield* repo.commitCalculation({
+          electionId: 7,
+          round: 1,
+          lastVoteCount: 1n,
+          ballots: [],
+          histograms: [],
+          result: {
+            computedAt: new Date('2026-07-15T00:00:00.000Z'),
+            totalVotingPower: '10',
+            quorumXrd: '100',
+            quorumMet: false,
+            minimumMedianGrade: 2,
+            candidateResults: [],
+            seatedCandidateIds: [],
+            reserveCandidateIds: [],
+            reserveExpiresAt: null,
+            referredSeats: 1,
+            tieBreakIterations: 3,
+            unresolvedCandidateIds: [],
+            status: 'LIVE'
+          }
+        })
+      })
+    )
+
+    await env.DB.prepare(
+      'UPDATE mj_result SET candidate_results = ? WHERE election_id = 7 AND round = 1'
+    )
+      .bind(
+        JSON.stringify([
+          {
+            candidateId: 0,
+            histogram: ['1', '0', '5', '0', '4'],
+            majorityGrade: 2,
+            finalMajorityGrade: 4,
+            electable: true,
+            rank: 2,
+            outcome: 'RESERVE'
+          },
+          {
+            candidateId: 1,
+            histogram: ['4', '0', '5', '0', '1'],
+            majorityGrade: 2,
+            finalMajorityGrade: 2,
+            electable: true,
+            rank: 1,
+            outcome: 'SEATED'
+          }
+        ])
+      )
+      .run()
+
+    const response = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(response.result?.candidateResults[0]).toMatchObject({
+      candidateId: 0,
+      median: 2,
+      powerAbove: '4',
+      powerBelow: '1',
+      p: '0.4',
+      q: '0.1',
+      band: 'A',
+      rank: 2,
+      tieGroupId: null
+    })
+  })
+
   it('indexes and finalizes the TC gate without requiring a round row', async () => {
     await runWithRepository(
       Effect.gen(function* () {

@@ -104,10 +104,15 @@ export type MajorityJudgmentCandidateGradeJson = {
 export type MajorityJudgmentCandidateResultJson = {
   readonly candidateId: number
   readonly histogram: readonly [string, string, string, string, string]
-  readonly majorityGrade: 0 | 1 | 2 | 3 | 4 | null
-  readonly finalMajorityGrade: 0 | 1 | 2 | 3 | 4 | null
+  readonly median: 0 | 1 | 2 | 3 | 4 | null
+  readonly powerAbove: string
+  readonly powerBelow: string
+  readonly p: string
+  readonly q: string
+  readonly band: 'A' | 'B' | 'C' | null
   readonly electable: boolean
   readonly rank: number | null
+  readonly tieGroupId: number | null
   readonly outcome: 'SEATED' | 'RESERVE' | 'NOT_ELECTABLE' | 'UNRESOLVED'
 }
 
