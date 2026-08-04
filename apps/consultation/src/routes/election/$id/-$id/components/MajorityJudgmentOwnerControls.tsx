@@ -11,6 +11,7 @@ import {
   formatGovernanceDuration,
   msPerGovernanceDurationUnit
 } from '@/lib/governanceDuration'
+import type { Candidate } from './CandidateCard'
 
 type MajorityJudgmentOwnerControlsProps = {
   readonly status: MajorityJudgmentElectionStatus
@@ -19,6 +20,7 @@ type MajorityJudgmentOwnerControlsProps = {
     readonly votingDays: number
     readonly rerunVotingDays: number
   }
+  readonly candidates: ReadonlyArray<Candidate>
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly busy: boolean
   readonly onOpenRoundOne: () => void
@@ -57,6 +59,7 @@ export function MajorityJudgmentOwnerControls({
   status,
   round,
   roundDurations,
+  candidates,
   unresolvedCandidateIds,
   busy,
   onOpenRoundOne,
@@ -64,6 +67,9 @@ export function MajorityJudgmentOwnerControls({
   onRecordTieResolution
 }: MajorityJudgmentOwnerControlsProps) {
   const [tieOrder, setTieOrder] = useState(() => [...unresolvedCandidateIds])
+  const candidatesById = new Map(
+    candidates.map((candidate) => [candidate.id, candidate])
+  )
 
   useEffect(() => {
     setTieOrder([...unresolvedCandidateIds])
@@ -140,44 +146,58 @@ export function MajorityJudgmentOwnerControls({
               </p>
             </div>
             <ol className="space-y-2">
-              {tieOrder.map((candidateId, index) => (
-                <li
-                  key={candidateId}
-                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-                >
-                  <span>Candidate {candidateId}</span>
-                  <span className="flex gap-1">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={busy || index === 0}
-                      aria-label={`Move candidate ${candidateId} up`}
-                      onClick={() =>
-                        setTieOrder((current) =>
-                          moveCandidate(current, index, -1)
-                        )
-                      }
-                    >
-                      Up
-                    </Button>
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={busy || index === tieOrder.length - 1}
-                      aria-label={`Move candidate ${candidateId} down`}
-                      onClick={() =>
-                        setTieOrder((current) =>
-                          moveCandidate(current, index, 1)
-                        )
-                      }
-                    >
-                      Down
-                    </Button>
-                  </span>
-                </li>
-              ))}
+              {tieOrder.map((candidateId, index) => {
+                const candidate = candidatesById.get(candidateId)
+                const label =
+                  candidate?.displayName ?? `Candidate ${candidateId}`
+                return (
+                  <li
+                    key={candidateId}
+                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {label}
+                      </span>
+                      {candidate?.reference ? (
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
+                          {candidate.reference}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="flex shrink-0 gap-1">
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={busy || index === 0}
+                        aria-label={`Move ${label} up`}
+                        onClick={() =>
+                          setTieOrder((current) =>
+                            moveCandidate(current, index, -1)
+                          )
+                        }
+                      >
+                        Up
+                      </Button>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={busy || index === tieOrder.length - 1}
+                        aria-label={`Move ${label} down`}
+                        onClick={() =>
+                          setTieOrder((current) =>
+                            moveCandidate(current, index, 1)
+                          )
+                        }
+                      >
+                        Down
+                      </Button>
+                    </span>
+                  </li>
+                )
+              })}
             </ol>
             <Button
               type="button"
