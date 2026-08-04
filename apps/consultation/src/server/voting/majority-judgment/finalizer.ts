@@ -97,7 +97,6 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
             seatedCandidateIds: result.seatedCandidateIds,
             reserveCandidateIds: result.reserveCandidateIds,
             referredSeats: result.referredSeats,
-            tieBreakIterations: result.tieBreakIterations,
             unresolvedCandidateIds: result.unresolvedCandidateIds,
             status: result.status
           })
@@ -126,7 +125,8 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
               reserveCandidateIds: result.reserveCandidateIds,
               reserveExpiresAt: result.reserveExpiresAt,
               referredSeats: result.referredSeats,
-              tieBreakIterations: result.tieBreakIterations,
+              // Retained only for the legacy checked database column.
+              tieBreakIterations: 0,
               unresolvedCandidateIds: result.unresolvedCandidateIds,
               status: result.status
             }
@@ -399,7 +399,6 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
                   ],
                   reserveExpiresAt: unresolvedResult.reserveExpiresAt,
                   referredSeats: unresolvedResult.referredSeats,
-                  tieBreakIterations: unresolvedResult.tieBreakIterations,
                   unresolvedCandidateIds: [
                     ...unresolvedResult.unresolvedCandidateIds
                   ]
@@ -444,7 +443,8 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
               reserveCandidateIds: resolved.reserveCandidateIds,
               reserveExpiresAt: resolved.reserveExpiresAt,
               referredSeats: resolved.referredSeats,
-              tieBreakIterations: resolved.tieBreakIterations,
+              // Retained only for the legacy checked database column.
+              tieBreakIterations: 0,
               unresolvedCandidateIds: resolved.unresolvedCandidateIds,
               status: resolved.status
             }

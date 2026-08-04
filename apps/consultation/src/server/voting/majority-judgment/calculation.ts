@@ -214,7 +214,6 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
           seatedCandidateIds: result.seatedCandidateIds,
           reserveCandidateIds: result.reserveCandidateIds,
           referredSeats: result.referredSeats,
-          tieBreakIterations: result.tieBreakIterations,
           unresolvedCandidateIds: result.unresolvedCandidateIds
         })
 
@@ -241,7 +240,9 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
             reserveCandidateIds: result.reserveCandidateIds,
             reserveExpiresAt: result.reserveExpiresAt,
             referredSeats: result.referredSeats,
-            tieBreakIterations: result.tieBreakIterations,
+            // Retained only for the legacy checked database column. The
+            // majority gauge never removes ballots or runs iterations.
+            tieBreakIterations: 0,
             unresolvedCandidateIds: result.unresolvedCandidateIds,
             status
           }

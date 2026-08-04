@@ -2,14 +2,9 @@ import BigNumber from 'bignumber.js'
 
 export type Grade = 0 | 1 | 2 | 3 | 4
 export type RoundId = 'RoundOne' | 'Rerun'
+export type GaugeBand = 'A' | 'B' | 'C'
 type CandidateOutcome = 'SEATED' | 'RESERVE' | 'NOT_ELECTABLE' | 'UNRESOLVED'
-
-export type GradeContribution = {
-  readonly accountAddress: string
-  readonly voteId: number
-  readonly grade: Grade
-  readonly votingPower: string
-}
+type GradeHistogram = readonly [string, string, string, string, string]
 
 export type MajorityJudgmentBallot = {
   readonly accountAddress: string
@@ -32,11 +27,25 @@ export type MajorityJudgmentCalculationInput = {
   readonly round?: RoundId
 }
 
-type WorkingCandidate = {
+type ValidBallot = {
+  readonly accountAddress: string
+  readonly voteId: number
+  readonly votingPower: string
+  readonly grades: ReadonlyMap<number, Grade>
+}
+
+type CandidateGauge = {
   readonly id: number
-  readonly originalMajorityGrade: Grade | null
-  readonly contributions: Array<GradeContribution>
-  readonly finalMajorityGrade: Grade | null
+  readonly histogram: GradeHistogram
+  readonly median: Grade | null
+  readonly powerAbove: BigNumber
+  readonly powerBelow: BigNumber
+  readonly band: GaugeBand | null
+}
+
+type RankedCandidate = CandidateGauge & {
+  readonly rank: number
+  readonly tieGroupId: number | null
 }
 
 const gradesDescending: ReadonlyArray<Grade> = [4, 3, 2, 1, 0]
@@ -54,129 +63,16 @@ const requireGrade = (value: number): Grade => {
 const compareStrings = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0
 
-const compareContributions = (
-  left: GradeContribution,
-  right: GradeContribution
-) => {
-  const byPower =
-    new BigNumber(left.votingPower).comparedTo(right.votingPower) ?? 0
-  if (byPower !== 0) return byPower
-  const byAccount = compareStrings(left.accountAddress, right.accountAddress)
-  return byAccount !== 0 ? byAccount : left.voteId - right.voteId
-}
-
-export const selectMedianContribution = (
-  contributions: ReadonlyArray<GradeContribution>,
-  grade: number
-): GradeContribution | undefined =>
-  contributions
-    .filter((contribution) => contribution.grade === grade)
-    .sort(compareContributions)[0]
-
-export const majorityGrade = (
-  contributions: ReadonlyArray<{
-    readonly grade: number
-    readonly votingPower: string
-  }>
-): Grade | null => {
-  const total = contributions.reduce(
-    (sum, contribution) => sum.plus(contribution.votingPower),
+const medianFromHistogram = (histogram: GradeHistogram): Grade | null => {
+  const total = histogram.reduce(
+    (sum, votingPower) => sum.plus(votingPower),
     new BigNumber(0)
   )
   if (total.isZero()) return null
 
   let cumulative = new BigNumber(0)
   for (const grade of gradesDescending) {
-    cumulative = contributions
-      .filter((contribution) => requireGrade(contribution.grade) === grade)
-      .reduce(
-        (sum, contribution) => sum.plus(contribution.votingPower),
-        cumulative
-      )
-    if (cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)) return grade
-  }
-  return null
-}
-
-const histogram = (
-  contributions: ReadonlyArray<GradeContribution>
-): readonly [string, string, string, string, string] => {
-  const values = [0, 1, 2, 3, 4].map((grade) =>
-    contributions
-      .filter((contribution) => contribution.grade === grade)
-      .reduce(
-        (sum, contribution) => sum.plus(contribution.votingPower),
-        new BigNumber(0)
-      )
-      .toFixed()
-  )
-  return [values[0], values[1], values[2], values[3], values[4]]
-}
-
-const candidateContributions = (
-  candidateId: number,
-  ballots: ReadonlyArray<MajorityJudgmentBallot>
-) =>
-  ballots.map((ballot) => {
-    const candidateGrades = ballot.grades.filter(
-      (candidateGrade) => candidateGrade.candidateId === candidateId
-    )
-    if (candidateGrades.length !== 1) {
-      throw new Error(
-        `Ballot ${ballot.voteId} must contain exactly one grade for candidate ${candidateId}`
-      )
-    }
-    const candidateGrade = candidateGrades[0]
-    if (candidateGrade === undefined) {
-      throw new Error(`Missing grade for candidate ${candidateId}`)
-    }
-    return {
-      accountAddress: ballot.accountAddress,
-      voteId: ballot.voteId,
-      votingPower: ballot.votingPower,
-      grade: requireGrade(candidateGrade.grade)
-    }
-  })
-
-const compareWorkingCandidates = (
-  left: WorkingCandidate,
-  right: WorkingCandidate
-) => {
-  const leftGrade = left.finalMajorityGrade
-  const rightGrade = right.finalMajorityGrade
-  if (leftGrade === rightGrade) return left.id - right.id
-  if (leftGrade === null) return 1
-  if (rightGrade === null) return -1
-  return rightGrade - leftGrade
-}
-
-type ContributionBuckets = [
-  Array<GradeContribution>,
-  Array<GradeContribution>,
-  Array<GradeContribution>,
-  Array<GradeContribution>,
-  Array<GradeContribution>
-]
-
-type GradeWeights = [BigNumber, BigNumber, BigNumber, BigNumber, BigNumber]
-
-type TieCandidate = {
-  readonly candidate: WorkingCandidate
-  readonly buckets: ContributionBuckets
-  readonly next: [number, number, number, number, number]
-  readonly weights: GradeWeights
-  total: BigNumber
-  majority: Grade | null
-}
-
-const majorityGradeFromWeights = (
-  weights: GradeWeights,
-  total: BigNumber
-): Grade | null => {
-  if (total.isZero()) return null
-  let cumulative = new BigNumber(0)
-  for (const grade of gradesDescending) {
-    cumulative = cumulative.plus(weights[grade])
+    cumulative = cumulative.plus(histogram[grade])
     if (cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)) {
       return grade
     }
@@ -184,142 +80,175 @@ const majorityGradeFromWeights = (
   return null
 }
 
-const makeTieCandidate = (candidate: WorkingCandidate): TieCandidate => {
-  const buckets: ContributionBuckets = [[], [], [], [], []]
-  const weights: GradeWeights = [
+export const majorityGrade = (
+  contributions: ReadonlyArray<{
+    readonly grade: number
+    readonly votingPower: string
+  }>
+): Grade | null => {
+  const weights = [
     new BigNumber(0),
     new BigNumber(0),
     new BigNumber(0),
     new BigNumber(0),
     new BigNumber(0)
   ]
-  let total = new BigNumber(0)
-  for (const contribution of candidate.contributions) {
-    buckets[contribution.grade].push(contribution)
-    weights[contribution.grade] = weights[contribution.grade].plus(
-      contribution.votingPower
-    )
-    total = total.plus(contribution.votingPower)
+  for (const contribution of contributions) {
+    const grade = requireGrade(contribution.grade)
+    weights[grade] = weights[grade].plus(contribution.votingPower)
   }
-  for (const bucket of buckets) bucket.sort(compareContributions)
-  return {
-    candidate,
-    buckets,
-    next: [0, 0, 0, 0, 0],
-    weights,
-    total,
-    majority: majorityGradeFromWeights(weights, total)
-  }
+  return medianFromHistogram([
+    weights[0].toFixed(),
+    weights[1].toFixed(),
+    weights[2].toFixed(),
+    weights[3].toFixed(),
+    weights[4].toFixed()
+  ])
 }
 
-const rankedTieCandidates = (candidates: ReadonlyArray<TieCandidate>) =>
-  [...candidates].sort((left, right) => {
-    if (left.majority === right.majority) {
-      return left.candidate.id - right.candidate.id
-    }
-    if (left.majority === null) return 1
-    if (right.majority === null) return -1
-    return right.majority - left.majority
-  })
+const validBallot = (
+  ballot: MajorityJudgmentBallot,
+  candidateIds: ReadonlySet<number>
+): ValidBallot | null => {
+  if (!new BigNumber(ballot.votingPower).isGreaterThan(0)) return null
+  if (ballot.grades.length !== candidateIds.size) return null
 
-const removeMedianContribution = (candidate: TieCandidate) => {
-  const grade = candidate.majority
-  if (grade === null) return false
-  const contribution = candidate.buckets[grade][candidate.next[grade]]
-  if (contribution === undefined) return false
-  candidate.next[grade] += 1
-  const power = new BigNumber(contribution.votingPower)
-  candidate.weights[grade] = candidate.weights[grade].minus(power)
-  candidate.total = candidate.total.minus(power)
-  candidate.majority = majorityGradeFromWeights(
-    candidate.weights,
-    candidate.total
-  )
-  return true
-}
-
-const resolveBoundaryTie = (
-  candidates: ReadonlyArray<WorkingCandidate>,
-  seatsAvailable: number
-) => {
-  let active = [...candidates]
-    .sort((left, right) => left.id - right.id)
-    .map(makeTieCandidate)
-  let activeSeats = seatsAvailable
-  const decidedAbove: Array<TieCandidate> = []
-  const decidedBelow: Array<TieCandidate> = []
-  const finish = () =>
-    [...decidedAbove, ...rankedTieCandidates(active), ...decidedBelow].map(
-      ({ candidate, majority }) => ({
-        ...candidate,
-        finalMajorityGrade: majority
-      })
-    )
-
-  let iterations = 0
-  while (true) {
-    const ordered = rankedTieCandidates(active)
-    const lastWinner = ordered[activeSeats - 1]
-    const firstReserve = ordered[activeSeats]
-    const lastWinnerGrade = lastWinner?.majority ?? null
-    const firstReserveGrade = firstReserve?.majority ?? null
-
+  const grades = new Map<number, Grade>()
+  for (const entry of ballot.grades) {
     if (
-      firstReserve === undefined ||
-      (lastWinnerGrade ?? -1) > (firstReserveGrade ?? -1)
+      !candidateIds.has(entry.candidateId) ||
+      !isGrade(entry.grade) ||
+      grades.has(entry.candidateId)
     ) {
-      return {
-        ordered: finish(),
-        iterations,
-        unresolvedCandidateIds: []
-      }
+      return null
     }
+    grades.set(entry.candidateId, entry.grade)
+  }
+  if ([...candidateIds].some((candidateId) => !grades.has(candidateId))) {
+    return null
+  }
+  return { ...ballot, grades }
+}
 
-    const separatedAbove = ordered.filter(({ majority }) =>
-      lastWinnerGrade === null
-        ? false
-        : majority !== null && majority > lastWinnerGrade
-    )
-    const separatedBelow = ordered.filter(({ majority }) =>
-      lastWinnerGrade === null
-        ? false
-        : majority === null || majority < lastWinnerGrade
-    )
-    if (separatedAbove.length > 0 || separatedBelow.length > 0) {
-      const boundary = ordered.filter(
-        ({ majority }) => majority === lastWinnerGrade
-      )
-      // Candidates that have separated from the seat boundary are decided.
-      // Continuing to remove their contributions can make them converge again
-      // after exhaustion and incorrectly expand a later unresolved group.
-      decidedAbove.push(...separatedAbove)
-      decidedBelow.unshift(...separatedBelow)
-      active = boundary
-      activeSeats -= separatedAbove.length
-      continue
+const histogramForCandidate = (
+  candidateId: number,
+  ballots: ReadonlyArray<ValidBallot>
+): GradeHistogram => {
+  const weights = [
+    new BigNumber(0),
+    new BigNumber(0),
+    new BigNumber(0),
+    new BigNumber(0),
+    new BigNumber(0)
+  ]
+  for (const ballot of ballots) {
+    const grade = ballot.grades.get(candidateId)
+    if (grade === undefined) {
+      throw new Error(`Validated ballot is missing candidate ${candidateId}`)
     }
+    weights[grade] = weights[grade].plus(ballot.votingPower)
+  }
+  return [
+    weights[0].toFixed(),
+    weights[1].toFixed(),
+    weights[2].toFixed(),
+    weights[3].toFixed(),
+    weights[4].toFixed()
+  ]
+}
 
-    let removed = 0
-    for (const candidate of active) {
-      if (removeMedianContribution(candidate)) removed += 1
-    }
-    if (removed === 0) {
-      return {
-        ordered: finish(),
-        iterations,
-        unresolvedCandidateIds: ordered.map(({ candidate }) => candidate.id)
-      }
-    }
-    iterations += 1
-
-    if (active.every((candidate) => candidate.total.isZero())) {
-      return {
-        ordered: finish(),
-        iterations,
-        unresolvedCandidateIds: active.map(({ candidate }) => candidate.id)
-      }
+const candidateGauge = (
+  id: number,
+  histogram: GradeHistogram
+): CandidateGauge => {
+  const median = medianFromHistogram(histogram)
+  if (median === null) {
+    return {
+      id,
+      histogram,
+      median,
+      powerAbove: new BigNumber(0),
+      powerBelow: new BigNumber(0),
+      band: null
     }
   }
+  const powerAbove = histogram.reduce(
+    (sum, votingPower, grade) => (grade > median ? sum.plus(votingPower) : sum),
+    new BigNumber(0)
+  )
+  const powerBelow = histogram.reduce(
+    (sum, votingPower, grade) => (grade < median ? sum.plus(votingPower) : sum),
+    new BigNumber(0)
+  )
+  const comparison = powerAbove.comparedTo(powerBelow) ?? 0
+  return {
+    id,
+    histogram,
+    median,
+    powerAbove,
+    powerBelow,
+    band: comparison > 0 ? 'A' : comparison < 0 ? 'C' : 'B'
+  }
+}
+
+const bandOrder: Record<GaugeBand, number> = { A: 0, B: 1, C: 2 }
+
+const compareCandidateGauges = (
+  left: CandidateGauge,
+  right: CandidateGauge
+) => {
+  if (left.median !== right.median) {
+    if (left.median === null) return 1
+    if (right.median === null) return -1
+    return right.median - left.median
+  }
+  if (left.band !== right.band) {
+    if (left.band === null) return 1
+    if (right.band === null) return -1
+    return bandOrder[left.band] - bandOrder[right.band]
+  }
+  if (left.band === 'A') {
+    return right.powerAbove.comparedTo(left.powerAbove) ?? 0
+  }
+  if (left.band === 'C') {
+    return left.powerBelow.comparedTo(right.powerBelow) ?? 0
+  }
+  // Band B, equal-p band A, and equal-q band C remain genuinely tied. Candidate
+  // ID must never become a silent mechanism-level tiebreaker.
+  return 0
+}
+
+const rankCandidates = (
+  electable: ReadonlyArray<CandidateGauge>
+): ReadonlyArray<RankedCandidate> => {
+  const ordered = [...electable].sort(compareCandidateGauges)
+  const ranked: Array<RankedCandidate> = []
+  let tieGroupId = 0
+  for (let start = 0; start < ordered.length; ) {
+    let end = start + 1
+    while (
+      end < ordered.length &&
+      compareCandidateGauges(
+        ordered[start] as CandidateGauge,
+        ordered[end] as CandidateGauge
+      ) === 0
+    ) {
+      end += 1
+    }
+    const tied = end - start > 1
+    const groupId = tied ? ++tieGroupId : null
+    for (let index = start; index < end; index += 1) {
+      const candidate = ordered[index]
+      if (candidate === undefined) continue
+      ranked.push({
+        ...candidate,
+        rank: start + 1,
+        tieGroupId: groupId
+      })
+    }
+    start = end
+  }
+  return ranked
 }
 
 const reserveExpiry = (roundEndsAt: Date, reserveListDays: number) =>
@@ -329,96 +258,80 @@ export const calculateMajorityJudgment = (
   input: MajorityJudgmentCalculationInput
 ) => {
   const round = input.round ?? 'RoundOne'
+  const sortedCandidates = [...input.candidates].sort(
+    (left, right) => left.id - right.id
+  )
+  const candidateIds = new Set(sortedCandidates.map(({ id }) => id))
   const positiveBallots = [...input.ballots]
-    .filter((ballot) => new BigNumber(ballot.votingPower).isGreaterThan(0))
     .sort(
       (left, right) =>
         compareStrings(left.accountAddress, right.accountAddress) ||
         left.voteId - right.voteId
     )
+    .flatMap((ballot) => {
+      const validated = validBallot(ballot, candidateIds)
+      if (validated !== null) return [validated]
+      if (new BigNumber(ballot.votingPower).isGreaterThan(0)) {
+        console.warn(
+          `Excluding invalid Majority Judgment ballot ${ballot.voteId} from ${ballot.accountAddress}`
+        )
+      }
+      return []
+    })
 
-  const totalVotingPower = positiveBallots
-    .reduce((sum, ballot) => sum.plus(ballot.votingPower), new BigNumber(0))
-    .toFixed()
-  const quorumMet = new BigNumber(totalVotingPower).isGreaterThanOrEqualTo(
+  const totalVotingPowerNumber = positiveBallots.reduce(
+    (sum, ballot) => sum.plus(ballot.votingPower),
+    new BigNumber(0)
+  )
+  const totalVotingPower = totalVotingPowerNumber.toFixed()
+  const quorumMet = totalVotingPowerNumber.isGreaterThanOrEqualTo(
     input.quorumXrd
   )
   const minimumMedianGrade = requireGrade(input.minimumMedianGrade)
+  const workingCandidates = sortedCandidates.map(({ id }) =>
+    candidateGauge(id, histogramForCandidate(id, positiveBallots))
+  )
+  const electable = rankCandidates(
+    workingCandidates.filter(
+      ({ median }) => median !== null && median >= minimumMedianGrade
+    )
+  )
 
-  const workingCandidates = [...input.candidates]
-    .sort((left, right) => left.id - right.id)
-    .map((candidate) => {
-      const contributions = candidateContributions(
-        candidate.id,
-        positiveBallots
-      )
-      return {
-        id: candidate.id,
-        originalMajorityGrade: majorityGrade(contributions),
-        contributions,
-        finalMajorityGrade: majorityGrade(contributions)
+  const boundaryGroups = electable
+    .filter(({ tieGroupId }) => tieGroupId !== null)
+    .reduce<Array<ReadonlyArray<RankedCandidate>>>((groups, candidate) => {
+      const previous = groups.at(-1)
+      if (previous?.[0]?.tieGroupId === candidate.tieGroupId) {
+        groups[groups.length - 1] = [...previous, candidate]
+      } else {
+        groups.push([candidate])
       }
+      return groups
+    }, [])
+    .filter((group) => {
+      const start = electable.indexOf(group[0] as RankedCandidate)
+      return start < input.seatCount && start + group.length > input.seatCount
     })
-
-  const electable = workingCandidates
-    .filter(
-      (candidate) =>
-        candidate.originalMajorityGrade !== null &&
-        candidate.originalMajorityGrade >= minimumMedianGrade
-    )
-    .sort(compareWorkingCandidates)
-
-  let orderedElectable = electable
-  let tieBreakIterations = 0
-  let unresolvedCandidateIds: Array<number> = []
-
-  if (quorumMet && input.seatCount > 0 && electable.length > input.seatCount) {
-    const boundaryGrade =
-      electable[input.seatCount - 1]?.originalMajorityGrade ?? null
-    const aboveBoundary = electable.filter(
-      (candidate) =>
-        boundaryGrade !== null &&
-        candidate.originalMajorityGrade !== null &&
-        candidate.originalMajorityGrade > boundaryGrade
-    )
-    const boundaryGroup = electable.filter(
-      (candidate) => candidate.originalMajorityGrade === boundaryGrade
-    )
-    const seatsAvailable = input.seatCount - aboveBoundary.length
-
-    if (boundaryGroup.length > seatsAvailable) {
-      const resolution = resolveBoundaryTie(boundaryGroup, seatsAvailable)
-      orderedElectable = [
-        ...aboveBoundary,
-        ...resolution.ordered,
-        ...electable.filter(
-          (candidate) =>
-            boundaryGrade !== null &&
-            candidate.originalMajorityGrade !== null &&
-            candidate.originalMajorityGrade < boundaryGrade
-        )
-      ]
-      tieBreakIterations = resolution.iterations
-      unresolvedCandidateIds = resolution.unresolvedCandidateIds
-    }
+  if (boundaryGroups.length > 1) {
+    throw new Error('At most one tie group may straddle the seat boundary')
   }
-
-  const unresolved = unresolvedCandidateIds.length > 0
-  // The unresolved group always straddles the seat line, so candidates ranked
-  // ahead of it have won a seat and candidates ranked behind it are on the
-  // reserve list regardless of how the tie is settled. Withholding those
-  // outcomes would publish an unambiguous winner as "not elected".
+  const unresolvedGroup =
+    quorumMet && input.seatCount > 0 ? boundaryGroups[0] : undefined
+  const unresolvedCandidateIds = unresolvedGroup?.map(({ id }) => id) ?? []
   const unresolvedIds = new Set(unresolvedCandidateIds)
-  const decided = (candidates: ReadonlyArray<WorkingCandidate>) =>
-    candidates
-      .filter((candidate) => !unresolvedIds.has(candidate.id))
-      .map((candidate) => candidate.id)
   const seatedCandidateIds = quorumMet
-    ? decided(orderedElectable.slice(0, input.seatCount))
+    ? electable
+        .slice(0, input.seatCount)
+        .filter(({ id }) => !unresolvedIds.has(id))
+        .map(({ id }) => id)
     : []
   const reserveCandidateIds = quorumMet
-    ? decided(orderedElectable.slice(input.seatCount))
+    ? electable
+        .slice(input.seatCount)
+        .filter(({ id }) => !unresolvedIds.has(id))
+        .map(({ id }) => id)
     : []
+  const unresolved = unresolvedCandidateIds.length > 0
   const status = !quorumMet
     ? round === 'Rerun'
       ? 'FAILED'
@@ -426,41 +339,37 @@ export const calculateMajorityJudgment = (
     : unresolved
       ? 'TIE_UNRESOLVED'
       : 'FINAL'
-
-  const rankByCandidate = new Map(
-    orderedElectable.map((candidate, index) => [candidate.id, index + 1])
-  )
-  const workingByCandidate = new Map(
-    orderedElectable.map((candidate) => [
-      candidate.id,
-      candidate.finalMajorityGrade
-    ])
+  const rankedByCandidate = new Map(
+    electable.map((candidate) => [candidate.id, candidate])
   )
 
   const candidateResults = workingCandidates.map((candidate) => {
-    const candidateIsElectable =
-      candidate.originalMajorityGrade !== null &&
-      candidate.originalMajorityGrade >= minimumMedianGrade
-    const outcome: CandidateOutcome = unresolvedCandidateIds.includes(
-      candidate.id
-    )
+    const ranked = rankedByCandidate.get(candidate.id)
+    const electableCandidate = ranked !== undefined
+    const outcome: CandidateOutcome = unresolvedIds.has(candidate.id)
       ? 'UNRESOLVED'
       : seatedCandidateIds.includes(candidate.id)
         ? 'SEATED'
         : reserveCandidateIds.includes(candidate.id)
           ? 'RESERVE'
           : 'NOT_ELECTABLE'
+    const share = (power: BigNumber) =>
+      totalVotingPowerNumber.isZero()
+        ? '0'
+        : power.dividedBy(totalVotingPowerNumber).toFixed()
 
     return {
       candidateId: candidate.id,
-      histogram: histogram(candidate.contributions),
-      majorityGrade: candidate.originalMajorityGrade,
-      finalMajorityGrade:
-        workingByCandidate.get(candidate.id) ?? candidate.originalMajorityGrade,
-      electable: candidateIsElectable,
-      rank: candidateIsElectable
-        ? (rankByCandidate.get(candidate.id) ?? null)
-        : null,
+      histogram: candidate.histogram,
+      median: candidate.median,
+      powerAbove: candidate.powerAbove.toFixed(),
+      powerBelow: candidate.powerBelow.toFixed(),
+      p: share(candidate.powerAbove),
+      q: share(candidate.powerBelow),
+      band: electableCandidate ? candidate.band : null,
+      electable: electableCandidate,
+      rank: ranked?.rank ?? null,
+      tieGroupId: ranked?.tieGroupId ?? null,
       outcome
     }
   })
@@ -481,7 +390,6 @@ export const calculateMajorityJudgment = (
     // Referral is a terminal determination. While a tie is open the contested
     // seats are pending, not referred to the vacancy process.
     referredSeats: unresolved ? 0 : input.seatCount - seatedCandidateIds.length,
-    tieBreakIterations,
     unresolvedCandidateIds
   }
 }
@@ -515,7 +423,8 @@ export const applyMajorityJudgmentTieResolution = (input: {
     .sort(
       (left, right) =>
         (left.rank ?? Number.MAX_SAFE_INTEGER) -
-        (right.rank ?? Number.MAX_SAFE_INTEGER)
+          (right.rank ?? Number.MAX_SAFE_INTEGER) ||
+        left.candidateId - right.candidateId
     )
     .map(({ candidateId }) => candidateId)
   let tieIndex = 0
@@ -532,8 +441,11 @@ export const applyMajorityJudgmentTieResolution = (input: {
   })
   const seatedCandidateIds = resolvedOrder.slice(0, input.seatCount)
   const reserveCandidateIds = resolvedOrder.slice(input.seatCount)
-  const rankByCandidate = new Map(
-    resolvedOrder.map((candidateId, index) => [candidateId, index + 1])
+  const resolvedRankByCandidate = new Map(
+    resolvedOrder
+      .map((candidateId, index) => ({ candidateId, index }))
+      .filter(({ candidateId }) => unresolved.has(candidateId))
+      .map(({ candidateId, index }) => [candidateId, index + 1])
   )
   const resolvedOutcome = (candidateId: number): CandidateOutcome =>
     seatedCandidateIds.includes(candidateId)
@@ -548,9 +460,12 @@ export const applyMajorityJudgmentTieResolution = (input: {
     status,
     candidateResults: input.result.candidateResults.map((candidate) => ({
       ...candidate,
-      rank: candidate.electable
-        ? (rankByCandidate.get(candidate.candidateId) ?? null)
-        : null,
+      rank: unresolved.has(candidate.candidateId)
+        ? (resolvedRankByCandidate.get(candidate.candidateId) ?? null)
+        : candidate.rank,
+      tieGroupId: unresolved.has(candidate.candidateId)
+        ? null
+        : candidate.tieGroupId,
       outcome: resolvedOutcome(candidate.candidateId)
     })),
     seatedCandidateIds,
