@@ -22,11 +22,44 @@ pnpm worktree:task <task-name> [base-ref]
 
 Before editing, verify the active branch and worktree with `git branch --show-current` and `git worktree list`. The repository pre-commit hook rejects commits outside a `task/*` branch (it also still accepts pre-existing `codex/*` branches during the migration — see [Migrating from codex/* branches](#migrating-from-codex-branches)) and rejects commits from the primary checkout.
 
+## Outside-in development
+
+Develop implementation tasks outside in. Start from the user-visible behavior
+or externally observable contract, then work inward through the system only as
+far as needed:
+
+1. Define the acceptance behavior at the outermost practical boundary (for
+   example the UI, HTTP/RPC API, Worker, persisted result, or ledger contract).
+2. Add or update a failing boundary-level acceptance, integration, or regression
+   test that demonstrates the requested behavior before changing production
+   code.
+3. Implement the smallest vertical slice that makes that test pass, adding
+   focused unit tests for internal components only where they help drive or
+   explain the implementation.
+4. Refactor after the observable behavior is green; do not begin with speculative
+   low-level abstractions or isolated internals disconnected from an acceptance
+   criterion.
+
+When the outer boundary cannot be automated, document the concrete manual
+acceptance check before implementation and test at the nearest practical
+automated boundary. Documentation-only and planning-only tasks do not require a
+synthetic failing test.
+
 ## Completion Contract
 
 An implementation task is complete only after its changes are committed on its dedicated `task/*` branch and `pnpm verify` passes. The final handoff must state the commit SHA and verification results. Tasks must not merge, push, or modify another task's branch unless the user explicitly asks.
 
 `pnpm verify` runs formatting/lint checks, TypeScript checks, the web and shared unit tests, the Workerd/D1 integration tests, and Scrypto tests. A pre-push hook runs it locally; the GitHub `Verify` workflow runs it for pull requests and merge-queue candidates.
+
+### Planning-only tasks
+
+A task whose only deliverable is an implementation plan is not an implementation
+task and does not enter the PR handoff workflow below. Create or update the plan
+and return it directly to the requester so it can be used as the input to a
+later implementation task. Do not push the planning branch, open or merge a PR,
+monitor CI or deployment, or delegate a follow-up review/merge task unless the
+user explicitly requests those actions. A later task that executes the plan
+must use the normal task-isolation, verification, and PR handoff workflow.
 
 ## Migrating from codex/* branches
 
@@ -54,11 +87,12 @@ merge — see [Promoting staging to production](#promoting-staging-to-production
 After completing an implementation task, push the branch and open a pull request against `staging`. The agent that opened the PR is responsible for seeing it through to merge — either directly, or by delegating to a follow-up task if your tool supports that (use the most capable model and reasoning/effort setting available; a delegated task must not create further handoffs or otherwise recurse). Whoever owns this step should:
 
 1. Wait for the `Claude Code Review` GitHub Actions check on the PR to finish. It runs automatically on open and on every push, and typically completes within a few minutes — don't merge before it's done.
-2. If it posted review comments, address the findings, push fixes, and wait for the check to re-run before proceeding.
-3. If it posted no comment and every required CI check (the `Verify` workflow and any others) is green, the PR may be merged into `staging`.
-4. Merge with **squash and merge**, not a merge commit or rebase — every `task/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `staging`'s history. `staging` should read as one commit per task.
-5. After merging, monitor the resulting `staging` CI run and automatic deployment to the preview Worker, and verify the result there.
-6. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
+2. After that check completes, inspect **every review surface**, including inline review comments and unresolved review threads. Do not rely only on the check conclusion or on top-level PR comments. In particular, `gh pr view --json comments,reviews` is insufficient: `comments` contains conversation comments and review bodies can be empty even when the review contains inline findings. Query inline comments explicitly (for example, `gh api --paginate repos/<owner>/<repo>/pulls/<number>/comments`) and inspect unresolved review threads when the available API supports them.
+3. Treat a successful `Claude Code Review` check only as confirmation that the workflow completed, **not** as confirmation that it found no issues. If any review surface contains an actionable finding, address it, push the fix, wait for all required checks to re-run on the new head commit, and inspect every review surface again. Resolve or explicitly respond to each finding before proceeding.
+4. Immediately before merging, verify all of the following against the PR's current head SHA: the review check completed, every required CI check is green, there are no unaddressed inline comments or unresolved actionable review threads, and the head SHA is the one that was reviewed. If any one of these cannot be confirmed, do not merge.
+5. Merge with **squash and merge**, not a merge commit or rebase — every `task/*` branch is one task, and its intermediate commits (fixups, formatting passes, retriggers) aren't worth preserving individually in `staging`'s history. `staging` should read as one commit per task.
+6. After merging, monitor the resulting `staging` CI run and automatic deployment to the preview Worker, and verify the result there.
+7. Report the outcome — commit SHA, verification results, review/merge status — back to whoever is tracking the originating task.
 
 ## Promoting staging to production
 
