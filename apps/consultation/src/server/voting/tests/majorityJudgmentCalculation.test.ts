@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { GRADE_QUANTILE, type GradeQuantile } from 'shared/governance/index'
 import { assert, describe, it } from 'vitest'
 import {
   applyMajorityJudgmentTieResolution,
@@ -6,6 +8,8 @@ import {
 } from '../majority-judgment/calculator'
 
 const candidate = (id: number) => ({ id })
+const HALF: GradeQuantile = { num: 1, den: 2 }
+const THREE_FIFTHS: GradeQuantile = { num: 3, den: 5 }
 
 const ballot = (
   accountAddress: string,
@@ -29,12 +33,18 @@ const calculate = (
     seatCount: 1,
     quorumXrd: '1',
     minimumMedianGrade: 0,
+    // Keep the pre-quantile regression suite explicitly anchored at τ = 1/2.
+    gradeQuantile: HALF,
     reserveListDays: 90,
     roundEndsAt: new Date('2026-07-01T00:00:00.000Z'),
     ...overrides
   })
 
 describe('majority judgment weighted calculation', () => {
+  it('keeps the active grade quantile constant at one half', () => {
+    assert.deepStrictEqual(GRADE_QUANTILE, HALF)
+  })
+
   it('finds every majority grade and uses the exact-half >= boundary', () => {
     for (const grade of [0, 1, 2, 3, 4]) {
       assert.strictEqual(majorityGrade([{ grade, votingPower: '7' }]), grade)
@@ -58,6 +68,183 @@ describe('majority judgment weighted calculation', () => {
       ]),
       1
     )
+  })
+
+  it('generalizes the crossing point without changing the explicit half fixture', () => {
+    const split = [
+      ballot('upper', 0, '5', [[0, 4]]),
+      ballot('lower', 1, '5', [[0, 0]])
+    ]
+
+    assert.strictEqual(
+      calculate(split, {
+        candidates: [candidate(0)],
+        gradeQuantile: HALF
+      }).candidateResults[0]?.qualifyingGrade,
+      4
+    )
+    assert.strictEqual(
+      calculate(split, {
+        candidates: [candidate(0)],
+        gradeQuantile: THREE_FIFTHS
+      }).candidateResults[0]?.qualifyingGrade,
+      0
+    )
+  })
+
+  it('accepts equality at three-fifths using exact decimal cross-multiplication', () => {
+    for (const [upper, lower] of [
+      ['6', '4'],
+      ['600.000000006', '400.000000004']
+    ] as const) {
+      const result = calculate(
+        [
+          ballot('upper', 0, upper, [[0, 4]]),
+          ballot('lower', 1, lower, [[0, 0]])
+        ],
+        {
+          candidates: [candidate(0)],
+          gradeQuantile: THREE_FIFTHS
+        }
+      )
+      assert.strictEqual(result.candidateResults[0]?.qualifyingGrade, 4)
+    }
+  })
+
+  it('makes exactly sixty percent of cast power decisive but not 59.99 percent', () => {
+    const qualifyingGrade = (upperPower: string, lowerPower: string) =>
+      calculate(
+        [
+          ballot('upper', 0, upperPower, [[0, 4]]),
+          ballot('lower', 1, lowerPower, [[0, 0]])
+        ],
+        {
+          candidates: [candidate(0)],
+          gradeQuantile: THREE_FIFTHS
+        }
+      ).candidateResults[0]?.qualifyingGrade
+
+    assert.strictEqual(qualifyingGrade('60', '40'), 4)
+    assert.strictEqual(qualifyingGrade('59.99', '40.01'), 0)
+  })
+
+  it('publishes a terminal referral when a 40.01-percent bloc obstructs the floor', () => {
+    const obstructed = calculate(
+      [
+        ballot('support', 0, '59.99', [[0, 4]]),
+        ballot('obstruct', 1, '40.01', [[0, 0]])
+      ],
+      {
+        candidates: [candidate(0)],
+        minimumMedianGrade: 2,
+        seatCount: 1,
+        gradeQuantile: THREE_FIFTHS
+      }
+    )
+    assert.strictEqual(obstructed.status, 'FINAL')
+    assert.deepStrictEqual(obstructed.seatedCandidateIds, [])
+    assert.strictEqual(obstructed.referredSeats, 1)
+    assert.notStrictEqual(obstructed.status, 'ROUND_1_FAILED')
+    assert.notMatch(JSON.stringify(obstructed), /RERUN_PENDING/)
+
+    const notObstructed = calculate(
+      [
+        ballot('support', 0, '60', [[0, 4]]),
+        ballot('obstruct', 1, '40', [[0, 0]])
+      ],
+      {
+        candidates: [candidate(0)],
+        minimumMedianGrade: 2,
+        seatCount: 1,
+        gradeQuantile: THREE_FIFTHS
+      }
+    )
+    assert.deepStrictEqual(notObstructed.seatedCandidateIds, [0])
+    assert.strictEqual(notObstructed.referredSeats, 0)
+  })
+
+  it('re-anchors majority-gauge evidence at the qualifying grade for both quantiles', () => {
+    const ballots = [
+      ballot('excellent', 0, '5', [[0, 4]]),
+      ballot('good', 1, '1', [[0, 2]]),
+      ballot('poor', 2, '4', [[0, 0]])
+    ]
+    const gauge = (gradeQuantile: GradeQuantile) =>
+      calculate(ballots, {
+        candidates: [candidate(0)],
+        gradeQuantile
+      }).candidateResults[0]
+
+    assert.deepInclude(gauge(HALF), {
+      qualifyingGrade: 4,
+      powerAbove: '0',
+      powerBelow: '5',
+      p: '0',
+      q: '0.5',
+      band: 'C'
+    })
+    assert.deepInclude(gauge(THREE_FIFTHS), {
+      qualifyingGrade: 2,
+      powerAbove: '5',
+      powerBelow: '4',
+      p: '0.5',
+      q: '0.4',
+      band: 'A'
+    })
+  })
+
+  it('matches an exact-rational oracle for randomized numeric(38,8) histograms', () => {
+    let state = 0x5eed1234
+    const random = () => {
+      state = (state * 1664525 + 1013904223) >>> 0
+      return state
+    }
+    const decimal = (units: bigint) =>
+      `${units / 100000000n}.${String(units % 100000000n).padStart(8, '0')}`
+    const oracle = (
+      weights: ReadonlyArray<bigint>,
+      quantile: GradeQuantile
+    ) => {
+      const total = weights.reduce((sum, value) => sum + value, 0n)
+      let cumulative = 0n
+      for (const grade of [4, 3, 2, 1, 0] as const) {
+        cumulative += weights[grade] ?? 0n
+        if (cumulative * BigInt(quantile.den) >= total * BigInt(quantile.num)) {
+          return grade
+        }
+      }
+      throw new Error('Exact oracle did not reach Poor')
+    }
+
+    for (let fixture = 0; fixture < 100; fixture += 1) {
+      const weights = Array.from({ length: 5 }, () =>
+        BigInt((random() % 1_000_000) + 1)
+      )
+      const ballots = weights.map((weight, grade) =>
+        ballot(`grade-${grade}`, grade, decimal(weight), [[0, grade]])
+      )
+      for (const gradeQuantile of [HALF, THREE_FIFTHS]) {
+        const result = calculate(ballots, {
+          candidates: [candidate(0)],
+          gradeQuantile
+        })
+        assert.strictEqual(
+          result.candidateResults[0]?.qualifyingGrade,
+          oracle(weights, gradeQuantile)
+        )
+      }
+    }
+  })
+
+  it('passes the exported constant at every production calculation boundary', () => {
+    for (const file of ['calculation.ts', 'finalizer.ts']) {
+      const source = readFileSync(
+        new URL(`../majority-judgment/${file}`, import.meta.url),
+        'utf8'
+      )
+      assert.lengthOf(source.match(/gradeQuantile:\s*GRADE_QUANTILE/g) ?? [], 1)
+      assert.notMatch(source, /gradeQuantile:\s*\{/)
+    }
   })
 
   it('applies the grade floor, seats, reserves, referrals, and expiry', () => {
@@ -665,6 +852,7 @@ describe('majority judgment weighted calculation', () => {
         seatCount: 5,
         quorumXrd: '1',
         minimumMedianGrade: 0,
+        gradeQuantile: GRADE_QUANTILE,
         reserveListDays: 90,
         roundEndsAt: new Date('2026-07-01T00:00:00.000Z')
       })
