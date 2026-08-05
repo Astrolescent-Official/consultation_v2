@@ -1,7 +1,12 @@
-import { gradeName } from 'shared/governance/index'
+import {
+  formatGradeQuantile,
+  GRADE_QUANTILE,
+  gradeName
+} from 'shared/governance/index'
 import type { GovernanceParameterSetSnapshot } from 'shared/governance/schemas'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatGovernanceDuration } from '@/lib/governanceDuration'
+import { gradeQuantileLabel } from '@/lib/gradeQuantile'
 import { formatApprovalThreshold, formatQuorum } from '@/lib/utils'
 
 export const ParameterSetSnapshotDetails = ({
@@ -42,13 +47,20 @@ export const ParameterSetSnapshotDetails = ({
             </dd>
             <dd className="text-muted-foreground">
               {formatQuorum(parameters.election.quorum)} fixed quorum · minimum{' '}
+              qualifying grade{' '}
               {gradeName(parameters.election.minimumMedianGrade)}
+            </dd>
+            <dd className="text-muted-foreground">
+              Grade quantile:{' '}
+              {gradeQuantileLabel(formatGradeQuantile(GRADE_QUANTILE))} · fixed
+              counting rule
             </dd>
             <dd className="text-muted-foreground">
               Rerun:{' '}
               {formatGovernanceDuration(parameters.election.rerunVotingDays)} ·{' '}
               {formatQuorum(parameters.election.rerunQuorum)} fixed quorum ·
-              minimum {gradeName(parameters.election.rerunMinimumMedianGrade)}
+              minimum qualifying grade{' '}
+              {gradeName(parameters.election.rerunMinimumMedianGrade)}
             </dd>
           </dl>
         )}

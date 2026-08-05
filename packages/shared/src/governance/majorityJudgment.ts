@@ -94,6 +94,25 @@ export const CandidateHttpUrlStringSchema = Schema.String.pipe(
 export const GradeSchema = Schema.Literal(0, 1, 2, 3, 4)
 export type Grade = typeof GradeSchema.Type
 
+/**
+ * Grade Quantile — the share of voting power cast that must place a candidate
+ * at or above a grade for that grade to be their qualifying grade.
+ *
+ * Fixed by Proposal & Voting Framework §6.2.4. NOT a DAO Parameter, NOT an
+ * election configuration field, and NOT settable by an election administrator
+ * (CR-004 CR-31). Moving it is an amendment to the counting mechanics and
+ * therefore a code release.
+ */
+export type GradeQuantile = {
+  readonly num: number
+  readonly den: number
+}
+
+export const GRADE_QUANTILE: GradeQuantile = { num: 3, den: 5 }
+
+export const formatGradeQuantile = (quantile: GradeQuantile) =>
+  `${quantile.num}/${quantile.den}`
+
 export const GradeNameSchema = Schema.Literal(
   'Poor',
   'Acceptable',
@@ -409,6 +428,7 @@ export class MajorityJudgmentResultResponse extends Schema.Class<MajorityJudgmen
   quorumXrd: PositiveDecimalStringSchema,
   quorumMet: Schema.Boolean,
   minimumMedianGrade: GradeSchema,
+  gradeQuantileApplied: Schema.String,
   candidateResults: Schema.Array(MajorityJudgmentCandidateResult),
   seatedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   reserveCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),

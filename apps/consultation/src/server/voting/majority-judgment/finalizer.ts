@@ -1,5 +1,6 @@
 import { Data, Effect, Option, Schema } from 'effect'
 import {
+  GRADE_QUANTILE,
   GradeSchema,
   MajorityJudgmentElectionStatusSchema
 } from 'shared/governance/index'
@@ -81,6 +82,7 @@ export class MajorityJudgmentFinalizer extends Effect.Service<MajorityJudgmentFi
             seatCount: election.seatCount,
             quorumXrd: round.quorumXrd,
             minimumMedianGrade: round.minimumMedianGrade,
+            gradeQuantile: GRADE_QUANTILE,
             reserveListDays: election.reserveListDays,
             roundEndsAt: round.votingEnd,
             round: round.round === 1 ? 'RoundOne' : 'Rerun'

@@ -187,7 +187,7 @@ describe('majority judgment election view', () => {
 
     assert.isNotNull(first('Provisional results'))
     assert.isNotNull(first(/rerun/i))
-    assert.isNotNull(first(/minimum majority grade: Very Good/i))
+    assert.isNotNull(first(/minimum qualifying grade: Very Good/i))
   })
 
   it('publishes the majority-gauge evidence and visible tied rank', () => {
@@ -203,6 +203,7 @@ describe('majority judgment election view', () => {
         minimumMedianGrade={2}
         result={{
           quorumMet: true,
+          gradeQuantileApplied: '3/5',
           candidateResults: candidates.map(({ id }) => ({
             candidateId: id,
             histogram: ['1', '0', '5', '0', '4'],
@@ -223,6 +224,14 @@ describe('majority judgment election view', () => {
     )
 
     assert.isNotNull(first('Band A · p 0.4 · q 0.1'))
+    assert.isNotNull(first('Qualifying grade (60% level)'))
+    assert.isNotNull(first('Minimum qualifying grade'))
+    assert.isNotNull(first('Grade quantile: 3/5 (60%)'))
+    assert.isNotNull(
+      first(
+        "Grades on this election were settled at the 60% level: a candidate's grade is the highest grade that 60% of the voting power cast placed them at or above. This is a higher bar than a simple median."
+      )
+    )
     assert.isNotNull(first(/Above 4 XRD · Below 1 XRD/))
     assert.isNotNull(first('Rank 2 · Tie group 1'))
     assert.isNotNull(first('Tied rank · group 1 · 2 candidates · Reserve list'))

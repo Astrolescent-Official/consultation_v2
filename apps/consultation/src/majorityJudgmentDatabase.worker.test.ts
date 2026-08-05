@@ -168,8 +168,8 @@ describe('D1 majority judgment persistence', () => {
         JSON.stringify([
           {
             candidateId: 0,
-            histogram: ['1', '0', '5', '0', '4'],
-            majorityGrade: 2,
+            histogram: ['5', '0', '0', '0', '5'],
+            majorityGrade: 4,
             finalMajorityGrade: 4,
             electable: true,
             rank: 2,
@@ -201,12 +201,12 @@ describe('D1 majority judgment persistence', () => {
     )
     expect(response.result?.candidateResults[0]).toMatchObject({
       candidateId: 0,
-      qualifyingGrade: 2,
-      powerAbove: '4',
-      powerBelow: '1',
-      p: '0.4',
-      q: '0.1',
-      band: 'A',
+      qualifyingGrade: 4,
+      powerAbove: '0',
+      powerBelow: '5',
+      p: '0',
+      q: '0.5',
+      band: 'C',
       rank: 2,
       tieGroupId: null
     })
@@ -616,6 +616,7 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
+    expect(response.election.result?.gradeQuantileApplied).toBe('3/5')
     expect(response.election.currentRound?.round).toBe('RoundOne')
     expect(response.election.rounds).toHaveLength(2)
     expect(response.election.results).toHaveLength(1)
@@ -635,6 +636,17 @@ describe('D1 majority judgment persistence', () => {
       outcomeConsistent: true,
       passed: true
     })
+
+    const persistedQuantile = await env.DB.prepare(
+      `SELECT election.grade_quantile_num AS num,
+              election.grade_quantile_den AS den,
+              result.grade_quantile_applied AS applied
+       FROM mj_election AS election
+       JOIN mj_result AS result
+         ON result.election_id = election.id
+       WHERE election.id = 7 AND result.round = 1`
+    ).first<{ num: number; den: number; applied: string }>()
+    expect(persistedQuantile).toEqual({ num: 3, den: 5, applied: '3/5' })
 
     await expect(
       runWithRepository(

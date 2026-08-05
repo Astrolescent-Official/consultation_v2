@@ -12,6 +12,7 @@ export function CandidateList({
   selectedGrades,
   candidateResults,
   minimumMedianGrade,
+  gradeQuantileApplied,
   showGrading,
   gradingDisabled,
   showRank,
@@ -22,6 +23,7 @@ export function CandidateList({
   readonly selectedGrades: ReadonlyMap<number, Grade>
   readonly candidateResults: ReadonlyArray<CandidateResult>
   readonly minimumMedianGrade: Grade
+  readonly gradeQuantileApplied: string
   readonly showGrading: boolean
   readonly gradingDisabled: boolean
   readonly showRank: boolean
@@ -53,6 +55,7 @@ export function CandidateList({
             showGrading={showGrading}
             candidateResult={resultByCandidate.get(candidate.id)}
             minimumMedianGrade={minimumMedianGrade}
+            gradeQuantileApplied={gradeQuantileApplied}
             showRank={showRank}
             onSelectGrade={(grade) => onSelectGrade(candidate.id, grade)}
           />

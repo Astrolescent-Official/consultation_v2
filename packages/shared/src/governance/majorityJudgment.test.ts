@@ -135,6 +135,15 @@ describe('majority judgment shared schemas', () => {
       })._tag === 'Left'
     )
     assert.isTrue(
+      Schema.decodeUnknownEither(MakeMajorityJudgmentElectionInputSchema)(
+        {
+          ...creation,
+          gradeQuantile: { num: 3, den: 5 }
+        },
+        { onExcessProperty: 'error' }
+      )._tag === 'Left'
+    )
+    assert.isTrue(
       Schema.decodeUnknownEither(MakeMajorityJudgmentTieResolutionInputSchema)({
         accountAddress,
         electionId: 7,
@@ -250,6 +259,7 @@ describe('majority judgment shared schemas', () => {
         quorumXrd: '1000000',
         quorumMet: false,
         minimumMedianGrade: 2,
+        gradeQuantileApplied: '1/2',
         candidateResults: [
           {
             candidateId: 0,
