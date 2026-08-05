@@ -108,7 +108,7 @@ export type GradeQuantile = {
   readonly den: number
 }
 
-export const GRADE_QUANTILE: GradeQuantile = { num: 1, den: 2 }
+export const GRADE_QUANTILE: GradeQuantile = { num: 3, den: 5 }
 
 export const formatGradeQuantile = (quantile: GradeQuantile) =>
   `${quantile.num}/${quantile.den}`

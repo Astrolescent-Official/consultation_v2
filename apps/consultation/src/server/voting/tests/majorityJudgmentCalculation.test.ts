@@ -41,11 +41,11 @@ const calculate = (
   })
 
 describe('majority judgment weighted calculation', () => {
-  it('keeps the active grade quantile constant at one half', () => {
-    assert.deepStrictEqual(GRADE_QUANTILE, HALF)
+  it('keeps the active grade quantile constant at three fifths', () => {
+    assert.deepStrictEqual(GRADE_QUANTILE, THREE_FIFTHS)
   })
 
-  it('finds every majority grade and uses the exact-half >= boundary', () => {
+  it('finds every qualifying grade and applies the active three-fifths boundary', () => {
     for (const grade of [0, 1, 2, 3, 4]) {
       assert.strictEqual(majorityGrade([{ grade, votingPower: '7' }]), grade)
     }
@@ -55,7 +55,7 @@ describe('majority judgment weighted calculation', () => {
         { grade: 4, votingPower: '5' },
         { grade: 0, votingPower: '5' }
       ]),
-      4
+      0
     )
     assert.isNull(majorityGrade([]))
   })
@@ -301,7 +301,7 @@ describe('majority judgment weighted calculation', () => {
     }
   })
 
-  it('orders equal medians by majority-gauge band', () => {
+  it('orders equal qualifying grades by majority-gauge band', () => {
     const grades = [
       [4, 4, 4, 4, 2, 2, 2, 2, 2, 0],
       [4, 4, 2, 2, 2, 2, 2, 2, 0, 0],

@@ -616,7 +616,7 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
-    expect(response.election.result?.gradeQuantileApplied).toBe('1/2')
+    expect(response.election.result?.gradeQuantileApplied).toBe('3/5')
     expect(response.election.currentRound?.round).toBe('RoundOne')
     expect(response.election.rounds).toHaveLength(2)
     expect(response.election.results).toHaveLength(1)
@@ -646,7 +646,7 @@ describe('D1 majority judgment persistence', () => {
          ON result.election_id = election.id
        WHERE election.id = 7 AND result.round = 1`
     ).first<{ num: number; den: number; applied: string }>()
-    expect(persistedQuantile).toEqual({ num: 1, den: 2, applied: '1/2' })
+    expect(persistedQuantile).toEqual({ num: 3, den: 5, applied: '3/5' })
 
     await expect(
       runWithRepository(
