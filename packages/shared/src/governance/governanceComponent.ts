@@ -1230,7 +1230,7 @@ CALL_METHOD
         Effect.gen(function* () {
           const parsedInput = yield* Schema.decodeUnknown(
             MakeMajorityJudgmentElectionInputSchema
-          )(input, { onExcessProperty: 'error' })
+          )(input)
           const adminBadgeProof = yield* makeAdminBadgeProof(
             parsedInput.accountAddress
           )

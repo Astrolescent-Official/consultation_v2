@@ -15,8 +15,6 @@ import {
   CandidateHttpUrlStringSchema,
   calculateTemperatureCheckOutcome,
   canTransitionFromRoundOneFailure,
-  formatGradeQuantile,
-  GRADE_QUANTILE,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
   MajorityJudgmentCandidateResult,
@@ -99,10 +97,6 @@ const normalizeStoredCandidateResult = (
     })
   }
 
-  // Legacy rows were tallied at τ = 1/2, before the Grade Quantile existed,
-  // and terminal results are immutable (FR-RESULT-004). This halving is
-  // deliberately NOT generalized to GRADE_QUANTILE: re-deriving at the
-  // current quantile would silently restate published outcomes.
   const weights = candidate.histogram.map((value) => new BigNumber(value))
   const total = weights.reduce(
     (sum, value) => sum.plus(value),
@@ -314,11 +308,7 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           ])
           yield* db
             .insert(mjElection)
-            .values({
-              ...input.election,
-              gradeQuantileNum: GRADE_QUANTILE.num,
-              gradeQuantileDen: GRADE_QUANTILE.den
-            })
+            .values(input.election)
             .onConflictDoUpdate({
               target: mjElection.id,
               set: {
@@ -772,11 +762,11 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
               `INSERT INTO mj_result (
                  election_id, round, computed_at, total_voting_power,
                  quorum_xrd, quorum_met, minimum_median_grade,
-                 grade_quantile_applied, candidate_results, seated_candidate_ids,
+                 candidate_results, seated_candidate_ids,
                  reserve_candidate_ids, reserve_expires_at, referred_seats,
                  tie_break_iterations, unresolved_candidate_ids, status
                )
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(election_id, round) DO UPDATE SET
                  computed_at = excluded.computed_at,
                  total_voting_power = excluded.total_voting_power,
@@ -800,7 +790,6 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
               input.result.quorumXrd,
               input.result.quorumMet ? 1 : 0,
               input.result.minimumMedianGrade,
-              formatGradeQuantile(GRADE_QUANTILE),
               JSON.stringify(input.result.candidateResults),
               JSON.stringify(input.result.seatedCandidateIds),
               JSON.stringify(input.result.reserveCandidateIds),
@@ -921,7 +910,6 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           quorumXrd: storedResult.quorumXrd,
           quorumMet: storedResult.quorumMet,
           minimumMedianGrade: storedResult.minimumMedianGrade,
-          gradeQuantileApplied: storedResult.gradeQuantileApplied,
           candidateResults: storedResult.candidateResults.map((candidate) =>
             normalizeStoredCandidateResult(
               candidate as StoredCandidateResult,

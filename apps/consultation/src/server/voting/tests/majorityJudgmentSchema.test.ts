@@ -32,13 +32,10 @@ describe('majority judgment database schema', () => {
   })
 
   it('keeps decimal voting power in numeric columns and JSON at typed boundaries', () => {
-    assert.strictEqual(mjElection.gradeQuantileNum.dataType, 'number')
-    assert.strictEqual(mjElection.gradeQuantileDen.dataType, 'number')
     assert.strictEqual(mjRound.quorumXrd.dataType, 'string')
     assert.strictEqual(mjAccountBallot.votingPower.dataType, 'string')
     assert.strictEqual(mjGradeHistogram.votingPower.dataType, 'string')
     assert.strictEqual(mjResult.totalVotingPower.dataType, 'string')
-    assert.strictEqual(mjResult.gradeQuantileApplied.dataType, 'string')
     assert.strictEqual(mjAccountBallot.grades.dataType, 'json')
     assert.strictEqual(mjResult.candidateResults.dataType, 'json')
   })

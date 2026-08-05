@@ -1,5 +1,4 @@
 import BigNumber from 'bignumber.js'
-import { GRADE_QUANTILE, type GradeQuantile } from 'shared/governance/index'
 
 export type Grade = 0 | 1 | 2 | 3 | 4
 export type RoundId = 'RoundOne' | 'Rerun'
@@ -23,7 +22,6 @@ export type MajorityJudgmentCalculationInput = {
   readonly seatCount: number
   readonly quorumXrd: string
   readonly minimumMedianGrade: number
-  readonly gradeQuantile: GradeQuantile
   readonly reserveListDays: number
   readonly roundEndsAt: Date
   readonly round?: RoundId
@@ -66,8 +64,7 @@ const compareStrings = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0
 
 const qualifyingGradeFromHistogram = (
-  histogram: GradeHistogram,
-  quantile: GradeQuantile
+  histogram: GradeHistogram
 ): Grade | null => {
   const total = histogram.reduce(
     (sum, votingPower) => sum.plus(votingPower),
@@ -75,17 +72,14 @@ const qualifyingGradeFromHistogram = (
   )
   if (total.isZero()) return null
 
-  const threshold = total.multipliedBy(quantile.num)
   let cumulative = new BigNumber(0)
   for (const grade of gradesDescending) {
     cumulative = cumulative.plus(histogram[grade])
-    if (
-      cumulative.multipliedBy(quantile.den).isGreaterThanOrEqualTo(threshold)
-    ) {
+    if (cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)) {
       return grade
     }
   }
-  throw new Error('Unreachable: Poor always satisfies the grade quantile')
+  return null
 }
 
 export const majorityGrade = (
@@ -105,16 +99,13 @@ export const majorityGrade = (
     const grade = requireGrade(contribution.grade)
     weights[grade] = weights[grade].plus(contribution.votingPower)
   }
-  return qualifyingGradeFromHistogram(
-    [
-      weights[0].toFixed(),
-      weights[1].toFixed(),
-      weights[2].toFixed(),
-      weights[3].toFixed(),
-      weights[4].toFixed()
-    ],
-    GRADE_QUANTILE
-  )
+  return qualifyingGradeFromHistogram([
+    weights[0].toFixed(),
+    weights[1].toFixed(),
+    weights[2].toFixed(),
+    weights[3].toFixed(),
+    weights[4].toFixed()
+  ])
 }
 
 const validBallot = (
@@ -170,10 +161,9 @@ const histogramForCandidate = (
 
 const candidateGauge = (
   id: number,
-  histogram: GradeHistogram,
-  gradeQuantile: GradeQuantile
+  histogram: GradeHistogram
 ): CandidateGauge => {
-  const qualifyingGrade = qualifyingGradeFromHistogram(histogram, gradeQuantile)
+  const qualifyingGrade = qualifyingGradeFromHistogram(histogram)
   if (qualifyingGrade === null) {
     return {
       id,
@@ -303,11 +293,7 @@ export const calculateMajorityJudgment = (
   )
   const minimumMedianGrade = requireGrade(input.minimumMedianGrade)
   const workingCandidates = sortedCandidates.map(({ id }) =>
-    candidateGauge(
-      id,
-      histogramForCandidate(id, positiveBallots),
-      input.gradeQuantile
-    )
+    candidateGauge(id, histogramForCandidate(id, positiveBallots))
   )
   const electable = rankCandidates(
     workingCandidates.filter(
