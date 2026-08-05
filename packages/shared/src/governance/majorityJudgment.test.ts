@@ -254,7 +254,7 @@ describe('majority judgment shared schemas', () => {
           {
             candidateId: 0,
             histogram: ['0', '0', '100000', '200000', '200000'],
-            median: 3,
+            qualifyingGrade: 3,
             powerAbove: '200000',
             powerBelow: '100000',
             p: '0.4',

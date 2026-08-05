@@ -136,15 +136,15 @@ describe('majority judgment weighted calculation', () => {
     )
 
     assert.deepStrictEqual(
-      result.candidateResults.map(({ median, band, rank }) => ({
-        median,
+      result.candidateResults.map(({ qualifyingGrade, band, rank }) => ({
+        qualifyingGrade,
         band,
         rank
       })),
       [
-        { median: 2, band: 'A', rank: 1 },
-        { median: 2, band: 'B', rank: 2 },
-        { median: 2, band: 'C', rank: 3 }
+        { qualifyingGrade: 2, band: 'A', rank: 1 },
+        { qualifyingGrade: 2, band: 'B', rank: 2 },
+        { qualifyingGrade: 2, band: 'C', rank: 3 }
       ]
     )
   })
@@ -374,12 +374,12 @@ describe('majority judgment weighted calculation', () => {
 
     assert.strictEqual(result.totalVotingPower, '10')
     assert.deepStrictEqual(
-      result.candidateResults.map(({ median }) => median),
+      result.candidateResults.map(({ qualifyingGrade }) => qualifyingGrade),
       [4, 2]
     )
   })
 
-  it('applies the median floor before a stronger gauge can affect seating', () => {
+  it('applies the qualifying-grade floor before a stronger gauge can affect seating', () => {
     const grades = [
       [4, 4, 4, 4, 1, 1, 1, 1, 1, 0],
       [2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
@@ -404,14 +404,14 @@ describe('majority judgment weighted calculation', () => {
 
     assert.deepStrictEqual(result.seatedCandidateIds, [1])
     assert.deepStrictEqual(
-      result.candidateResults.map(({ median, band, rank }) => ({
-        median,
+      result.candidateResults.map(({ qualifyingGrade, band, rank }) => ({
+        qualifyingGrade,
         band,
         rank
       })),
       [
-        { median: 1, band: null, rank: null },
-        { median: 2, band: 'B', rank: 1 }
+        { qualifyingGrade: 1, band: null, rank: null },
+        { qualifyingGrade: 2, band: 'B', rank: 1 }
       ]
     )
   })
@@ -567,7 +567,7 @@ describe('majority judgment weighted calculation', () => {
 
     assert.strictEqual(result.status, 'TIE_UNRESOLVED')
     assert.deepStrictEqual(
-      result.candidateResults.map(({ median }) => median),
+      result.candidateResults.map(({ qualifyingGrade }) => qualifyingGrade),
       [4, 4, 4]
     )
     assert.deepStrictEqual(result.unresolvedCandidateIds, [1, 2])

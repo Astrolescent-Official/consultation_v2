@@ -45,7 +45,7 @@ export function ElectionOutcomeCard({
       <ol className="space-y-3">
         {ranked.map((candidate) => {
           const result = resultByCandidate.get(candidate.id)
-          const grade: Grade | null | undefined = result?.median
+          const grade: Grade | null | undefined = result?.qualifyingGrade
           const tieGroupSize =
             result?.tieGroupId === null || result?.tieGroupId === undefined
               ? 0
@@ -71,7 +71,7 @@ export function ElectionOutcomeCard({
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {grade === null || grade === undefined
-                    ? 'No majority grade'
+                    ? 'No qualifying grade'
                     : gradeName(grade)}
                 </p>
                 {result?.tieGroupId === null ||

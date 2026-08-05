@@ -19,7 +19,7 @@ export type Candidate = {
 export type CandidateResult = {
   readonly candidateId: number
   readonly histogram?: readonly [string, string, string, string, string]
-  readonly median?: Grade | null
+  readonly qualifyingGrade?: Grade | null
   readonly powerAbove?: string
   readonly powerBelow?: string
   readonly p?: string
@@ -71,10 +71,10 @@ export function CandidateOutcomeBadge({
  */
 function GradeHistogram({
   histogram,
-  median
+  qualifyingGrade
 }: {
   readonly histogram: readonly [string, string, string, string, string]
-  readonly median?: Grade | null
+  readonly qualifyingGrade?: Grade | null
 }) {
   // Index the histogram by grade rather than by row position: the rows are
   // ordered best-first, the tuple is stored worst-first.
@@ -93,7 +93,7 @@ function GradeHistogram({
             <span
               className={cn(
                 'w-20 shrink-0',
-                grade === median
+                grade === qualifyingGrade
                   ? 'font-medium text-foreground'
                   : 'text-muted-foreground'
               )}
@@ -190,7 +190,7 @@ export function CandidateCard({
 }) {
   const rank =
     showRank && candidateResult?.rank ? candidateResult.rank : undefined
-  const median = candidateResult?.median
+  const qualifyingGrade = candidateResult?.qualifyingGrade
 
   return (
     <Card className="gap-5 p-6 shadow-none">
@@ -259,12 +259,12 @@ export function CandidateCard({
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                Median grade
+                Qualifying grade
               </dt>
               <dd className="mt-0.5 font-medium">
-                {median === null || median === undefined
+                {qualifyingGrade === null || qualifyingGrade === undefined
                   ? 'None'
-                  : gradeName(median)}
+                  : gradeName(qualifyingGrade)}
               </dd>
             </div>
             <div>
@@ -325,7 +325,7 @@ export function CandidateCard({
           {candidateResult.histogram ? (
             <GradeHistogram
               histogram={candidateResult.histogram}
-              median={median}
+              qualifyingGrade={qualifyingGrade}
             />
           ) : null}
         </div>

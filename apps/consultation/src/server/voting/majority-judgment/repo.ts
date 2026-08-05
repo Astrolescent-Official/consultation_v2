@@ -57,22 +57,52 @@ const StoredLegacyCandidateResultSchema = Schema.Struct({
   rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
   outcome: Schema.Literal('SEATED', 'RESERVE', 'NOT_ELECTABLE', 'UNRESOLVED')
 })
+const StoredMedianCandidateResultSchema = Schema.Struct({
+  candidateId: MajorityJudgmentCandidateIdSchema,
+  histogram: Schema.Tuple(
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String
+  ),
+  median: Schema.NullOr(GradeSchema),
+  powerAbove: Schema.String,
+  powerBelow: Schema.String,
+  p: Schema.String,
+  q: Schema.String,
+  band: Schema.NullOr(Schema.Literal('A', 'B', 'C')),
+  electable: Schema.Boolean,
+  rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
+  tieGroupId: Schema.NullOr(
+    Schema.Number.pipe(Schema.int(), Schema.nonNegative())
+  ),
+  outcome: Schema.Literal('SEATED', 'RESERVE', 'NOT_ELECTABLE', 'UNRESOLVED')
+})
 type StoredCandidateResult =
   | MajorityJudgmentCandidateResult
+  | typeof StoredMedianCandidateResultSchema.Type
   | typeof StoredLegacyCandidateResultSchema.Type
 
 const normalizeStoredCandidateResult = (
   candidate: StoredCandidateResult,
   totalVotingPower: string
 ): MajorityJudgmentCandidateResult => {
-  if ('median' in candidate) return candidate
+  if ('qualifyingGrade' in candidate) return candidate
+  if ('median' in candidate) {
+    const { median, ...storedResult } = candidate
+    return new MajorityJudgmentCandidateResult({
+      ...storedResult,
+      qualifyingGrade: median
+    })
+  }
 
   const weights = candidate.histogram.map((value) => new BigNumber(value))
   const total = weights.reduce(
     (sum, value) => sum.plus(value),
     new BigNumber(0)
   )
-  let median: 0 | 1 | 2 | 3 | 4 | null = null
+  let qualifyingGrade: 0 | 1 | 2 | 3 | 4 | null = null
   let cumulative = new BigNumber(0)
   for (const grade of [4, 3, 2, 1, 0] as const) {
     cumulative = cumulative.plus(weights[grade])
@@ -80,18 +110,22 @@ const normalizeStoredCandidateResult = (
       !total.isZero() &&
       cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)
     ) {
-      median = grade
+      qualifyingGrade = grade
       break
     }
   }
   const powerAbove = weights.reduce(
     (sum, value, grade) =>
-      median !== null && grade > median ? sum.plus(value) : sum,
+      qualifyingGrade !== null && grade > qualifyingGrade
+        ? sum.plus(value)
+        : sum,
     new BigNumber(0)
   )
   const powerBelow = weights.reduce(
     (sum, value, grade) =>
-      median !== null && grade < median ? sum.plus(value) : sum,
+      qualifyingGrade !== null && grade < qualifyingGrade
+        ? sum.plus(value)
+        : sum,
     new BigNumber(0)
   )
   const denominator = new BigNumber(totalVotingPower)
@@ -102,13 +136,13 @@ const normalizeStoredCandidateResult = (
   return new MajorityJudgmentCandidateResult({
     candidateId: candidate.candidateId,
     histogram: candidate.histogram,
-    median,
+    qualifyingGrade,
     powerAbove: powerAbove.toFixed(),
     powerBelow: powerBelow.toFixed(),
     p: share(powerAbove),
     q: share(powerBelow),
     band:
-      candidate.electable && median !== null
+      candidate.electable && qualifyingGrade !== null
         ? comparison > 0
           ? 'A'
           : comparison < 0
@@ -128,6 +162,7 @@ const StoredResultJsonSchema = Schema.Struct({
   candidateResults: Schema.Array(
     Schema.Union(
       MajorityJudgmentCandidateResult,
+      StoredMedianCandidateResultSchema,
       StoredLegacyCandidateResultSchema
     )
   ),
