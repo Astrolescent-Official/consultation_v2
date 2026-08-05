@@ -178,10 +178,15 @@ describe('D1 majority judgment persistence', () => {
           {
             candidateId: 1,
             histogram: ['4', '0', '5', '0', '1'],
-            majorityGrade: 2,
-            finalMajorityGrade: 2,
+            median: 2,
+            powerAbove: '1',
+            powerBelow: '4',
+            p: '0.1',
+            q: '0.4',
+            band: 'C',
             electable: true,
             rank: 1,
+            tieGroupId: null,
             outcome: 'SEATED'
           }
         ])
@@ -196,13 +201,24 @@ describe('D1 majority judgment persistence', () => {
     )
     expect(response.result?.candidateResults[0]).toMatchObject({
       candidateId: 0,
-      median: 2,
+      qualifyingGrade: 2,
       powerAbove: '4',
       powerBelow: '1',
       p: '0.4',
       q: '0.1',
       band: 'A',
       rank: 2,
+      tieGroupId: null
+    })
+    expect(response.result?.candidateResults[1]).toMatchObject({
+      candidateId: 1,
+      qualifyingGrade: 2,
+      powerAbove: '1',
+      powerBelow: '4',
+      p: '0.1',
+      q: '0.4',
+      band: 'C',
+      rank: 1,
       tieGroupId: null
     })
   })

@@ -206,7 +206,7 @@ describe('majority judgment election view', () => {
           candidateResults: candidates.map(({ id }) => ({
             candidateId: id,
             histogram: ['1', '0', '5', '0', '4'],
-            median: 2,
+            qualifyingGrade: 2,
             powerAbove: '4',
             powerBelow: '1',
             p: '0.4',
