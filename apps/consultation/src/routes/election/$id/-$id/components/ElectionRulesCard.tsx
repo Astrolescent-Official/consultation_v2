@@ -1,5 +1,6 @@
 import { type Grade, gradeName } from 'shared/governance/index'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { gradeQuantileLabel } from '@/lib/gradeQuantile'
 import { formatQuorum } from '@/lib/utils'
 
 export function ElectionRulesCard({
@@ -9,6 +10,7 @@ export function ElectionRulesCard({
   parameterSetVersion,
   quorumXrd,
   minimumMedianGrade,
+  gradeQuantileApplied,
   reserveListDays
 }: {
   readonly seatCount: number
@@ -17,6 +19,7 @@ export function ElectionRulesCard({
   readonly parameterSetVersion?: number
   readonly quorumXrd?: string
   readonly minimumMedianGrade: Grade
+  readonly gradeQuantileApplied: string
   readonly reserveListDays?: number
 }) {
   return (
@@ -56,11 +59,14 @@ export function ElectionRulesCard({
             </dd>
           )}
           <dd className="text-muted-foreground">
-            Grade floor: {gradeName(minimumMedianGrade)}
+            Grade quantile: {gradeQuantileLabel(gradeQuantileApplied)}
           </dd>
           <dd className="text-muted-foreground">
-            Equal medians are ordered by the majority gauge; equal gauge ranks
-            remain ties.
+            Minimum qualifying grade: {gradeName(minimumMedianGrade)}
+          </dd>
+          <dd className="text-muted-foreground">
+            Equal qualifying grades are ordered by the majority gauge; equal
+            gauge ranks remain ties.
           </dd>
         </dl>
       </CardContent>

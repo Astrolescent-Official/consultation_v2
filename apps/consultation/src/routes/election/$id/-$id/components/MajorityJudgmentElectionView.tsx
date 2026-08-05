@@ -2,6 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { ArrowUpRight, Users } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import {
+  formatGradeQuantile,
+  GRADE_QUANTILE,
   type Grade,
   gradeName,
   type MajorityJudgmentElectionStatus
@@ -13,6 +15,7 @@ import {
   type DetailPageSchedule
 } from '@/components/detail/DetailPageHeader'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
+import { gradeQuantileDisclosure } from '@/lib/gradeQuantile'
 import { meetsQuorum } from '@/lib/quorum'
 import { electionItemStatus, electionStatusCopy } from '../electionDisplay'
 import { BallotPanel } from './BallotPanel'
@@ -27,6 +30,7 @@ import { RoundAuditHistory } from './RoundAuditHistory'
 
 type ElectionResult = {
   readonly round?: 'RoundOne' | 'Rerun'
+  readonly gradeQuantileApplied?: string
   readonly candidateResults: ReadonlyArray<CandidateResult>
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly quorumMet?: boolean
@@ -225,6 +229,8 @@ export function MajorityJudgmentElectionView({
     () => result?.candidateResults ?? [],
     [result]
   )
+  const gradeQuantileApplied =
+    result?.gradeQuantileApplied ?? formatGradeQuantile(GRADE_QUANTILE)
 
   const schedule: Array<DetailPageSchedule> = []
   if (tcVotingStart !== undefined && tcVotingEnd !== undefined) {
@@ -308,7 +314,7 @@ export function MajorityJudgmentElectionView({
         {status === 'RERUN_LIVE' ? (
           <p className="mt-1 text-sm text-muted-foreground">
             This rerun uses the same quorum and grade floor as Round 1. Minimum
-            majority grade: {gradeName(minimumMedianGrade)}.
+            qualifying grade: {gradeName(minimumMedianGrade)}.
           </p>
         ) : null}
       </div>
@@ -327,6 +333,7 @@ export function MajorityJudgmentElectionView({
         parameterSetVersion={parameterSetVersion}
         quorumXrd={quorumXrd}
         minimumMedianGrade={minimumMedianGrade}
+        gradeQuantileApplied={gradeQuantileApplied}
         reserveListDays={reserveListDays}
       />
       {shortDescription === undefined ? null : (
@@ -346,6 +353,7 @@ export function MajorityJudgmentElectionView({
         selectedGrades={selectedGrades}
         candidateResults={candidateResults}
         minimumMedianGrade={minimumMedianGrade}
+        gradeQuantileApplied={gradeQuantileApplied}
         showGrading={gradingRelevant || priorBallot}
         gradingDisabled={!votingOpen || submitting}
         showRank={result?.quorumMet !== false}
@@ -362,6 +370,7 @@ export function MajorityJudgmentElectionView({
           status={status}
           result={result}
           seatCount={seatCount}
+          gradeQuantileApplied={gradeQuantileApplied}
         />
       ) : null}
       {historicalResults.length > 0 ? (
@@ -389,6 +398,7 @@ export function MajorityJudgmentElectionView({
         totalVotingPower={totalVotingPower}
         quorumXrd={quorumXrd}
         minimumMedianGrade={minimumMedianGrade}
+        gradeQuantileApplied={gradeQuantileApplied}
         roundLabel={
           result?.round === 'Rerun' || status === 'RERUN_LIVE'
             ? 'Round 2 rerun'
@@ -453,11 +463,13 @@ export function MajorityJudgmentElectionView({
 function ElectionResultNotes({
   status,
   result,
-  seatCount
+  seatCount,
+  gradeQuantileApplied
 }: {
   readonly status: MajorityJudgmentElectionStatus
   readonly result: ElectionResult
   readonly seatCount: number
+  readonly gradeQuantileApplied: string
 }) {
   const unfilledSeats =
     status === 'FINAL' &&
@@ -465,6 +477,7 @@ function ElectionResultNotes({
       .length < seatCount
 
   const notes: Array<string> = []
+  notes.push(gradeQuantileDisclosure(gradeQuantileApplied))
   notes.push(
     'Candidates are ordered by the majority gauge. Equal ranks remain published as ties.'
   )

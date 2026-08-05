@@ -1,6 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 import { type Grade, gradeName } from 'shared/governance/index'
 import { Card } from '@/components/ui/card'
+import { gradeQuantileLevelLabel } from '@/lib/gradeQuantile'
 import { cn, formatXrd } from '@/lib/utils'
 import { type CandidateOutcome, candidateOutcomeCopy } from '../electionDisplay'
 
@@ -174,6 +175,7 @@ export function CandidateCard({
   showGrading,
   candidateResult,
   minimumMedianGrade,
+  gradeQuantileApplied,
   showRank,
   onSelectGrade
 }: {
@@ -185,6 +187,7 @@ export function CandidateCard({
   readonly showGrading: boolean
   readonly candidateResult?: CandidateResult
   readonly minimumMedianGrade: Grade
+  readonly gradeQuantileApplied: string
   readonly showRank: boolean
   readonly onSelectGrade: (grade: Grade) => void
 }) {
@@ -259,7 +262,8 @@ export function CandidateCard({
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                Qualifying grade
+                Qualifying grade (
+                {gradeQuantileLevelLabel(gradeQuantileApplied)})
               </dt>
               <dd className="mt-0.5 font-medium">
                 {qualifyingGrade === null || qualifyingGrade === undefined
@@ -269,7 +273,7 @@ export function CandidateCard({
             </div>
             <div>
               <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                Grade floor
+                Minimum qualifying grade
               </dt>
               <dd className="mt-0.5 font-medium">
                 {gradeName(minimumMedianGrade)} ·{' '}

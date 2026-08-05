@@ -1,5 +1,6 @@
 import { type Grade, gradeName } from 'shared/governance/index'
 import { SidebarCard } from '@/components/detail/SidebarCard'
+import { gradeQuantileLabel } from '@/lib/gradeQuantile'
 import { meetsQuorum } from '@/lib/quorum'
 import { formatXrd } from '@/lib/utils'
 
@@ -7,11 +8,13 @@ export function ElectionTurnoutCard({
   totalVotingPower,
   quorumXrd,
   minimumMedianGrade,
+  gradeQuantileApplied,
   roundLabel
 }: {
   readonly totalVotingPower: string
   readonly quorumXrd: string
   readonly minimumMedianGrade: Grade
+  readonly gradeQuantileApplied: string
   readonly roundLabel: string
 }) {
   const total = Number(totalVotingPower)
@@ -41,7 +44,10 @@ export function ElectionTurnoutCard({
         · XRD-equivalent voting power
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Grade floor: {gradeName(minimumMedianGrade)}
+        Minimum qualifying grade: {gradeName(minimumMedianGrade)}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Grade quantile: {gradeQuantileLabel(gradeQuantileApplied)}
       </p>
     </SidebarCard>
   )

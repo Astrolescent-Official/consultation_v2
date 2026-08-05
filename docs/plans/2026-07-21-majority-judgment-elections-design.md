@@ -567,20 +567,20 @@ histogram[c][g] = sum(voter voting power where ballot[c] == g)
 
 Because partial ballots are rejected, the sum across all grades is the same for every candidate and equals total valid ballot voting power.
 
-### Majority grade
+### Grade Quantile and qualifying grade
 
 For each candidate:
 
 1. Traverse grades from Excellent to Poor.
 2. Accumulate the exact decimal voting power.
-3. Select the first grade where `2 * cumulative >= total`.
+3. Select the first grade where `5 * cumulative >= 3 * total`.
 
-The multiplication form avoids division and midpoint rounding. When total power is zero, the candidate has no majority grade and cannot be ranked or elected.
+The fixed Grade Quantile is `τ = 3/5`: a candidate's qualifying grade is the highest grade that at least 60% of the voting power cast placed them at or above. The multiplication form avoids division and rounding. When total power is zero, the candidate has no qualifying grade and cannot be ranked or elected. Grade Quantile is a counting-mechanics constant, not a DAO parameter or election-creation input.
 
 ### Electability and seating
 
-1. Mark a candidate electable only when their majority grade is at least the round's minimum median grade.
-2. Rank electable candidates by median grade descending and then by the majority gauge. Leave gauge-equal reserve candidates tied; halt only when a gauge-equal group straddles the seat boundary.
+1. Mark a candidate electable only when their qualifying grade is at least the round's Minimum Qualifying Grade (persisted on-ledger as `minimum_median_grade`).
+2. Rank electable candidates by qualifying grade descending and then by the majority gauge. Leave gauge-equal reserve candidates tied; halt only when a gauge-equal group straddles the seat boundary.
 3. Seat the first `seat_count` electable candidates.
 4. Record `referred_seats = seat_count - seated_count`.
 5. Put remaining electable candidates on the reserve list in calculated order.
@@ -590,17 +590,17 @@ The collector records the result. KYC, willingness to serve, concurrent-role lim
 
 ### Majority-gauge tie procedure
 
-For every candidate with median grade `m`, derive exact voting-power sums from the immutable five-bucket histogram:
+For every candidate with qualifying grade `a`, derive exact voting-power sums from the immutable five-bucket histogram:
 
-- `powerAbove`: power grading the candidate strictly above `m`;
-- `powerBelow`: power grading the candidate strictly below `m`;
+- `powerAbove`: power grading the candidate strictly above `a`;
+- `powerBelow`: power grading the candidate strictly below `a`;
 - `p = powerAbove / W` and `q = powerBelow / W`, published for display only.
 
-All comparisons use the exact power sums, never the divided shares. At an equal median, band A (`powerAbove > powerBelow`) precedes band B (equal sums), which precedes band C (`powerAbove < powerBelow`). Within band A, higher `powerAbove` ranks first; within band C, lower `powerBelow` ranks first. Band-B candidates are inseparable regardless of magnitude. Equal-power candidates within A or C are likewise inseparable. The comparator never falls through to candidate ID.
+All comparisons use the exact power sums, never the divided shares. At an equal qualifying grade, band A (`powerAbove > powerBelow`) precedes band B (equal sums), which precedes band C (`powerAbove < powerBelow`). Within band A, higher `powerAbove` ranks first; within band C, lower `powerBelow` ranks first. Band-B candidates are inseparable regardless of magnitude. Equal-power candidates within A or C are likewise inseparable. The comparator never falls through to candidate ID.
 
 Ranks are competition ranks (`1, 2, 2, 4`). Every comparator-equal group receives a published tie-group marker. A reserve-list tie remains standing in a `FINAL` result. If and only if a group straddles the seat boundary, seat assignment halts with `TIE_UNRESOLVED`; the complete group is published in `unresolvedCandidateIds` regardless of its size. The calculator neither selects nor publishes a governance route. The existing on-ledger adjudication input may later order that one boundary group.
 
-Persist and publish the median, histogram, exact powers, `p`, `q`, band, competition rank, tie-group marker, and candidate outcome. The legacy checked `tie_break_iterations` database column remains at zero until a later table-rebuild migration removes it. No recorded grade is removed, reweighted, or mutated.
+Persist and publish the applied Grade Quantile, qualifying grade, histogram, exact powers, `p`, `q`, band, competition rank, tie-group marker, and candidate outcome. The legacy checked `tie_break_iterations` database column remains at zero until a later table-rebuild migration removes it. No recorded grade is removed, reweighted, or mutated.
 
 ### Round and election status
 
