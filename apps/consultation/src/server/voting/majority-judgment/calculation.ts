@@ -6,7 +6,7 @@ import type {
   Grade,
   MajorityJudgmentElectionStatus
 } from 'shared/governance/index'
-import { GovernanceComponent } from 'shared/governance/index'
+import { GovernanceComponent, GRADE_QUANTILE } from 'shared/governance/index'
 import { KeyValueStoreAddress } from 'shared/schemas'
 import { VotePowerSnapshot } from '../vote-calculation/votePowerSnapshot'
 import { getVotePowerConfig } from '../vote-calculation/voteSourceConfig'
@@ -195,6 +195,7 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
           seatCount: election.election.seatCount,
           quorumXrd: round.quorumXrd,
           minimumMedianGrade: round.minimumMedianGrade,
+          gradeQuantile: GRADE_QUANTILE,
           reserveListDays: election.election.reserveListDays,
           roundEndsAt: round.votingEnd,
           round: action.round
