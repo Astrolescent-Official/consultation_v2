@@ -37,7 +37,7 @@ type ValidBallot = {
 type CandidateGauge = {
   readonly id: number
   readonly histogram: GradeHistogram
-  readonly median: Grade | null
+  readonly qualifyingGrade: Grade | null
   readonly powerAbove: BigNumber
   readonly powerBelow: BigNumber
   readonly band: GaugeBand | null
@@ -63,7 +63,9 @@ const requireGrade = (value: number): Grade => {
 const compareStrings = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0
 
-const medianFromHistogram = (histogram: GradeHistogram): Grade | null => {
+const qualifyingGradeFromHistogram = (
+  histogram: GradeHistogram
+): Grade | null => {
   const total = histogram.reduce(
     (sum, votingPower) => sum.plus(votingPower),
     new BigNumber(0)
@@ -97,7 +99,7 @@ export const majorityGrade = (
     const grade = requireGrade(contribution.grade)
     weights[grade] = weights[grade].plus(contribution.votingPower)
   }
-  return medianFromHistogram([
+  return qualifyingGradeFromHistogram([
     weights[0].toFixed(),
     weights[1].toFixed(),
     weights[2].toFixed(),
@@ -161,30 +163,32 @@ const candidateGauge = (
   id: number,
   histogram: GradeHistogram
 ): CandidateGauge => {
-  const median = medianFromHistogram(histogram)
-  if (median === null) {
+  const qualifyingGrade = qualifyingGradeFromHistogram(histogram)
+  if (qualifyingGrade === null) {
     return {
       id,
       histogram,
-      median,
+      qualifyingGrade,
       powerAbove: new BigNumber(0),
       powerBelow: new BigNumber(0),
       band: null
     }
   }
   const powerAbove = histogram.reduce(
-    (sum, votingPower, grade) => (grade > median ? sum.plus(votingPower) : sum),
+    (sum, votingPower, grade) =>
+      grade > qualifyingGrade ? sum.plus(votingPower) : sum,
     new BigNumber(0)
   )
   const powerBelow = histogram.reduce(
-    (sum, votingPower, grade) => (grade < median ? sum.plus(votingPower) : sum),
+    (sum, votingPower, grade) =>
+      grade < qualifyingGrade ? sum.plus(votingPower) : sum,
     new BigNumber(0)
   )
   const comparison = powerAbove.comparedTo(powerBelow) ?? 0
   return {
     id,
     histogram,
-    median,
+    qualifyingGrade,
     powerAbove,
     powerBelow,
     band: comparison > 0 ? 'A' : comparison < 0 ? 'C' : 'B'
@@ -197,10 +201,10 @@ const compareCandidateGauges = (
   left: CandidateGauge,
   right: CandidateGauge
 ) => {
-  if (left.median !== right.median) {
-    if (left.median === null) return 1
-    if (right.median === null) return -1
-    return right.median - left.median
+  if (left.qualifyingGrade !== right.qualifyingGrade) {
+    if (left.qualifyingGrade === null) return 1
+    if (right.qualifyingGrade === null) return -1
+    return right.qualifyingGrade - left.qualifyingGrade
   }
   if (left.band !== right.band) {
     if (left.band === null) return 1
@@ -293,7 +297,8 @@ export const calculateMajorityJudgment = (
   )
   const electable = rankCandidates(
     workingCandidates.filter(
-      ({ median }) => median !== null && median >= minimumMedianGrade
+      ({ qualifyingGrade }) =>
+        qualifyingGrade !== null && qualifyingGrade >= minimumMedianGrade
     )
   )
 
@@ -361,7 +366,7 @@ export const calculateMajorityJudgment = (
     return {
       candidateId: candidate.id,
       histogram: candidate.histogram,
-      median: candidate.median,
+      qualifyingGrade: candidate.qualifyingGrade,
       powerAbove: candidate.powerAbove.toFixed(),
       powerBelow: candidate.powerBelow.toFixed(),
       p: share(candidate.powerAbove),

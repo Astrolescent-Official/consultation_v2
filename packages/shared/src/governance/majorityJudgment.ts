@@ -385,7 +385,7 @@ export class MajorityJudgmentCandidateResult extends Schema.Class<MajorityJudgme
     DecimalStringSchema,
     DecimalStringSchema
   ),
-  median: Schema.NullOr(GradeSchema),
+  qualifyingGrade: Schema.NullOr(GradeSchema),
   powerAbove: DecimalStringSchema,
   powerBelow: DecimalStringSchema,
   p: DecimalStringSchema,

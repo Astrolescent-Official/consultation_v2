@@ -104,7 +104,7 @@ export type MajorityJudgmentCandidateGradeJson = {
 export type MajorityJudgmentCandidateResultJson = {
   readonly candidateId: number
   readonly histogram: readonly [string, string, string, string, string]
-  readonly median: 0 | 1 | 2 | 3 | 4 | null
+  readonly qualifyingGrade: 0 | 1 | 2 | 3 | 4 | null
   readonly powerAbove: string
   readonly powerBelow: string
   readonly p: string
