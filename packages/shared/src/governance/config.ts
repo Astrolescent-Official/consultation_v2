@@ -8,10 +8,10 @@ import { Config as ConfigEffect, Context, Data, Effect, Layer } from 'effect'
 
 const StokenetConfig = {
   packageAddress: PackageAddress.make(
-    'package_tdx_2_1pkkqvahjxykk7en5r0d0gsq06kzw2gd0mgxl4hjdjdfyxgdlqaehtk'
+    'package_tdx_2_1p5h67uvtzygusykn6gwv5jlsmgz8yvu4h25j8nz22hlug5kukmkkvc'
   ),
   componentAddress: ComponentAddress.make(
-    'component_tdx_2_1cq627a0qv4xmjrzl7yym0ryl720vmp803u0nm40w49y5m30k5dgcej'
+    'component_tdx_2_1crwpaq0k9fxhp65t8hc4qjcu894t29k70y599ch7kunc9hhmgd0zdh'
   ),
   adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'
@@ -23,10 +23,10 @@ const StokenetConfig = {
 
 const MainnetConfig = {
   packageAddress: PackageAddress.make(
-    'package_rdx1p5w0ckjksr2q7ww5f5u76dzmvvekmyae2t7p6k2xm9v26ysddqvsvk'
+    'package_rdx1p49s2442esdzs7wet7wucpagnftctml8aecc6a74q67r8r023u4dzn'
   ),
   componentAddress: ComponentAddress.make(
-    'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y'
+    'component_rdx1cpg8ehtstxnxzj5rzpefnp4vxk8c87pds29r65cgm4cs8akv5ee8tt'
   ),
   adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'
