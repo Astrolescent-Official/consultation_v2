@@ -87,10 +87,11 @@ const ConnectedEligibleVotingTokens = ({
   return Result.builder(votingPower)
     .onInitial(() => <EligibleVotingTokensContent />)
     .onFailure(() => <EligibleVotingTokensContent />)
-    .onSuccess(({ votePower, resourceBalances }) => (
+    .onSuccess(({ votePower, resourceBalances, validatorLsuBalances }) => (
       <EligibleVotingTokensContent
         votePower={votePower}
         resourceBalances={resourceBalances}
+        validatorLsuBalances={validatorLsuBalances}
       />
     ))
     .render()
@@ -98,10 +99,15 @@ const ConnectedEligibleVotingTokens = ({
 
 const EligibleVotingTokensContent = ({
   votePower,
-  resourceBalances
+  resourceBalances,
+  validatorLsuBalances
 }: {
   votePower?: string
   resourceBalances?: Readonly<Record<string, string>>
+  validatorLsuBalances?: ReadonlyArray<{
+    resourceAddress: string
+    amount: string
+  }>
 }) => (
   <div className="space-y-12">
     <div className="space-y-4">
@@ -137,18 +143,26 @@ const EligibleVotingTokensContent = ({
           name="XRD"
           detail="1 XRD equals 1 vote."
           address={XRD_ADDRESS}
-          walletAmount={resourceBalances?.[XRD_ADDRESS]}
+          walletAmount={
+            resourceBalances
+              ? (resourceBalances[XRD_ADDRESS] ?? '0')
+              : undefined
+          }
         />
         <DirectHolding
           name="Validator LSU tokens"
           detail="LSUs from every active Radix validator count for their underlying XRD value."
-          walletAmount="See your eligible voting power above."
+          walletLsuBalances={validatorLsuBalances}
         />
         <DirectHolding
           name="LSULP"
           detail="LSULP counts for its underlying liquid-staked XRD value."
           address={LSULP_RESOURCE_ADDRESS}
-          walletAmount={resourceBalances?.[LSULP_RESOURCE_ADDRESS]}
+          walletAmount={
+            resourceBalances
+              ? (resourceBalances[LSULP_RESOURCE_ADDRESS] ?? '0')
+              : undefined
+          }
         />
       </div>
     </section>
@@ -212,12 +226,14 @@ const DirectHolding = ({
   name,
   detail,
   address,
-  walletAmount
+  walletAmount,
+  walletLsuBalances
 }: {
   name: string
   detail: string
   address?: string
   walletAmount?: string
+  walletLsuBalances?: ReadonlyArray<{ resourceAddress: string; amount: string }>
 }) => (
   <article className="space-y-2 border border-neutral-200 p-4 dark:border-neutral-800">
     <h3 className="font-semibold text-neutral-900 dark:text-white">{name}</h3>
@@ -225,10 +241,25 @@ const DirectHolding = ({
     {address ? (
       <p className="break-all font-mono text-xs text-neutral-500">{address}</p>
     ) : null}
-    {walletAmount ? (
+    {walletAmount !== undefined ? (
       <p className="text-sm text-neutral-600 dark:text-neutral-400">
         In your wallet: {walletAmount}
       </p>
+    ) : null}
+    {walletLsuBalances ? (
+      walletLsuBalances.length > 0 ? (
+        <ul className="space-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+          {walletLsuBalances.map(({ resourceAddress, amount }) => (
+            <li key={resourceAddress} className="break-all">
+              {amount} · {resourceAddress}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          In your wallet: 0
+        </p>
+      )
     ) : null}
   </article>
 )

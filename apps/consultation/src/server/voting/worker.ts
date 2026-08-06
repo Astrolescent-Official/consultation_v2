@@ -1,7 +1,8 @@
 import {
   GatewayApiClient,
   GetFungibleBalance,
-  GetNonFungibleBalanceService
+  GetNonFungibleBalanceService,
+  GetValidators
 } from '@radix-effects/gateway'
 import { AccountAddress, StateVersion } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
@@ -102,6 +103,7 @@ export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
         const gateway = yield* GatewayApiClient
         const getFungibleBalance = yield* GetFungibleBalance
         const getNonFungibleBalance = yield* GetNonFungibleBalanceService
+        const getValidators = yield* GetValidators
         const snapshot = yield* VotePowerSnapshot
         const accountAddress = AccountAddress.make(params.accountAddress)
         const current = yield* gateway.status.getCurrent()
@@ -159,11 +161,22 @@ export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
           }
         }
 
+        const validatorLsuBalances = (yield* getValidators()).flatMap(
+          (validator) => {
+            const amount = resourceBalances[validator.lsuResourceAddress]
+
+            return amount
+              ? [{ resourceAddress: validator.lsuResourceAddress, amount }]
+              : []
+          }
+        )
+
         return json({
           votePower: votePower
             .decimalPlaces(0, BigNumber.ROUND_FLOOR)
             .toFixed(),
-          resourceBalances
+          resourceBalances,
+          validatorLsuBalances
         })
       }
 

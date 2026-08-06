@@ -2,7 +2,8 @@ import * as D1Client from '@effect/sql-d1/D1Client'
 import {
   type GatewayApiClient,
   GetFungibleBalance,
-  GetNonFungibleBalanceService
+  GetNonFungibleBalanceService,
+  GetValidators
 } from '@radix-effects/gateway'
 import { ConfigProvider, Effect, Layer, Logger } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
@@ -48,7 +49,8 @@ const HttpHandlerLayer = (env: VotingWorkerEnv) => {
     Layer.mergeAll(
       VotePowerSnapshot.Default,
       GetFungibleBalance.Default,
-      GetNonFungibleBalanceService.Default
+      GetNonFungibleBalanceService.Default,
+      GetValidators.Default
     ).pipe(Layer.provide(GatewayApiClientLayer))
   )
 
@@ -81,5 +83,6 @@ export const runHttpEffect = <A, E>(
     | GatewayApiClient
     | GetFungibleBalance
     | GetNonFungibleBalanceService
+    | GetValidators
   >
 ) => Effect.runPromise(effect.pipe(Effect.provide(HttpHandlerLayer(env))))
