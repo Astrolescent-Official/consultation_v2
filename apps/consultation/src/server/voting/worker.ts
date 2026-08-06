@@ -1,3 +1,6 @@
+import { GatewayApiClient } from '@radix-effects/gateway'
+import { AccountAddress, StateVersion } from '@radix-effects/shared'
+import BigNumber from 'bignumber.js'
 import { Config, Duration, Effect, ParseResult, Schema } from 'effect'
 import { EntityType } from 'shared/governance/index'
 import { runCronEffect, runHttpEffect, type VotingWorkerEnv } from './layers'
@@ -5,6 +8,8 @@ import { MajorityJudgmentRepo } from './majority-judgment/repo'
 import { PollService } from './poll'
 import { PollLock } from './pollLock'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
+import { VotePowerSnapshot } from './vote-calculation/votePowerSnapshot'
+import { getVotePowerConfig } from './vote-calculation/voteSourceConfig'
 
 const QueryParams = Schema.Struct({
   type: EntityType,
@@ -13,6 +18,10 @@ const QueryParams = Schema.Struct({
 
 const MajorityJudgmentQueryParams = Schema.Struct({
   electionId: Schema.NumberFromString.pipe(Schema.int(), Schema.nonNegative())
+})
+
+const VotingPowerQueryParams = Schema.Struct({
+  accountAddress: Schema.String
 })
 
 const jsonHeaders = {
@@ -55,6 +64,23 @@ const parseMajorityJudgmentQuery = (request: Request) => {
   )
 }
 
+const parseVotingPowerQuery = (request: Request) => {
+  const query = Object.fromEntries(new URL(request.url).searchParams)
+  return Schema.decodeUnknown(VotingPowerQueryParams)(query, {
+    errors: 'all'
+  }).pipe(
+    Effect.mapError((error) =>
+      json(
+        {
+          error: 'Invalid query parameters',
+          details: ParseResult.ArrayFormatter.formatErrorSync(error)
+        },
+        400
+      )
+    )
+  )
+}
+
 export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
   runHttpEffect(
     env,
@@ -65,6 +91,24 @@ export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
         const params = yield* parseMajorityJudgmentQuery(request)
         const repo = yield* MajorityJudgmentRepo
         return json(yield* repo.getElectionResponse(params.electionId))
+      }
+
+      if (pathname === '/voting-power') {
+        const params = yield* parseVotingPowerQuery(request)
+        const gateway = yield* GatewayApiClient
+        const snapshot = yield* VotePowerSnapshot
+        const accountAddress = AccountAddress.make(params.accountAddress)
+        const current = yield* gateway.status.getCurrent()
+        const result = yield* snapshot({
+          addresses: [accountAddress],
+          stateVersion: StateVersion.make(current.ledger_state.state_version),
+          sourceConfig: getVotePowerConfig(new Date())
+        })
+        const votePower = result.votePower[accountAddress] ?? new BigNumber(0)
+
+        return json({
+          votePower: votePower.decimalPlaces(0, BigNumber.ROUND_FLOOR).toFixed()
+        })
       }
 
       const params = yield* parseQuery(request)

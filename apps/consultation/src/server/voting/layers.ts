@@ -1,4 +1,5 @@
 import * as D1Client from '@effect/sql-d1/D1Client'
+import type { GatewayApiClient } from '@radix-effects/gateway'
 import { ConfigProvider, Effect, Layer, Logger } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
 import { GovernanceConfigLayer } from 'shared/governance/index'
@@ -8,6 +9,7 @@ import { MajorityJudgmentRepo } from './majority-judgment/repo'
 import { PollService } from './poll'
 import { PollLock } from './pollLock'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
+import { VotePowerSnapshot } from './vote-calculation/votePowerSnapshot'
 
 export type VotingWorkerEnv = Env
 
@@ -38,13 +40,15 @@ const CronJobHandlerLayer = (env: VotingWorkerEnv) => {
 const HttpHandlerLayer = (env: VotingWorkerEnv) => {
   const database = databaseLayer(env)
 
-  return Layer.merge(
+  return Layer.mergeAll(
     VoteCalculationRepo.Default,
-    MajorityJudgmentRepo.Default
+    MajorityJudgmentRepo.Default,
+    VotePowerSnapshot.Default
   ).pipe(
     Layer.provide(ORM.Default),
     Layer.provideMerge(database),
     Layer.provideMerge(GovernanceConfigLayer),
+    Layer.provideMerge(GatewayApiClientLayer),
     Layer.provideMerge(Logger.json),
     Layer.provide(configLayer(env))
   )
@@ -57,5 +61,12 @@ export const runCronEffect = <A, E>(
 
 export const runHttpEffect = <A, E>(
   env: VotingWorkerEnv,
-  effect: Effect.Effect<A, E, VoteCalculationRepo | MajorityJudgmentRepo>
+  effect: Effect.Effect<
+    A,
+    E,
+    | VoteCalculationRepo
+    | MajorityJudgmentRepo
+    | VotePowerSnapshot
+    | GatewayApiClient
+  >
 ) => Effect.runPromise(effect.pipe(Effect.provide(HttpHandlerLayer(env))))

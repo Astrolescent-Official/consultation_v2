@@ -8,10 +8,10 @@ import { Config as ConfigEffect, Context, Data, Effect, Layer } from 'effect'
 
 const StokenetConfig = {
   packageAddress: PackageAddress.make(
-    'package_tdx_2_1pkkqvahjxykk7en5r0d0gsq06kzw2gd0mgxl4hjdjdfyxgdlqaehtk'
+    'package_tdx_2_1p5h67uvtzygusykn6gwv5jlsmgz8yvu4h25j8nz22hlug5kukmkkvc'
   ),
   componentAddress: ComponentAddress.make(
-    'component_tdx_2_1cq627a0qv4xmjrzl7yym0ryl720vmp803u0nm40w49y5m30k5dgcej'
+    'component_tdx_2_1crwpaq0k9fxhp65t8hc4qjcu894t29k70y599ch7kunc9hhmgd0zdh'
   ),
   adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_tdx_2_1nfdxglpp5h908thwss32zs2sy9gvyye7jhajm8l6fn72p9d8nhqnaq'

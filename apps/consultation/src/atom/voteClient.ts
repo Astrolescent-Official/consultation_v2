@@ -27,6 +27,10 @@ const AccountVoteSchema = Schema.Struct({
   votePower: Schema.String
 })
 
+const CurrentVotingPowerSchema = Schema.Struct({
+  votePower: Schema.String
+})
+
 export class VoteClientError extends Data.TaggedError('VoteClientError')<{
   message: string
 }> {}
@@ -51,6 +55,9 @@ export class VoteClient extends Context.Tag('VoteClient')<
       ReadonlyArray<typeof AccountVoteSchema.Type>,
       VoteClientError
     >
+    readonly GetCurrentVotingPower: (params: {
+      accountAddress: string
+    }) => Effect.Effect<typeof CurrentVotingPowerSchema.Type, VoteClientError>
     readonly GetMajorityJudgmentElection: (params: {
       electionId: MajorityJudgmentElectionId
     }) => Effect.Effect<
@@ -92,6 +99,19 @@ const VoteClientLive = Layer.effect(
             Effect.flatMap(
               Schema.decodeUnknown(Schema.Array(AccountVoteSchema))
             ),
+            Effect.scoped,
+            Effect.catchAll((e) => new VoteClientError({ message: String(e) }))
+          ),
+      GetCurrentVotingPower: ({ accountAddress }) =>
+        client
+          .execute(
+            HttpClientRequest.get(
+              `${baseUrl}/voting-power?accountAddress=${encodeURIComponent(accountAddress)}`
+            )
+          )
+          .pipe(
+            Effect.flatMap((res) => res.json),
+            Effect.flatMap(Schema.decodeUnknown(CurrentVotingPowerSchema)),
             Effect.scoped,
             Effect.catchAll((e) => new VoteClientError({ message: String(e) }))
           ),
