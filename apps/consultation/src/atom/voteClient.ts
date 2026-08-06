@@ -28,7 +28,8 @@ const AccountVoteSchema = Schema.Struct({
 })
 
 const CurrentVotingPowerSchema = Schema.Struct({
-  votePower: Schema.String
+  votePower: Schema.String,
+  resourceBalances: Schema.Record({ key: Schema.String, value: Schema.String })
 })
 
 export class VoteClientError extends Data.TaggedError('VoteClientError')<{

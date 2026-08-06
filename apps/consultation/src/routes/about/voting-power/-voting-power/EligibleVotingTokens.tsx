@@ -64,9 +64,45 @@ const eligibleDexPositions = [
   ...precisionPositions,
   ...poolUnitPositions,
   ...shapePositions
-]
+].sort(
+  (left, right) =>
+    left.dex.localeCompare(right.dex) || left.pair.localeCompare(right.pair)
+)
 
-export const EligibleVotingTokens = () => (
+export const EligibleVotingTokens = () => {
+  const account = useCurrentAccount()
+
+  if (!account) return <EligibleVotingTokensContent />
+
+  return <ConnectedEligibleVotingTokens accountAddress={account.address} />
+}
+
+const ConnectedEligibleVotingTokens = ({
+  accountAddress
+}: {
+  accountAddress: string
+}) => {
+  const votingPower = useAtomValue(currentVotingPowerAtom(accountAddress))
+
+  return Result.builder(votingPower)
+    .onInitial(() => <EligibleVotingTokensContent />)
+    .onFailure(() => <EligibleVotingTokensContent />)
+    .onSuccess(({ votePower, resourceBalances }) => (
+      <EligibleVotingTokensContent
+        votePower={votePower}
+        resourceBalances={resourceBalances}
+      />
+    ))
+    .render()
+}
+
+const EligibleVotingTokensContent = ({
+  votePower,
+  resourceBalances
+}: {
+  votePower?: string
+  resourceBalances?: Readonly<Record<string, string>>
+}) => (
   <div className="space-y-12">
     <div className="space-y-4">
       <h1 className="text-3xl font-semibold text-neutral-900 dark:text-white">
@@ -79,7 +115,15 @@ export const EligibleVotingTokens = () => (
       </p>
     </div>
 
-    <ConnectedVotingPower />
+    {votePower ? (
+      <WalletVotingPowerCard>
+        Your connected wallet currently has{' '}
+        <strong className="text-neutral-900 dark:text-white">
+          {votePower} XRD
+        </strong>{' '}
+        of eligible voting power.
+      </WalletVotingPowerCard>
+    ) : null}
 
     <section className="space-y-4" aria-labelledby="direct-holdings-heading">
       <h2
@@ -122,14 +166,13 @@ export const EligibleVotingTokens = () => (
       </div>
 
       <div className="overflow-x-auto border border-neutral-200 dark:border-neutral-800">
-        <table className="w-full min-w-[60rem] text-left text-sm">
+        <table className="w-full min-w-[48rem] text-left text-sm">
           <thead className="bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
             <tr>
               <th className="px-4 py-3 font-semibold">DEX</th>
               <th className="px-4 py-3 font-semibold">Pair</th>
-              <th className="px-4 py-3 font-semibold">Position</th>
               <th className="px-4 py-3 font-semibold">Eligible resource</th>
-              <th className="px-4 py-3 font-semibold">Pool</th>
+              <th className="px-4 py-3 font-semibold">In your wallet</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
@@ -141,14 +184,11 @@ export const EligibleVotingTokens = () => (
                 <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                   {position.pair}
                 </td>
-                <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
-                  {position.positionType}
-                </td>
                 <td className="break-all px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">
                   {position.resourceAddress}
                 </td>
-                <td className="break-all px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">
-                  {position.poolAddress}
+                <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
+                  {resourceBalances?.[position.resourceAddress] ?? '—'}
                 </td>
               </tr>
             ))}
@@ -158,44 +198,6 @@ export const EligibleVotingTokens = () => (
     </section>
   </div>
 )
-
-const ConnectedVotingPower = () => {
-  const account = useCurrentAccount()
-
-  if (!account) return null
-
-  return <ConnectedVotingPowerValue accountAddress={account.address} />
-}
-
-const ConnectedVotingPowerValue = ({
-  accountAddress
-}: {
-  accountAddress: string
-}) => {
-  const votingPower = useAtomValue(currentVotingPowerAtom(accountAddress))
-
-  return Result.builder(votingPower)
-    .onInitial(() => (
-      <WalletVotingPowerCard>
-        Calculating eligible voting power…
-      </WalletVotingPowerCard>
-    ))
-    .onFailure(() => (
-      <WalletVotingPowerCard>
-        Unable to calculate eligible voting power for the connected wallet.
-      </WalletVotingPowerCard>
-    ))
-    .onSuccess(({ votePower }) => (
-      <WalletVotingPowerCard>
-        Your connected wallet currently has{' '}
-        <strong className="text-neutral-900 dark:text-white">
-          {votePower} XRD
-        </strong>{' '}
-        of eligible voting power, rounded down to whole XRD.
-      </WalletVotingPowerCard>
-    ))
-    .render()
-}
 
 const WalletVotingPowerCard = ({ children }: { children: ReactNode }) => (
   <div className="border border-neutral-200 bg-neutral-100 p-5 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">

@@ -1,4 +1,8 @@
-import { GatewayApiClient } from '@radix-effects/gateway'
+import {
+  GatewayApiClient,
+  GetFungibleBalance,
+  GetNonFungibleBalanceService
+} from '@radix-effects/gateway'
 import { AccountAddress, StateVersion } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
 import { Config, Duration, Effect, ParseResult, Schema } from 'effect'
@@ -96,6 +100,8 @@ export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
       if (pathname === '/voting-power') {
         const params = yield* parseVotingPowerQuery(request)
         const gateway = yield* GatewayApiClient
+        const getFungibleBalance = yield* GetFungibleBalance
+        const getNonFungibleBalance = yield* GetNonFungibleBalanceService
         const snapshot = yield* VotePowerSnapshot
         const accountAddress = AccountAddress.make(params.accountAddress)
         const current = yield* gateway.status.getCurrent()
@@ -105,9 +111,59 @@ export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
           sourceConfig: getVotePowerConfig(new Date())
         })
         const votePower = result.votePower[accountAddress] ?? new BigNumber(0)
+        const sourceConfig = getVotePowerConfig(new Date())
+        const [fungibleBalances, nonFungibleBalances] = yield* Effect.all(
+          [
+            getFungibleBalance({
+              addresses: [accountAddress],
+              at_ledger_state: {
+                state_version: StateVersion.make(
+                  current.ledger_state.state_version
+                )
+              }
+            }),
+            getNonFungibleBalance({
+              addresses: [String(accountAddress)],
+              at_ledger_state: {
+                state_version: StateVersion.make(
+                  current.ledger_state.state_version
+                )
+              },
+              resourceAddresses: [
+                ...sourceConfig.precisionPoolsV1.map(
+                  (pool) => pool.lpResourceAddress
+                ),
+                ...sourceConfig.precisionPoolsV2.map(
+                  (pool) => pool.lpResourceAddress
+                ),
+                ...sourceConfig.shapePools.map((pool) => pool.liquidity_receipt)
+              ]
+            })
+          ],
+          { concurrency: 'unbounded' }
+        )
+        const resourceBalances: Record<string, string> = {}
+        const fungibleAccount = fungibleBalances.find(
+          (balance) => balance.address === accountAddress
+        )
+
+        for (const balance of fungibleAccount?.items ?? []) {
+          resourceBalances[balance.resource_address] = balance.amount.toString()
+        }
+
+        for (const account of nonFungibleBalances.items) {
+          for (const resource of account.nonFungibleResources) {
+            resourceBalances[resource.resourceAddress] = String(
+              resource.items.length
+            )
+          }
+        }
 
         return json({
-          votePower: votePower.decimalPlaces(0, BigNumber.ROUND_FLOOR).toFixed()
+          votePower: votePower
+            .decimalPlaces(0, BigNumber.ROUND_FLOOR)
+            .toFixed(),
+          resourceBalances
         })
       }
 

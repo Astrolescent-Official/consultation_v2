@@ -1,5 +1,9 @@
 import * as D1Client from '@effect/sql-d1/D1Client'
-import type { GatewayApiClient } from '@radix-effects/gateway'
+import {
+  type GatewayApiClient,
+  GetFungibleBalance,
+  GetNonFungibleBalanceService
+} from '@radix-effects/gateway'
 import { ConfigProvider, Effect, Layer, Logger } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
 import { GovernanceConfigLayer } from 'shared/governance/index'
@@ -39,16 +43,23 @@ const CronJobHandlerLayer = (env: VotingWorkerEnv) => {
 
 const HttpHandlerLayer = (env: VotingWorkerEnv) => {
   const database = databaseLayer(env)
+  const votePowerServices = Layer.mergeAll(
+    GatewayApiClientLayer,
+    Layer.mergeAll(
+      VotePowerSnapshot.Default,
+      GetFungibleBalance.Default,
+      GetNonFungibleBalanceService.Default
+    ).pipe(Layer.provide(GatewayApiClientLayer))
+  )
 
   return Layer.mergeAll(
     VoteCalculationRepo.Default,
     MajorityJudgmentRepo.Default,
-    VotePowerSnapshot.Default
+    votePowerServices
   ).pipe(
     Layer.provide(ORM.Default),
     Layer.provideMerge(database),
     Layer.provideMerge(GovernanceConfigLayer),
-    Layer.provideMerge(GatewayApiClientLayer),
     Layer.provideMerge(Logger.json),
     Layer.provide(configLayer(env))
   )
@@ -68,5 +79,7 @@ export const runHttpEffect = <A, E>(
     | MajorityJudgmentRepo
     | VotePowerSnapshot
     | GatewayApiClient
+    | GetFungibleBalance
+    | GetNonFungibleBalanceService
   >
 ) => Effect.runPromise(effect.pipe(Effect.provide(HttpHandlerLayer(env))))

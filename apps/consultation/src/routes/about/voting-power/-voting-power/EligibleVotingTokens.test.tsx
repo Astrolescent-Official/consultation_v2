@@ -19,6 +19,11 @@ describe('EligibleVotingTokens', () => {
     assert.isAbove(screen.getAllByText('hBNB/XRD').length, 0)
     assert.isAbove(screen.getAllByText('CaviarNine Shape').length, 0)
     assert.isAbove(screen.getAllByText('LSULP/XRD (v2)').length, 0)
+    assert.isNotNull(
+      screen.getByRole('columnheader', { name: 'In your wallet' })
+    )
+    assert.isNull(screen.queryByRole('columnheader', { name: 'Position' }))
+    assert.isNull(screen.queryByRole('columnheader', { name: 'Pool' }))
 
     assert.strictEqual(screen.getAllByRole('row').length, 69)
   })
