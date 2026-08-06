@@ -87,20 +87,29 @@ const ConnectedEligibleVotingTokens = ({
   return Result.builder(votingPower)
     .onInitial(() => <EligibleVotingTokensContent />)
     .onFailure(() => <EligibleVotingTokensContent />)
-    .onSuccess(({ votePower, resourceBalances, validatorLsuBalances }) => (
-      <EligibleVotingTokensContent
-        votePower={votePower}
-        resourceBalances={resourceBalances}
-        validatorLsuBalances={validatorLsuBalances}
-      />
-    ))
+    .onSuccess(
+      ({
+        votePower,
+        resourceBalances,
+        validatorLsuBalances,
+        xrdResourceAddress
+      }) => (
+        <EligibleVotingTokensContent
+          votePower={votePower}
+          resourceBalances={resourceBalances}
+          validatorLsuBalances={validatorLsuBalances}
+          xrdResourceAddress={xrdResourceAddress}
+        />
+      )
+    )
     .render()
 }
 
 const EligibleVotingTokensContent = ({
   votePower,
   resourceBalances,
-  validatorLsuBalances
+  validatorLsuBalances,
+  xrdResourceAddress = XRD_ADDRESS
 }: {
   votePower?: string
   resourceBalances?: Readonly<Record<string, string>>
@@ -108,6 +117,7 @@ const EligibleVotingTokensContent = ({
     resourceAddress: string
     amount: string
   }>
+  xrdResourceAddress?: string
 }) => (
   <div className="space-y-12">
     <div className="space-y-4">
@@ -142,10 +152,10 @@ const EligibleVotingTokensContent = ({
         <DirectHolding
           name="XRD"
           detail="1 XRD equals 1 vote."
-          address={XRD_ADDRESS}
+          address={xrdResourceAddress}
           walletAmount={
             resourceBalances
-              ? (resourceBalances[XRD_ADDRESS] ?? '0')
+              ? (resourceBalances[xrdResourceAddress] ?? '0')
               : undefined
           }
         />

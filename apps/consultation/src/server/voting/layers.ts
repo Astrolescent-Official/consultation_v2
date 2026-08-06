@@ -7,7 +7,10 @@ import {
 } from '@radix-effects/gateway'
 import { ConfigProvider, Effect, Layer, Logger } from 'effect'
 import { GatewayApiClientLayer } from 'shared/gateway'
-import { GovernanceConfigLayer } from 'shared/governance/index'
+import {
+  type GovernanceConfig,
+  GovernanceConfigLayer
+} from 'shared/governance/index'
 import { VoteDatabaseLive } from './db/d1'
 import { ORM } from './db/orm'
 import { MajorityJudgmentRepo } from './majority-judgment/repo'
@@ -84,5 +87,6 @@ export const runHttpEffect = <A, E>(
     | GetFungibleBalance
     | GetNonFungibleBalanceService
     | GetValidators
+    | GovernanceConfig
   >
 ) => Effect.runPromise(effect.pipe(Effect.provide(HttpHandlerLayer(env))))
