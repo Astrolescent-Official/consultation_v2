@@ -32,7 +32,10 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        # Pinned to the last version confirmed working end-to-end -- see the
+        # comment on the same input in claude-code-review.yml for why we no
+        # longer float on @v1.
+        uses: anthropics/claude-code-action@v1.0.183
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 

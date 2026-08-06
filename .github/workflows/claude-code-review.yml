@@ -34,7 +34,17 @@ jobs:
 
       - name: Run Claude Code Review
         id: claude-review
-        uses: anthropics/claude-code-action@v1
+        # Pinned (not the floating @v1 tag): v1.0.184-186 each bundle a newer
+        # Claude Code CLI (2.1.221-223) that breaks this plugin's parallel
+        # multi-agent review flow in this action's non-interactive `claude -p`
+        # mode -- 2.1.222 (v1.0.185) silently drops every comment with
+        # permission_denials_count > 0, and 2.1.223 (v1.0.186) has the review
+        # agent launch subagents in background mode and then exit without
+        # ever collecting their results (no notification loop exists outside
+        # an interactive session). v1.0.183 bundles 2.1.220, the last version
+        # confirmed working end-to-end (PR #30's canary got a real inline
+        # comment). Re-verify with a canary PR before bumping this pin.
+        uses: anthropics/claude-code-action@v1.0.183
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
@@ -60,6 +70,5 @@ jobs:
             }
           additional_permissions: |
             actions: read
-          show_full_output: true
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
