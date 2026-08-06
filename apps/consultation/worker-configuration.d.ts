@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20260722.1 2026-07-28 nodejs_compat
 interface __BaseEnv_Env {
 	DB: D1Database;
-	DAPP_DEFINITION_ADDRESS: "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang" | "account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf";
+	DAPP_DEFINITION_ADDRESS: "account_tdx_2_12x50w93rgzgyzxek5y4ku24aa5nn9k0jqzlv5gg7jycwe9jzs26ang" | "account_rdx128965k8mhauk679vtew96ynq4k43rzd975jak4d5z6cvp0t0c6z7u0";
 	DEX_POSITION_CONCURRENCY: "1";
 	ENV: "preview" | "production";
 	NETWORK_ID: "2" | "1";
