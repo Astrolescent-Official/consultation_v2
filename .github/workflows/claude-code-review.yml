@@ -38,18 +38,37 @@ jobs:
         # Claude Code CLI (2.1.221-223) that breaks this plugin's parallel
         # multi-agent review flow in this action's non-interactive `claude -p`
         # mode -- 2.1.222 (v1.0.185) silently drops every comment with
-        # permission_denials_count > 0, and 2.1.223 (v1.0.186) has the review
-        # agent launch subagents in background mode and then exit without
-        # ever collecting their results (no notification loop exists outside
-        # an interactive session). v1.0.183 bundles 2.1.220, the last version
-        # confirmed working end-to-end (PR #30's canary got a real inline
-        # comment). Re-verify with a canary PR before bumping this pin.
+        # permission_denials_count > 0. v1.0.183 bundles 2.1.220, the last
+        # version confirmed working end-to-end (PR #30's canary got a real
+        # inline comment). Re-verify with a canary PR before bumping this pin.
+        #
+        # Pinning the CLI reduces but does not eliminate silent failures: the
+        # Agent/Task tool defaults to launching subagents asynchronously
+        # unless the model explicitly requests foreground execution, and
+        # whether it does so is non-deterministic model behavior, not tied to
+        # a specific CLI build (observed on 2.1.220 itself -- see the prompt
+        # override below, added after PR #48 got zero comments twice on
+        # 2.1.220 with "Async agent launched successfully" in its log, while
+        # PR #30 and #47 on the same CLI version launched no async agents at
+        # all and completed normally). There is no notification mechanism in
+        # this action's single-shot, non-interactive session, so an
+        # asynchronously-launched subagent's result never comes back and the
+        # review silently gives up.
         uses: anthropics/claude-code-action@v1.0.183
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: |
+            IMPORTANT: This is a non-interactive, single-shot session. There is no
+            mechanism to deliver a background task's completion notification back
+            to you afterward -- if you launch an Agent/Task subagent
+            asynchronously/in the background, its result will never reach you and
+            this review will silently fail to post anything. Always launch
+            subagents in the foreground (synchronously) and wait for each one's
+            direct result before proceeding, even when running several checks that
+            could otherwise be parallelized in the background.
+
             /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
           settings: |
             {
@@ -70,6 +89,5 @@ jobs:
             }
           additional_permissions: |
             actions: read
-          show_full_output: true
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
