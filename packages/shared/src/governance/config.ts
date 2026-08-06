@@ -26,7 +26,7 @@ const MainnetConfig = {
     'package_rdx1p49s2442esdzs7wet7wucpagnftctml8aecc6a74q67r8r023u4dzn'
   ),
   componentAddress: ComponentAddress.make(
-    'component_rdx1cpg8ehtstxnxzj5rzpefnp4vxk8c87pds29r65cgm4cs8akv5ee8tt'
+    'component_rdx1cp90ys553uwxuckev249x5wezucqru0u4qr7qdxdc9tlpmnh93242k'
   ),
   adminBadgeAddress: NonFungibleResourceAddress.make(
     'resource_rdx1ng4c5k872hvhr379n0z0x6ht2n0guugns4jeh6mck9y28cu432xvc4'

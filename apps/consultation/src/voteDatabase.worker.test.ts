@@ -96,7 +96,7 @@ describe('runtime app configuration', () => {
       'application/javascript; charset=utf-8'
     )
     expect(await scriptResponse.text()).toBe(
-      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","NETWORK_ID":"1"};'
+      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128965k8mhauk679vtew96ynq4k43rzd975jak4d5z6cvp0t0c6z7u0","NETWORK_ID":"1"};'
     )
 
     const wellKnownResponse = await SELF.fetch(
@@ -106,7 +106,7 @@ describe('runtime app configuration', () => {
       dApps: [
         {
           dAppDefinitionAddress:
-            'account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf'
+            'account_rdx128965k8mhauk679vtew96ynq4k43rzd975jak4d5z6cvp0t0c6z7u0'
         }
       ]
     })

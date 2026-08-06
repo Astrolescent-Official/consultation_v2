@@ -16,7 +16,7 @@ import {
 } from '../governanceEvents'
 
 const governanceComponentAddress =
-  'component_rdx1cpg8ehtstxnxzj5rzpefnp4vxk8c87pds29r65cgm4cs8akv5ee8tt'
+  'component_rdx1cp90ys553uwxuckev249x5wezucqru0u4qr7qdxdc9tlpmnh93242k'
 
 const creationEvent = (
   event: string,
