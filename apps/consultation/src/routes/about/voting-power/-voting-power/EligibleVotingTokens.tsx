@@ -137,15 +137,18 @@ const EligibleVotingTokensContent = ({
           name="XRD"
           detail="1 XRD equals 1 vote."
           address={XRD_ADDRESS}
+          walletAmount={resourceBalances?.[XRD_ADDRESS]}
         />
         <DirectHolding
           name="Validator LSU tokens"
           detail="LSUs from every active Radix validator count for their underlying XRD value."
+          walletAmount="See your eligible voting power above."
         />
         <DirectHolding
           name="LSULP"
           detail="LSULP counts for its underlying liquid-staked XRD value."
           address={LSULP_RESOURCE_ADDRESS}
+          walletAmount={resourceBalances?.[LSULP_RESOURCE_ADDRESS]}
         />
       </div>
     </section>
@@ -208,17 +211,24 @@ const WalletVotingPowerCard = ({ children }: { children: ReactNode }) => (
 const DirectHolding = ({
   name,
   detail,
-  address
+  address,
+  walletAmount
 }: {
   name: string
   detail: string
   address?: string
+  walletAmount?: string
 }) => (
   <article className="space-y-2 border border-neutral-200 p-4 dark:border-neutral-800">
     <h3 className="font-semibold text-neutral-900 dark:text-white">{name}</h3>
     <p className="text-sm text-neutral-600 dark:text-neutral-400">{detail}</p>
     {address ? (
       <p className="break-all font-mono text-xs text-neutral-500">{address}</p>
+    ) : null}
+    {walletAmount ? (
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        In your wallet: {walletAmount}
+      </p>
     ) : null}
   </article>
 )

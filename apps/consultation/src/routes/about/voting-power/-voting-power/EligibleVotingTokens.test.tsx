@@ -24,6 +24,9 @@ describe('EligibleVotingTokens', () => {
     )
     assert.isNull(screen.queryByRole('columnheader', { name: 'Position' }))
     assert.isNull(screen.queryByRole('columnheader', { name: 'Pool' }))
+    assert.isNotNull(
+      screen.getByText('In your wallet: See your eligible voting power above.')
+    )
 
     assert.strictEqual(screen.getAllByRole('row').length, 69)
   })
