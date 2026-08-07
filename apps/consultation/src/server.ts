@@ -10,7 +10,8 @@ export default {
       request.method === 'GET' &&
       (url.pathname === '/vote-results' ||
         url.pathname === '/account-votes' ||
-        url.pathname === '/majority-judgment-election')
+        url.pathname === '/majority-judgment-election' ||
+        url.pathname === '/voting-power')
     ) {
       return handleVotingRequest(request, env)
     }
