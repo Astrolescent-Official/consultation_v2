@@ -281,6 +281,15 @@ describe('D1 vote persistence', () => {
     ])
   })
 
+  it('rejects a voting-power request without an account address', async () => {
+    const response = await SELF.fetch('https://example.test/voting-power')
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: 'Invalid query parameters'
+    })
+  })
+
   it('rolls back every statement when one write in a commit fails', async () => {
     const votePower = '123.456789012345678901'
     const stateId = await runWithRepository(

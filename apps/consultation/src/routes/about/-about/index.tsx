@@ -91,11 +91,18 @@ const GovernanceContent = ({
         Voting Power
       </h3>
       <p className="text-neutral-600 dark:text-neutral-400">
-        Your voting power is determined by your XRD holdings. 1 XRD = 1 Vote. A
-        snapshot of your balance is taken when each vote opens. A Temperature
-        Check and a Governance Proposal each snapshot at their own start; a
-        Majority Judgment election snapshots when the Governance Operator opens
-        grading, and a rerun reuses the first round&apos;s snapshot.
+        Your voting power is determined by your XRD holdings.{' '}
+        <Link
+          to="/about/voting-power"
+          className="underline underline-offset-4 hover:text-neutral-900 dark:hover:text-white"
+        >
+          1 XRD = 1 Vote
+        </Link>
+        . A snapshot of your balance is taken when each vote opens. A
+        Temperature Check and a Governance Proposal each snapshot at their own
+        start; a Majority Judgment election snapshots when the Governance
+        Operator opens grading, and a rerun reuses the first round&apos;s
+        snapshot.
       </p>
     </div>
   </>
