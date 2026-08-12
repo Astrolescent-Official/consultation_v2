@@ -41,7 +41,7 @@ const outcomeTone = (outcome: CandidateOutcome) => {
     case 'UNRESOLVED':
       return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
     default:
-      return 'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+      return 'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground'
   }
 }
 
@@ -101,7 +101,7 @@ function GradeHistogram({
             >
               {gradeName(grade)}
             </span>
-            <span className="h-1.5 flex-1 bg-neutral-100 dark:bg-neutral-800">
+            <span className="h-1.5 flex-1 bg-muted">
               <span
                 className="block h-full bg-emerald-600 transition-all dark:bg-emerald-500"
                 style={{ width: `${percentage}%` }}
@@ -145,7 +145,7 @@ function GradeSelector({
               'has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50',
               'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60',
               selected === grade
-                ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-black'
+                ? 'border-primary bg-primary text-primary-foreground'
                 : 'cursor-pointer border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground'
             )}
           >

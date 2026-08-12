@@ -46,7 +46,7 @@ export function QuorumBadge({
           className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${
             quorumMet
               ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-              : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+              : 'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground'
           }`}
         >
           {quorumMet ? 'Quorum Reached' : `Quorum ${displayPercent}%`}

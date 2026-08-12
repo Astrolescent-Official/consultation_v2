@@ -7,7 +7,7 @@ function H1({ className, ...props }: React.ComponentProps<'h1'>) {
     <h1
       data-slot="h1"
       className={cn(
-        'scroll-m-20 text-3xl md:text-4xl font-light tracking-tight text-balance',
+        'scroll-m-20 text-3xl md:text-4xl font-bold tracking-tight text-balance',
         className
       )}
       {...props}

@@ -121,10 +121,10 @@ const EligibleVotingTokensContent = ({
 }) => (
   <div className="space-y-12">
     <div className="space-y-4">
-      <h1 className="text-3xl font-semibold text-neutral-900 dark:text-white">
+      <h1 className="text-3xl font-semibold text-foreground">
         Eligible voting tokens
       </h1>
-      <p className="max-w-3xl text-lg leading-relaxed text-neutral-600 dark:text-neutral-400">
+      <p className="max-w-3xl text-lg leading-relaxed text-muted-foreground">
         Voting power includes the XRD represented by the assets and liquidity
         positions below. This is the current static allowlist used when a vote
         is snapshotted.
@@ -134,17 +134,15 @@ const EligibleVotingTokensContent = ({
     {votePower ? (
       <WalletVotingPowerCard>
         Your connected wallet currently has{' '}
-        <strong className="text-neutral-900 dark:text-white">
-          {votePower} XRD
-        </strong>{' '}
-        of eligible voting power.
+        <strong className="text-foreground">{votePower} XRD</strong> of eligible
+        voting power.
       </WalletVotingPowerCard>
     ) : null}
 
     <section className="space-y-4" aria-labelledby="direct-holdings-heading">
       <h2
         id="direct-holdings-heading"
-        className="border-b border-neutral-200 pb-4 text-2xl font-medium text-neutral-900 dark:border-neutral-800 dark:text-white"
+        className="border-b border-border pb-4 text-2xl font-medium text-foreground dark:border-border dark:text-white"
       >
         Direct holdings
       </h2>
@@ -181,20 +179,20 @@ const EligibleVotingTokensContent = ({
       <div>
         <h2
           id="dex-positions-heading"
-          className="border-b border-neutral-200 pb-4 text-2xl font-medium text-neutral-900 dark:border-neutral-800 dark:text-white"
+          className="border-b border-border pb-4 text-2xl font-medium text-foreground dark:border-border dark:text-white"
         >
           Eligible DEX liquidity positions ({eligibleDexPositions.length})
         </h2>
-        <p className="mt-3 text-neutral-600 dark:text-neutral-400">
+        <p className="mt-3 text-muted-foreground">
           These pool units and liquidity receipts contribute the XRD, LSU, or
           LSULP contained in the position. Other tokens in the pair do not add
           voting power.
         </p>
       </div>
 
-      <div className="overflow-x-auto border border-neutral-200 dark:border-neutral-800">
+      <div className="overflow-x-auto border border-border">
         <table className="w-full min-w-[48rem] text-left text-sm">
-          <thead className="bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+          <thead className="bg-muted text-foreground dark:bg-muted dark:text-muted-foreground">
             <tr>
               <th className="px-4 py-3 font-semibold">DEX</th>
               <th className="px-4 py-3 font-semibold">Pair</th>
@@ -202,19 +200,19 @@ const EligibleVotingTokensContent = ({
               <th className="px-4 py-3 font-semibold">In your wallet</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+          <tbody className="divide-y divide-border">
             {eligibleDexPositions.map((position) => (
               <tr key={position.resourceAddress}>
-                <td className="px-4 py-3 font-medium text-neutral-900 dark:text-white">
+                <td className="px-4 py-3 font-medium text-foreground">
                   {position.dex}
                 </td>
-                <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
+                <td className="px-4 py-3 text-muted-foreground">
                   {position.pair}
                 </td>
-                <td className="break-all px-4 py-3 font-mono text-xs text-neutral-600 dark:text-neutral-400">
+                <td className="break-all px-4 py-3 font-mono text-xs text-muted-foreground">
                   {position.resourceAddress}
                 </td>
-                <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
+                <td className="px-4 py-3 text-muted-foreground">
                   {resourceBalances?.[position.resourceAddress] ?? '—'}
                 </td>
               </tr>
@@ -227,7 +225,7 @@ const EligibleVotingTokensContent = ({
 )
 
 const WalletVotingPowerCard = ({ children }: { children: ReactNode }) => (
-  <div className="border border-neutral-200 bg-neutral-100 p-5 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
+  <div className="border border-border bg-muted p-5 text-muted-foreground dark:border-border dark:bg-muted dark:text-muted-foreground">
     {children}
   </div>
 )
@@ -245,20 +243,22 @@ const DirectHolding = ({
   walletAmount?: string
   walletLsuBalances?: ReadonlyArray<{ resourceAddress: string; amount: string }>
 }) => (
-  <article className="space-y-2 border border-neutral-200 p-4 dark:border-neutral-800">
-    <h3 className="font-semibold text-neutral-900 dark:text-white">{name}</h3>
-    <p className="text-sm text-neutral-600 dark:text-neutral-400">{detail}</p>
+  <article className="space-y-2 border border-border p-4 dark:border-border">
+    <h3 className="font-semibold text-foreground">{name}</h3>
+    <p className="text-sm text-muted-foreground">{detail}</p>
     {address ? (
-      <p className="break-all font-mono text-xs text-neutral-500">{address}</p>
+      <p className="break-all font-mono text-xs text-muted-foreground">
+        {address}
+      </p>
     ) : null}
     {walletAmount !== undefined ? (
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      <p className="text-sm text-muted-foreground">
         In your wallet: {walletAmount}
       </p>
     ) : null}
     {walletLsuBalances ? (
       walletLsuBalances.length > 0 ? (
-        <ul className="space-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+        <ul className="space-y-1 text-xs text-muted-foreground">
           {walletLsuBalances.map(({ resourceAddress, amount }) => (
             <li key={resourceAddress} className="break-all">
               {amount} · {resourceAddress}
@@ -266,9 +266,7 @@ const DirectHolding = ({
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          In your wallet: 0
-        </p>
+        <p className="text-sm text-muted-foreground">In your wallet: 0</p>
       )
     ) : null}
   </article>

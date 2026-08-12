@@ -154,7 +154,7 @@ const markerTone = (state: StageState) => {
     case 'current':
       return 'bg-foreground ring-4 ring-foreground/15'
     case 'failed':
-      return 'bg-neutral-400 dark:bg-neutral-600'
+      return 'bg-muted-foreground'
     case 'upcoming':
       return 'bg-border'
   }

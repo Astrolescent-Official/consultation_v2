@@ -34,12 +34,12 @@ export const Page: React.FC = () => {
       {/* Header */}
       <div className="mb-8">
         <H1>Radix DAO Governance</H1>
-        <P className="mt-2 text-neutral-500 dark:text-neutral-400">
+        <P className="mt-2 text-muted-foreground">
           Participate in community governance through temperature checks and
           proposals.{' '}
           <Link
             to="/about"
-            className="text-neutral-700 dark:text-neutral-300 underline underline-offset-4 hover:text-neutral-900 dark:hover:text-white"
+            className="text-foreground dark:text-muted-foreground underline underline-offset-4 hover:text-foreground dark:hover:text-white"
           >
             Learn how governance works
           </Link>

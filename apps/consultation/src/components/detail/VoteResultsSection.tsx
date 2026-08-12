@@ -89,7 +89,7 @@ export function VoteResultsSection({
                       {formatXrd(option.power)} XRD ({percentage.toFixed(1)}%)
                     </span>
                   </div>
-                  <div className="w-full bg-neutral-100 dark:bg-neutral-800 h-2">
+                  <div className="w-full bg-muted h-2">
                     <div
                       className="bg-emerald-600 dark:bg-emerald-500 h-full transition-all"
                       style={{ width: `${percentage}%` }}

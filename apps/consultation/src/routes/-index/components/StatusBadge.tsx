@@ -16,7 +16,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         status === 'active' &&
           'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-black',
         status === 'closed' &&
-          'bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400',
+          'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground',
         status === 'passed' && 'bg-blue-600 text-white dark:bg-blue-500'
       )}
     >

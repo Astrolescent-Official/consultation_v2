@@ -73,7 +73,7 @@ export function DetailPageHeader({
     <div className="lg:border-b lg:border-border lg:pb-6 pb-2">
       <div className="flex items-center gap-2 mb-4">
         <StatusBadge status={status} />
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground">
           {typeBadge}
         </span>
         {quorumBadge && <div className="ml-auto">{quorumBadge}</div>}

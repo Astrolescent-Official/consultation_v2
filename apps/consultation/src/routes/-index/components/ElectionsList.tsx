@@ -80,12 +80,12 @@ export function ElectionsList({
                 params={{ id: String(election.id) }}
                 className="group block"
               >
-                <Card className="p-6 transition-colors group-hover:border-neutral-400 dark:group-hover:border-neutral-600">
+                <Card className="p-6 transition-colors group-hover:border-rule-strong">
                   <div className="flex flex-col gap-5 sm:flex-row sm:justify-between">
                     <div className="min-w-0 flex-1 space-y-3">
                       <div className="flex flex-wrap items-center gap-3">
                         <StatusBadge status={status} />
-                        <span className="font-mono text-xs text-neutral-500">
+                        <span className="font-mono text-xs text-muted-foreground">
                           Election #{election.id}
                         </span>
                         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -99,17 +99,17 @@ export function ElectionsList({
                           </span>
                         ) : null}
                       </div>
-                      <h3 className="text-xl font-medium text-neutral-900 decoration-neutral-400 underline-offset-4 group-hover:underline dark:text-neutral-100">
+                      <h3 className="text-xl font-medium text-foreground decoration-muted-foreground underline-offset-4 group-hover:underline dark:text-foreground">
                         {election.title}
                       </h3>
-                      <p className="line-clamp-2 text-sm text-neutral-600 dark:text-neutral-400">
+                      <p className="line-clamp-2 text-sm text-muted-foreground">
                         {election.shortDescription}
                       </p>
-                      <p className="pt-2 text-xs text-neutral-500">
+                      <p className="pt-2 text-xs text-muted-foreground">
                         {formatDateRange(dates.start, dates.deadline)}
                       </p>
                     </div>
-                    <div className="border-t border-neutral-100 pt-4 text-xs text-muted-foreground sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0 dark:border-neutral-800">
+                    <div className="border-t border-border pt-4 text-xs text-muted-foreground sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0 dark:border-border">
                       <div className="mb-1 uppercase tracking-wider">
                         Parameters
                       </div>

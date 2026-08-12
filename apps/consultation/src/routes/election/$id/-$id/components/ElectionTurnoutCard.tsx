@@ -31,7 +31,7 @@ export function ElectionTurnoutCard({
           {formatXrd(total)} / {formatXrd(quorum)} XRD
         </span>
       </div>
-      <div className="h-2 w-full bg-neutral-100 dark:bg-neutral-800">
+      <div className="h-2 w-full bg-muted">
         <div
           className="h-full bg-emerald-600 transition-all dark:bg-emerald-500"
           style={{ width: `${percentage}%` }}
