@@ -10,6 +10,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from './ui/dropdown-menu'
+import { Wordmark } from './Wordmark'
+
+const NAV = [
+  { label: 'Home', href: '/', exact: true },
+  { label: 'New Proposal', href: '/tc/new', exact: false },
+  { label: 'About', href: '/about', exact: false }
+] as const
 
 export default function Header() {
   const { actualTheme, setTheme } = useTheme()
@@ -43,30 +50,37 @@ export default function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="flex size-8 items-center justify-center bg-foreground text-background text-sm font-semibold">
-              R
-            </div>
-            <span className="hidden sm:inline text-base font-medium tracking-tight">
-              Radix DAO
-              <span className="ml-1 text-xs font-light text-muted-foreground">
-                v2
-              </span>
+          <Link
+            to="/"
+            aria-label="Radix DAO — home"
+            className="flex items-center gap-2"
+          >
+            <Wordmark />
+            <span className="font-mono text-[0.65625rem] uppercase tracking-[0.09em] text-muted-foreground">
+              v2
             </span>
           </Link>
 
-          <nav className="hidden sm:flex items-center gap-1">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/" activeOptions={{ exact: true }}>
-                Home
+          {/* Nav items turn accent when current — the system's only nav state. */}
+          <nav
+            aria-label="Primary"
+            className="hidden sm:flex items-center gap-8"
+          >
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                to={item.href}
+                activeOptions={item.exact ? { exact: true } : undefined}
+                activeProps={{
+                  className: 'text-primary',
+                  'aria-current': 'page'
+                }}
+                inactiveProps={{ className: 'text-foreground' }}
+                className="text-[0.90625rem] font-semibold transition-colors duration-150 hover:text-primary"
+              >
+                {item.label}
               </Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/tc/new">New Proposal</Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/about">About</Link>
-            </Button>
+            ))}
           </nav>
         </div>
 
