@@ -60,7 +60,9 @@ export default function Header() {
               v2
             </span>
           </Link>
+        </div>
 
+        <div className="flex items-center gap-8">
           {/* Nav items turn accent when current — the system's only nav state. */}
           <nav
             aria-label="Primary"
@@ -82,25 +84,27 @@ export default function Header() {
               </Link>
             ))}
           </nav>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(actualTheme === 'dark' ? 'light' : 'dark')}
-            aria-label="Toggle theme"
-          >
-            {actualTheme === 'dark' ? (
-              <Sun className="size-4" />
-            ) : (
-              <Moon className="size-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                setTheme(actualTheme === 'dark' ? 'light' : 'dark')
+              }
+              aria-label="Toggle theme"
+            >
+              {actualTheme === 'dark' ? (
+                <Sun className="size-4" />
+              ) : (
+                <Moon className="size-4" />
+              )}
+            </Button>
 
-          <AccountSelector />
-          <ConnectButton />
+            <AccountSelector />
+            <ConnectButton />
+          </div>
         </div>
       </div>
     </header>
