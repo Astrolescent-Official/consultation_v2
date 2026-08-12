@@ -28,7 +28,7 @@ export const Page = () => {
         <div className="flex items-start justify-between gap-4">
           <div>
             <H1>About Radix DAO Governance</H1>
-            <p className="mt-2 text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed">
+            <p className="mt-2 text-lg text-muted-foreground leading-relaxed">
               Radix DAO Governance is a decentralized governance platform for
               the Radix ecosystem. It enables the community to signal sentiment
               through Temperature Checks (TC) and decide on execution paths
@@ -41,14 +41,14 @@ export const Page = () => {
 
       {Result.builder(parameterSetsResult)
         .onInitial(() => (
-          <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading governance parameters...
           </div>
         ))
         .onFailure(() => (
-          <div className="bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
-            <p className="text-sm text-red-700 dark:text-red-300">
+          <div className="border-l-[3px] border-l-destructive bg-muted p-4">
+            <p className="text-sm text-foreground">
               Failed to load governance parameters.
             </p>
           </div>
@@ -66,11 +66,11 @@ const GovernanceContent = ({
 }) => (
   <>
     <div className="space-y-8">
-      <h2 className="text-2xl font-medium text-neutral-900 dark:text-white border-b border-neutral-200 dark:border-neutral-800 pb-4">
+      <h2 className="text-2xl font-medium text-foreground border-b border-border pb-4">
         How it Works
       </h2>
 
-      <p className="text-neutral-600 dark:text-neutral-400">
+      <p className="text-muted-foreground">
         Each Temperature Check chooses one of the active parameter sets below.
         The selected rules are snapshotted, so later registry updates never
         change an existing vote.
@@ -86,15 +86,13 @@ const GovernanceContent = ({
       </div>
     </div>
 
-    <div className="bg-neutral-100 dark:bg-neutral-900 p-6 border border-neutral-200 dark:border-neutral-800">
-      <h3 className="text-lg font-medium text-neutral-900 dark:text-white mb-2">
-        Voting Power
-      </h3>
-      <p className="text-neutral-600 dark:text-neutral-400">
+    <div className="bg-muted p-6 border border-border">
+      <h3 className="text-lg font-medium text-foreground mb-2">Voting Power</h3>
+      <p className="text-muted-foreground">
         Your voting power is determined by your XRD holdings.{' '}
         <Link
           to="/about/voting-power"
-          className="underline underline-offset-4 hover:text-neutral-900 dark:hover:text-white"
+          className="text-primary underline underline-offset-[3px]"
         >
           1 XRD = 1 Vote
         </Link>
@@ -116,12 +114,12 @@ const ParameterSetDetails = ({
   const parameters = parameterSet.parameters
 
   return (
-    <div className="border border-neutral-200 dark:border-neutral-800 p-6 space-y-5">
+    <div className="border border-border p-6 space-y-5">
       <div>
-        <h3 className="text-xl font-semibold text-neutral-900 dark:text-white">
+        <h3 className="text-xl font-semibold text-foreground">
           {parameterSet.label}
         </h3>
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-muted-foreground">
           {parameterSet.id} · version {parameterSet.version}
         </p>
       </div>
@@ -142,10 +140,10 @@ const ParameterSetDetails = ({
           />
         ) : (
           <div className="space-y-3">
-            <h4 className="font-semibold text-neutral-900 dark:text-white">
+            <h4 className="font-semibold text-foreground">
               Majority Judgment Election
             </h4>
-            <ul className="list-inside list-disc space-y-2 pl-2 text-sm text-neutral-500">
+            <ul className="list-inside list-disc space-y-2 pl-2 text-sm text-muted-foreground">
               <li>
                 Voting:{' '}
                 {formatGovernanceDuration(parameters.election.votingDays)}
@@ -165,7 +163,7 @@ const ParameterSetDetails = ({
                 {formatQuorum(parameters.election.rerunQuorum)}
               </li>
             </ul>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-muted-foreground">
               {gradeQuantileDisclosure(formatGradeQuantile(GRADE_QUANTILE))}
             </p>
           </div>
@@ -187,8 +185,8 @@ const ParameterRules = ({
   threshold: string
 }) => (
   <div className="space-y-3">
-    <h4 className="font-semibold text-neutral-900 dark:text-white">{title}</h4>
-    <ul className="list-disc list-inside text-sm text-neutral-500 space-y-2 pl-2">
+    <h4 className="font-semibold text-foreground">{title}</h4>
+    <ul className="list-disc list-inside text-sm text-muted-foreground space-y-2 pl-2">
       <li>Voting period: {formatGovernanceDuration(duration)}</li>
       <li>Requires {formatQuorum(quorum)} quorum</li>
       <li>Approval threshold: {formatApprovalThreshold(threshold)}</li>

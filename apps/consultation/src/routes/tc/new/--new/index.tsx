@@ -27,7 +27,7 @@ export const Page: React.FC = () => {
     <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-light text-foreground tracking-tight">
+        <h1 className="text-3xl font-bold text-foreground tracking-tight">
           New Proposal
         </h1>
         <p className="text-muted-foreground mt-2 max-w-lg">

@@ -195,7 +195,7 @@ export const Page = () => {
 const AccessMessage = ({ message }: { message: string }) => (
   <div className="max-w-4xl mx-auto space-y-6">
     <H1>Admin Panel</H1>
-    <p className="text-neutral-500">{message}</p>
+    <p className="text-muted-foreground">{message}</p>
     <Button variant="outline" asChild>
       <Link to="/about">Back to About</Link>
     </Button>
@@ -219,7 +219,7 @@ const AdminGuard = ({ accountAddress }: { accountAddress: string }) => {
 }
 
 const LoadingMessage = ({ message }: { message: string }) => (
-  <div className="max-w-4xl mx-auto flex items-center gap-2 text-sm text-neutral-500">
+  <div className="max-w-4xl mx-auto flex items-center gap-2 text-sm text-muted-foreground">
     <Loader2 className="h-4 w-4 animate-spin" />
     {message}
   </div>
@@ -243,7 +243,7 @@ const AdminPanel = () => {
           </Button>
           <div>
             <H1>Governance Parameter Sets</H1>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-muted-foreground">
               Updates create a new version. Existing votes keep their snapshot.
             </p>
           </div>

@@ -249,7 +249,7 @@ export function TemperatureCheckForm({
       {/* Basic Information Section */}
       <Card className="shadow-none">
         <CardHeader>
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
             Basic Information
           </CardTitle>
         </CardHeader>
@@ -446,7 +446,7 @@ export function TemperatureCheckForm({
       {/* Formal continuation section */}
       <Card className="shadow-none">
         <CardContent className="pt-2">
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mt-6 mb-2">
+          <CardTitle className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground mt-6 mb-2">
             {isMajorityJudgment
               ? 'Majority Judgment Election'
               : 'Governance Proposal'}
@@ -499,7 +499,7 @@ export function TemperatureCheckForm({
               {failedSameRoleWithinCooldown ? (
                 <p
                   role="alert"
-                  className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200"
+                  className="border-l-[3px] border-l-pending bg-muted px-3 py-2 text-sm text-foreground"
                 >
                   A Temperature Check for this role failed less than seven days
                   ago. The cooldown is operator-enforced; confirm the governance
@@ -535,7 +535,7 @@ export function TemperatureCheckForm({
           ) : (
             <>
               <MaxSelectionsField form={form} optionCount={optionCount} />
-              <CardTitle className="mt-6 mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <CardTitle className="mt-6 mb-2 text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Vote Options
               </CardTitle>
               <VoteOptionsField
