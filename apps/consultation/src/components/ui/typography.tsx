@@ -20,7 +20,7 @@ function H2({ className, ...props }: React.ComponentProps<'h2'>) {
     <h2
       data-slot="h2"
       className={cn(
-        'scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight transition-colors first:mt-0',
+        'scroll-m-20 border-b pb-2 text-3xl font-bold tracking-tight first:mt-0',
         className
       )}
       {...props}
@@ -32,10 +32,7 @@ function H3({ className, ...props }: React.ComponentProps<'h3'>) {
   return (
     <h3
       data-slot="h3"
-      className={cn(
-        'scroll-m-20 text-2xl font-semibold tracking-tight',
-        className
-      )}
+      className={cn('scroll-m-20 text-2xl font-bold tracking-tight', className)}
       {...props}
     />
   )
@@ -45,10 +42,7 @@ function H4({ className, ...props }: React.ComponentProps<'h4'>) {
   return (
     <h4
       data-slot="h4"
-      className={cn(
-        'scroll-m-20 text-xl font-semibold tracking-tight',
-        className
-      )}
+      className={cn('scroll-m-20 text-xl font-bold tracking-tight', className)}
       {...props}
     />
   )

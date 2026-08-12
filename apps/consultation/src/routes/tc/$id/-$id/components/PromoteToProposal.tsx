@@ -87,7 +87,7 @@ function ContinuationBanner({
     <button
       type="button"
       onClick={handleNavigate}
-      className="inline-flex cursor-pointer items-center gap-1 bg-muted px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground dark:bg-muted dark:text-muted-foreground"
+      className="inline-flex cursor-pointer items-center gap-1 bg-muted px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground transition-colors hover:text-foreground dark:bg-muted dark:text-muted-foreground"
     >
       {isProposal ? 'Elevated to GP' : 'Created election'} #
       {String(continuation.id)}

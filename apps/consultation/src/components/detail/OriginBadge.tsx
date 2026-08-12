@@ -21,7 +21,7 @@ export function OriginBadge({ type, id }: OriginBadgeProps) {
     <button
       type="button"
       onClick={handleNavigate}
-      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.09em] font-mono bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
     >
       Originated from {label}
       <ArrowUpRight className="size-3" />

@@ -47,8 +47,8 @@ export const Page = () => {
           </div>
         ))
         .onFailure(() => (
-          <div className="bg-red-50 dark:bg-red-900/20 p-4 border border-red-200 dark:border-red-800">
-            <p className="text-sm text-red-700 dark:text-red-300">
+          <div className="border-l-[3px] border-l-destructive bg-muted p-4">
+            <p className="text-sm text-foreground">
               Failed to load governance parameters.
             </p>
           </div>
@@ -92,7 +92,7 @@ const GovernanceContent = ({
         Your voting power is determined by your XRD holdings.{' '}
         <Link
           to="/about/voting-power"
-          className="underline underline-offset-4 hover:text-foreground dark:hover:text-white"
+          className="text-primary underline underline-offset-[3px]"
         >
           1 XRD = 1 Vote
         </Link>

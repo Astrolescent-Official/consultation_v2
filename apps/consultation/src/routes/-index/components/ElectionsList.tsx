@@ -88,13 +88,13 @@ export function ElectionsList({
                         <span className="font-mono text-xs text-muted-foreground">
                           Election #{election.id}
                         </span>
-                        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        <span className="text-xs font-medium uppercase tracking-[0.09em] font-mono text-muted-foreground">
                           {election.seatCount}{' '}
                           {election.seatCount === 1 ? 'seat' : 'seats'} · Role{' '}
                           {election.roleId}
                         </span>
                         {election.hidden ? (
-                          <span className="bg-yellow-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                          <span className="rounded-sm bg-pending px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.09em] text-pending-foreground">
                             Hidden
                           </span>
                         ) : null}
@@ -110,7 +110,7 @@ export function ElectionsList({
                       </p>
                     </div>
                     <div className="border-t border-border pt-4 text-xs text-muted-foreground sm:border-t-0 sm:border-l sm:pl-6 sm:pt-0 dark:border-border">
-                      <div className="mb-1 uppercase tracking-wider">
+                      <div className="mb-1 uppercase tracking-[0.09em] font-mono">
                         Parameters
                       </div>
                       <div className="font-mono">

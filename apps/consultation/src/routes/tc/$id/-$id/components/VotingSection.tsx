@@ -216,7 +216,9 @@ function ConnectedVoting({
               >
                 <span
                   className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    isSelected ? 'border-current bg-white/20' : 'border-current'
+                    isSelected
+                      ? 'border-current bg-current/20'
+                      : 'border-current'
                   }`}
                 >
                   {isSelected && <Check className="size-3" />}
@@ -244,7 +246,7 @@ function ConnectedVoting({
             >
               <span
                 className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-current bg-white/20' : 'border-current'
+                  isSelected ? 'border-current bg-current/20' : 'border-current'
                 }`}
               >
                 {isSelected && <Check className="size-3" />}
@@ -287,7 +289,7 @@ function ConnectedVoting({
             disabled={
               !selectedVote || isSubmitting || (hasVoted && !hasChanged)
             }
-            className={`w-full mt-4 ${hasChanged || (!hasVoted && selectedVote) ? 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 border-transparent' : ''}`}
+            className="w-full mt-4"
           >
             {isSubmitting && <LoaderIcon className="size-4 animate-spin" />}
             {hasVoted ? 'Change Vote' : 'Sign Transaction'}

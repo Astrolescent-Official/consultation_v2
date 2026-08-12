@@ -57,12 +57,12 @@ export function ItemCard({
               </span>
               {isActive && <EndingSoonBadge deadline={deadline} />}
               {contextLabel ? (
-                <span className="bg-sky-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                <span className="rounded-sm bg-muted px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
                   {contextLabel}
                 </span>
               ) : null}
               {hidden && (
-                <span className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400">
+                <span className="rounded-sm bg-pending px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.09em] text-pending-foreground">
                   Hidden
                 </span>
               )}
@@ -81,7 +81,9 @@ export function ItemCard({
                 By <AddressLink address={author} />
               </span>
               <span className="hidden sm:inline">&middot;</span>
-              <span>{formatDateRange(start, deadline)}</span>
+              <span className="font-mono">
+                {formatDateRange(start, deadline)}
+              </span>
             </div>
           </div>
 

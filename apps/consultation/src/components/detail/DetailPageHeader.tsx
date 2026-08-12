@@ -73,13 +73,13 @@ export function DetailPageHeader({
     <div className="lg:border-b lg:border-border lg:pb-6 pb-2">
       <div className="flex items-center gap-2 mb-4">
         <StatusBadge status={status} />
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground">
+        <span className="inline-flex items-center rounded-sm bg-muted px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.09em] text-muted-foreground">
           {typeBadge}
         </span>
         {quorumBadge && <div className="ml-auto">{quorumBadge}</div>}
       </div>
       {/* Title group */}
-      <h1 className="text-3xl md:text-4xl font-light text-foreground leading-tight">
+      <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground leading-tight">
         {title}
       </h1>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
@@ -100,7 +100,9 @@ export function DetailPageHeader({
             {window.label ? (
               <span className="text-foreground">{window.label}: </span>
             ) : null}
-            {formatDateTime(window.start)} – {formatDateTime(window.deadline)}
+            <span className="font-mono">
+              {formatDateTime(window.start)} – {formatDateTime(window.deadline)}
+            </span>
           </DetailPageMetaRow>
         ))}
         {author && (

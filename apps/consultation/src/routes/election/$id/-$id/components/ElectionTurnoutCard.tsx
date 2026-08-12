@@ -33,7 +33,7 @@ export function ElectionTurnoutCard({
       </div>
       <div className="h-2 w-full bg-muted">
         <div
-          className="h-full bg-emerald-600 transition-all dark:bg-emerald-500"
+          className="h-full bg-live transition-all"
           style={{ width: `${percentage}%` }}
         />
       </div>

@@ -35,11 +35,11 @@ export type CandidateResult = {
 const outcomeTone = (outcome: CandidateOutcome) => {
   switch (outcome) {
     case 'SEATED':
-      return 'bg-emerald-600 text-white dark:bg-emerald-500 dark:text-black'
+      return 'bg-live text-live-foreground'
     case 'RESERVE':
-      return 'bg-blue-600 text-white dark:bg-blue-500'
+      return 'bg-foreground text-background'
     case 'UNRESOLVED':
-      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+      return 'bg-pending text-pending-foreground'
     default:
       return 'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground'
   }
@@ -55,7 +55,7 @@ export function CandidateOutcomeBadge({
   return (
     <span
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs font-semibold uppercase tracking-wider',
+        'inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.09em] font-mono',
         outcomeTone(outcome)
       )}
     >
@@ -103,7 +103,7 @@ function GradeHistogram({
             </span>
             <span className="h-1.5 flex-1 bg-muted">
               <span
-                className="block h-full bg-emerald-600 transition-all dark:bg-emerald-500"
+                className="block h-full bg-live transition-all"
                 style={{ width: `${percentage}%` }}
               />
             </span>
@@ -132,7 +132,7 @@ function GradeSelector({
 }) {
   return (
     <fieldset disabled={disabled}>
-      <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
         Your grade
         <span className="sr-only"> for {candidate.displayName}</span>
       </legend>
@@ -142,8 +142,10 @@ function GradeSelector({
             key={grade}
             className={cn(
               'flex items-center justify-center border px-2 py-2 text-center text-xs font-medium transition-colors',
-              'has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50',
               'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60',
+              // The radio itself is sr-only, so the focus outline has to sit
+              // on the visible label instead.
+              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[3px] has-[:focus-visible]:outline-primary',
               selected === grade
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'cursor-pointer border-border text-muted-foreground hover:border-muted-foreground hover:text-foreground'
@@ -261,7 +263,7 @@ export function CandidateCard({
         <div className="space-y-4 border-t border-border pt-5">
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Qualifying grade (
                 {gradeQuantileLevelLabel(gradeQuantileApplied)})
               </dt>
@@ -272,7 +274,7 @@ export function CandidateCard({
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Minimum qualifying grade
               </dt>
               <dd className="mt-0.5 font-medium">
@@ -280,7 +282,7 @@ export function CandidateCard({
                 <span
                   className={
                     candidateResult.electable
-                      ? 'text-emerald-600 dark:text-emerald-400'
+                      ? 'text-live'
                       : 'text-muted-foreground'
                   }
                 >
@@ -291,7 +293,7 @@ export function CandidateCard({
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Majority gauge
               </dt>
               <dd className="mt-0.5 font-medium tabular-nums">
@@ -302,7 +304,7 @@ export function CandidateCard({
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Exact gauge power
               </dt>
               <dd className="mt-0.5 break-words font-mono text-xs">
@@ -311,7 +313,7 @@ export function CandidateCard({
               </dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
                 Published standing
               </dt>
               <dd className="mt-0.5 font-medium">

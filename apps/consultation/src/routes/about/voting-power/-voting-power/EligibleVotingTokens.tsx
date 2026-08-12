@@ -142,7 +142,7 @@ const EligibleVotingTokensContent = ({
     <section className="space-y-4" aria-labelledby="direct-holdings-heading">
       <h2
         id="direct-holdings-heading"
-        className="border-b border-border pb-4 text-2xl font-medium text-foreground dark:border-border dark:text-white"
+        className="border-b border-border pb-4 text-2xl font-medium text-foreground"
       >
         Direct holdings
       </h2>
@@ -179,7 +179,7 @@ const EligibleVotingTokensContent = ({
       <div>
         <h2
           id="dex-positions-heading"
-          className="border-b border-border pb-4 text-2xl font-medium text-foreground dark:border-border dark:text-white"
+          className="border-b border-border pb-4 text-2xl font-medium text-foreground"
         >
           Eligible DEX liquidity positions ({eligibleDexPositions.length})
         </h2>

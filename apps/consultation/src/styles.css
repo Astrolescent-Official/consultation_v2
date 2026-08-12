@@ -66,9 +66,14 @@ code,
   --band-foreground: #ffffff;
   --band-muted: #c3cedd;
 
-  /* State — deliberately not the accent; status must never read as brand. */
+  /* State — deliberately not the accent; status must never read as brand.
+     State colours are used as solid fills or as a left edge, never as a soft
+     tint behind their own text: a tint drops the pair below the system's
+     5.7:1 floor. White on --live is 5.89:1, white on --pending is 5.93:1. */
   --live: #00734f;
+  --live-foreground: #ffffff;
   --pending: #8a5a00;
+  --pending-foreground: #ffffff;
 
   --card: var(--background);
   --card-foreground: var(--foreground);
@@ -78,7 +83,7 @@ code,
   /* Ratify Magenta — #ce0d98 darkened to clear AA as text (6.98:1). */
   --primary: #a80c7c;
   --primary-foreground: #ffffff;
-  --secondary: var(--paper);
+  --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
   --muted: var(--paper);
   --accent: #fbeaf4;
@@ -117,7 +122,9 @@ code,
   --band-muted: #c3cedd;
 
   --live: #3ddc9a;
+  --live-foreground: #0a1226;
   --pending: #e8b54a;
+  --pending-foreground: #0a1226;
 
   --card: var(--paper);
   --card-foreground: var(--foreground);
@@ -126,9 +133,11 @@ code,
 
   --primary: #f272c6;
   --primary-foreground: #0a1226;
-  --secondary: var(--paper);
+  --secondary: var(--muted);
   --secondary-foreground: var(--foreground);
-  --muted: var(--paper);
+  /* One step above --paper so muted surfaces (skeletons, progress tracks,
+     chips) stay visible on a card, which is itself --paper. */
+  --muted: #1e3050;
   --accent: #2a0c22;
   --accent-foreground: var(--primary);
   --destructive: #ff6b6b;
@@ -163,7 +172,9 @@ code,
   --color-band-foreground: var(--band-foreground);
   --color-band-muted: var(--band-muted);
   --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
   --color-pending: var(--pending);
+  --color-pending-foreground: var(--pending-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -230,10 +241,13 @@ code,
     display: block;
     overflow-x: auto;
   }
-  /* Focus is a 2px accent outline at 3px offset, sitewide. */
+  /* Focus is a 2px accent outline at 3px offset with a 2px radius, sitewide.
+     Primitives deliberately carry no `outline-none` or focus ring of their
+     own, so this single rule is the whole focus treatment. */
   :focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 3px;
+    border-radius: 2px;
   }
 }
 

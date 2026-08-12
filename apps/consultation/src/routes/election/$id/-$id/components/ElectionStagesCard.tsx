@@ -150,7 +150,7 @@ export function buildElectionStages({
 const markerTone = (state: StageState) => {
   switch (state) {
     case 'done':
-      return 'bg-emerald-600 dark:bg-emerald-500'
+      return 'bg-live'
     case 'current':
       return 'bg-foreground ring-4 ring-foreground/15'
     case 'failed':

@@ -39,7 +39,7 @@ export const Page: React.FC = () => {
           proposals.{' '}
           <Link
             to="/about"
-            className="text-foreground dark:text-muted-foreground underline underline-offset-4 hover:text-foreground dark:hover:text-white"
+            className="text-primary underline underline-offset-[3px]"
           >
             Learn how governance works
           </Link>

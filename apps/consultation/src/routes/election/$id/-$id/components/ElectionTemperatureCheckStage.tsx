@@ -48,7 +48,7 @@ function Fact({
 }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+      <dt className="text-xs uppercase tracking-[0.09em] font-mono text-muted-foreground">
         {label}
       </dt>
       <dd className="mt-0.5 font-medium tabular-nums">{value}</dd>
@@ -56,9 +56,7 @@ function Fact({
         <dd
           className={cn(
             'text-xs',
-            positive
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-muted-foreground'
+            positive ? 'text-live' : 'text-muted-foreground'
           )}
         >
           {note}
