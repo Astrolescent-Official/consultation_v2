@@ -99,7 +99,7 @@ function HideToggleButton(props: HideToggleProps) {
       onClick={handleToggle}
       disabled={isSubmitting}
       aria-label={props.hidden ? 'Unhide this item' : 'Hide this item'}
-      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400 hover:bg-yellow-200 dark:hover:bg-yellow-900/60 transition-colors cursor-pointer disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded-sm bg-pending px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.09em] text-pending-foreground hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
     >
       {isSubmitting ? (
         <LoaderIcon className="size-3 animate-spin" />

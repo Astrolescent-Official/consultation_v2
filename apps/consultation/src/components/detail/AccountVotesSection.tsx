@@ -65,7 +65,7 @@ export function AccountVotesSection({
       if (accountVotes.length === 0) {
         return (
           <div className="bg-card border border-border p-6 shadow-sm">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground mb-4">
               Voters (0)
             </h3>
             <p className="text-sm text-muted-foreground">No voters yet.</p>
@@ -84,7 +84,7 @@ export function AccountVotesSection({
 
       return (
         <div className="bg-card border border-border p-6 shadow-sm">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground mb-4">
             Voters ({filteredCount}
             {selectedVote !== null ? ` / ${accountVotes.length}` : ''})
           </h3>

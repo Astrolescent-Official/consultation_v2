@@ -96,7 +96,7 @@ function PageContentInner({
   const details = (
     <>
       {proposal.hidden && isAdmin && (
-        <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300">
+        <div className="border-l-[3px] border-l-pending bg-muted px-4 py-3 text-sm text-foreground">
           This proposal is hidden from public view.
         </div>
       )}

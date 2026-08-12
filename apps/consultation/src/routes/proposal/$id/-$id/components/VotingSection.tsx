@@ -34,7 +34,7 @@ function OptionButton({
       className={cn(
         'w-full text-left px-4 py-3 border transition-all duration-200 flex items-center gap-3 cursor-pointer',
         selected
-          ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-black dark:border-white'
+          ? 'bg-primary text-primary-foreground border-primary'
           : 'border-border hover:border-muted-foreground hover:bg-secondary/50',
         disabled && 'opacity-50 cursor-not-allowed'
       )}
@@ -42,7 +42,7 @@ function OptionButton({
       <span
         className={cn(
           'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
-          selected ? 'border-current bg-white/20' : 'border-current'
+          selected ? 'border-current bg-current/20' : 'border-current'
         )}
       >
         {selected && <Check className="size-3" />}
@@ -280,14 +280,14 @@ function ConnectedVoting({
               key={opt.id}
               className={`w-full flex items-center gap-3 px-4 py-3 text-sm border transition-all ${
                 isSelected
-                  ? 'bg-neutral-900 text-white border-neutral-900 dark:bg-white dark:text-black dark:border-white font-medium'
+                  ? 'bg-primary text-primary-foreground border-primary font-medium'
                   : 'bg-muted border-border text-muted-foreground'
               }`}
             >
               <span
                 className={cn(
                   'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
-                  isSelected ? 'border-current bg-white/20' : 'border-current'
+                  isSelected ? 'border-current bg-current/20' : 'border-current'
                 )}
               >
                 {isSelected && <Check className="size-3" />}
@@ -321,11 +321,7 @@ function ConnectedVoting({
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={cn(
-              'w-full mt-4',
-              canSubmit &&
-                'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 border-transparent'
-            )}
+            className="w-full mt-4"
           >
             {isSubmitting && <LoaderIcon className="size-4 animate-spin" />}
             {hasVoted ? 'Change Vote' : 'Sign Transaction'}
