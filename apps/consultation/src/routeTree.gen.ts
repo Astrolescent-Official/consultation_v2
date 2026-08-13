@@ -16,6 +16,7 @@ import { Route as TcNewIndexRouteImport } from './routes/tc/new/index'
 import { Route as TcIdIndexRouteImport } from './routes/tc/$id/index'
 import { Route as ProposalIdIndexRouteImport } from './routes/proposal/$id/index'
 import { Route as ElectionIdIndexRouteImport } from './routes/election/$id/index'
+import { Route as AboutVotingPowerIndexRouteImport } from './routes/about/voting-power/index'
 import { Route as AboutAdminIndexRouteImport } from './routes/about/admin/index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -53,6 +54,11 @@ const ElectionIdIndexRoute = ElectionIdIndexRouteImport.update({
   path: '/election/$id/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutVotingPowerIndexRoute = AboutVotingPowerIndexRouteImport.update({
+  id: '/about/voting-power/',
+  path: '/about/voting-power/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutAdminIndexRoute = AboutAdminIndexRouteImport.update({
   id: '/about/admin/',
   path: '/about/admin/',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutIndexRoute
   '/tc': typeof TcIndexRoute
   '/about/admin': typeof AboutAdminIndexRoute
+  '/about/voting-power': typeof AboutVotingPowerIndexRoute
   '/election/$id': typeof ElectionIdIndexRoute
   '/proposal/$id': typeof ProposalIdIndexRoute
   '/tc/$id': typeof TcIdIndexRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutIndexRoute
   '/tc': typeof TcIndexRoute
   '/about/admin': typeof AboutAdminIndexRoute
+  '/about/voting-power': typeof AboutVotingPowerIndexRoute
   '/election/$id': typeof ElectionIdIndexRoute
   '/proposal/$id': typeof ProposalIdIndexRoute
   '/tc/$id': typeof TcIdIndexRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/about/': typeof AboutIndexRoute
   '/tc/': typeof TcIndexRoute
   '/about/admin/': typeof AboutAdminIndexRoute
+  '/about/voting-power/': typeof AboutVotingPowerIndexRoute
   '/election/$id/': typeof ElectionIdIndexRoute
   '/proposal/$id/': typeof ProposalIdIndexRoute
   '/tc/$id/': typeof TcIdIndexRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/tc'
     | '/about/admin'
+    | '/about/voting-power'
     | '/election/$id'
     | '/proposal/$id'
     | '/tc/$id'
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/tc'
     | '/about/admin'
+    | '/about/voting-power'
     | '/election/$id'
     | '/proposal/$id'
     | '/tc/$id'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/about/'
     | '/tc/'
     | '/about/admin/'
+    | '/about/voting-power/'
     | '/election/$id/'
     | '/proposal/$id/'
     | '/tc/$id/'
@@ -128,6 +140,7 @@ export interface RootRouteChildren {
   AboutIndexRoute: typeof AboutIndexRoute
   TcIndexRoute: typeof TcIndexRoute
   AboutAdminIndexRoute: typeof AboutAdminIndexRoute
+  AboutVotingPowerIndexRoute: typeof AboutVotingPowerIndexRoute
   ElectionIdIndexRoute: typeof ElectionIdIndexRoute
   ProposalIdIndexRoute: typeof ProposalIdIndexRoute
   TcIdIndexRoute: typeof TcIdIndexRoute
@@ -185,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ElectionIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about/voting-power/': {
+      id: '/about/voting-power/'
+      path: '/about/voting-power'
+      fullPath: '/about/voting-power'
+      preLoaderRoute: typeof AboutVotingPowerIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about/admin/': {
       id: '/about/admin/'
       path: '/about/admin'
@@ -200,6 +220,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutIndexRoute: AboutIndexRoute,
   TcIndexRoute: TcIndexRoute,
   AboutAdminIndexRoute: AboutAdminIndexRoute,
+  AboutVotingPowerIndexRoute: AboutVotingPowerIndexRoute,
   ElectionIdIndexRoute: ElectionIdIndexRoute,
   ProposalIdIndexRoute: ProposalIdIndexRoute,
   TcIdIndexRoute: TcIdIndexRoute,

@@ -480,7 +480,7 @@ describe('D1 majority judgment persistence', () => {
          last_vote_count,
          results_computed
        ) VALUES (
-         'component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y',
+         'component_rdx1cp90ys553uwxuckev249x5wezucqru0u4qr7qdxdc9tlpmnh93242k',
          'temperature_check',
          3,
          2,
