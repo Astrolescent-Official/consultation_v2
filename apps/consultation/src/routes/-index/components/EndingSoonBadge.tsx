@@ -14,7 +14,7 @@ export function EndingSoonBadge({ deadline }: EndingSoonBadgeProps) {
   )
 
   return (
-    <span className="inline-flex items-center gap-1 bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+    <span className="inline-flex items-center gap-1 rounded-sm bg-pending px-2.5 py-0.5 font-mono text-xs font-medium text-pending-foreground">
       <Clock className="size-3" />
       {hoursLeft <= 1 ? 'Ending soon' : `${hoursLeft}h left`}
     </span>

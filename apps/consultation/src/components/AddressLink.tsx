@@ -34,7 +34,7 @@ export function AddressLink({
       tabIndex={0}
       title={address}
       className={cn(
-        'cursor-pointer hover:text-primary hover:underline focus:outline-none focus:ring-1 focus:ring-primary',
+        'cursor-pointer hover:text-primary hover:underline',
         className
       )}
       onClick={(e) => {

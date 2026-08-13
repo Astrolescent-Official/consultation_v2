@@ -31,7 +31,7 @@ export function RoundAuditHistory({
       <div className="grid gap-4 sm:grid-cols-2">
         {rounds.map((round) => (
           <Card key={round.round} className="gap-2 p-6 shadow-none">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
               {round.round === 'RoundOne' ? 'Round 1' : 'Round 2 rerun'}
             </p>
             <p className="text-sm font-medium">

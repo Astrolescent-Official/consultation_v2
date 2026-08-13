@@ -119,10 +119,10 @@ function ElectionQuorumBadge({
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${
+      className={`inline-flex items-center px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.09em] font-mono ${
         quorumMet
-          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-          : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+          ? 'bg-live text-live-foreground'
+          : 'bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground'
       }`}
     >
       {quorumMet ? 'Quorum Reached' : `Quorum ${displayPercent}%`}
@@ -288,7 +288,7 @@ export function MajorityJudgmentElectionView({
             <Link
               to="/tc/$id"
               params={{ id: String(temperatureCheckId) }}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 hover:text-foreground transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.09em] font-mono bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground hover:text-foreground transition-colors"
             >
               <span>Candidate-list TC #{temperatureCheckId}</span>
               <ArrowUpRight className="size-3" />

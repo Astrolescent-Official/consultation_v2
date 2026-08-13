@@ -69,7 +69,7 @@ export function VoteResultsSection({
       return (
         <div className="bg-card border border-border p-6 shadow-sm">
           <div className="mb-6">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
               Current Results
             </h3>
           </div>
@@ -89,9 +89,9 @@ export function VoteResultsSection({
                       {formatXrd(option.power)} XRD ({percentage.toFixed(1)}%)
                     </span>
                   </div>
-                  <div className="w-full bg-neutral-100 dark:bg-neutral-800 h-2">
+                  <div className="w-full bg-muted h-2">
                     <div
-                      className="bg-emerald-600 dark:bg-emerald-500 h-full transition-all"
+                      className="bg-live h-full transition-all"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>

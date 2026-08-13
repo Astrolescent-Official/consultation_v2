@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* IBM Plex Sans + IBM Plex Mono, self-hosted via @fontsource.
+   The Radix DAO design system bans third-party font requests. */
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
 
@@ -8,14 +15,16 @@
 
 body {
   @apply m-0;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--ds-font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.62;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-code {
-  font-family:
-    source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+code,
+.data {
+  font-family: var(--ds-font-mono);
 }
 
 /* Custom scrollbar */
@@ -25,103 +34,147 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: oklch(0.96 0 0);
+  background: var(--paper);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.75 0 0);
+  background: var(--rule-strong);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.65 0 0);
+  background: var(--muted-foreground);
 }
 
-.dark ::-webkit-scrollbar-track {
-  background: oklch(0.18 0 0);
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.35 0 0);
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0 0);
-}
-
+/* Radix DAO design system tokens.
+   Light is the system's primary ground; dark is tuned, not inverted. */
 :root {
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.13 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0 0);
-  --primary: oklch(0.2 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.2 0 0);
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.55 0 0);
-  --accent: oklch(0.965 0 0);
-  --accent-foreground: oklch(0.2 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.91 0 0);
-  --input: oklch(0.91 0 0);
-  --ring: oklch(0.87 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.13 0 0);
-  --sidebar-primary: oklch(0.2 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.965 0 0);
-  --sidebar-accent-foreground: oklch(0.2 0 0);
-  --sidebar-border: oklch(0.91 0 0);
-  --sidebar-ring: oklch(0.87 0 0);
+  --ds-font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --ds-font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Ground */
+  --background: #ffffff;
+  --paper: #f5f6fa;
+  --rule: #dde3ec;
+  --rule-strong: #b9c4d4;
+
+  /* Ink — Radix navy, one notch deeper. 14.4:1 on white. */
+  --foreground: #012b4e;
+  --muted-foreground: #51637a;
+
+  /* Full-bleed deep sections */
+  --band: #00204a;
+  --band-foreground: #ffffff;
+  --band-muted: #c3cedd;
+
+  /* State — deliberately not the accent; status must never read as brand.
+     State colours are used as solid fills or as a left edge, never as a soft
+     tint behind their own text: a tint drops the pair below the system's
+     5.7:1 floor. White on --live is 5.89:1, white on --pending is 5.93:1. */
+  --live: #00734f;
+  --live-foreground: #ffffff;
+  --pending: #8a5a00;
+  --pending-foreground: #ffffff;
+
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--background);
+  --popover-foreground: var(--foreground);
+
+  /* Ratify Magenta — #ce0d98 darkened to clear AA as text (6.98:1). */
+  --primary: #a80c7c;
+  --primary-foreground: #ffffff;
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--paper);
+  --accent: #fbeaf4;
+  --accent-foreground: var(--primary);
+  --destructive: #a4161a;
+  --destructive-foreground: #ffffff;
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--primary);
+  --chart-1: #a80c7c;
+  --chart-2: #052cc0;
+  --chart-3: #00c389;
+  --chart-4: #00204a;
+  --chart-5: #8a5a00;
+  --radius: 4px;
+  --sidebar: var(--paper);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--primary);
 }
 
 .dark {
-  --background: oklch(0.16 0 0);
-  --foreground: oklch(0.97 0 0);
-  --card: oklch(0.23 0 0);
-  --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.23 0 0);
-  --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.97 0 0);
-  --primary-foreground: oklch(0.16 0 0);
-  --secondary: oklch(0.25 0 0);
-  --secondary-foreground: oklch(0.97 0 0);
-  --muted: oklch(0.25 0 0);
-  --muted-foreground: oklch(0.63 0 0);
-  --accent: oklch(0.25 0 0);
-  --accent-foreground: oklch(0.97 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.30 0 0);
-  --input: oklch(0.30 0 0);
-  --ring: oklch(0.4 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.19 0 0);
-  --sidebar-foreground: oklch(0.97 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.97 0 0);
-  --sidebar-accent: oklch(0.25 0 0);
-  --sidebar-accent-foreground: oklch(0.97 0 0);
-  --sidebar-border: oklch(0.30 0 0);
-  --sidebar-ring: oklch(0.4 0 0);
+  --background: #0a1226;
+  --paper: #0e1a33;
+  --rule: #1e2e4d;
+  --rule-strong: #33476e;
+  --foreground: #e6edf7;
+  --muted-foreground: #a9bad1;
+
+  --band: #001a3d;
+  --band-foreground: #ffffff;
+  --band-muted: #c3cedd;
+
+  --live: #3ddc9a;
+  --live-foreground: #0a1226;
+  --pending: #e8b54a;
+  --pending-foreground: #0a1226;
+
+  --card: var(--paper);
+  --card-foreground: var(--foreground);
+  --popover: var(--paper);
+  --popover-foreground: var(--foreground);
+
+  --primary: #f272c6;
+  --primary-foreground: #0a1226;
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  /* One step above --paper so muted surfaces (skeletons, progress tracks,
+     chips) stay visible on a card, which is itself --paper. */
+  --muted: #1e3050;
+  --accent: #2a0c22;
+  --accent-foreground: var(--primary);
+  --destructive: #ff6b6b;
+  --destructive-foreground: #0a1226;
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--primary);
+  --chart-1: #f272c6;
+  --chart-2: #6f8dff;
+  --chart-3: #3ddc9a;
+  --chart-4: #c3cedd;
+  --chart-5: #e8b54a;
+  --sidebar: var(--paper);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--rule);
+  --sidebar-ring: var(--primary);
 }
 
 @theme inline {
+  --font-sans: var(--ds-font-sans);
+  --font-mono: var(--ds-font-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-band: var(--band);
+  --color-band-foreground: var(--band-foreground);
+  --color-band-muted: var(--band-muted);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-pending: var(--pending);
+  --color-pending-foreground: var(--pending-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -144,10 +197,20 @@ code {
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
+  /* Radii are tiny and purposeful: 2px on tags, 4px on buttons. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 4px;
+  /* Hairline rules do the work shadows do elsewhere — there are no shadows. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -165,8 +228,36 @@ code {
   body {
     @apply bg-background text-foreground;
   }
+  /* Headings: 700 at -0.02em, 1.12 line-height. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+  }
   .prose table {
     display: block;
     overflow-x: auto;
+  }
+  /* Focus is a 2px accent outline at 3px offset with a 2px radius, sitewide.
+     Primitives deliberately carry no `outline-none` or focus ring of their
+     own, so this single rule is the whole focus treatment. */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+/* Motion is almost none, and never decorative. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

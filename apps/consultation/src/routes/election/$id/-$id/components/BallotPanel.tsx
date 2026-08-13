@@ -99,12 +99,7 @@ export function BallotPanel({
             type="button"
             onClick={onSubmit}
             disabled={remaining > 0 || submitting}
-            className={cn(
-              'mt-4 w-full',
-              remaining === 0 &&
-                !submitting &&
-                'border-transparent bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500'
-            )}
+            className="mt-4 w-full"
           >
             {submitting ? <LoaderIcon className="size-4 animate-spin" /> : null}
             {submitting

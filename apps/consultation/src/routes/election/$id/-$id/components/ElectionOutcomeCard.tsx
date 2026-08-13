@@ -62,7 +62,7 @@ export function ElectionOutcomeCard({
               className={`flex items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0 ${
                 result?.tieGroupId === null || result?.tieGroupId === undefined
                   ? 'border-border/50'
-                  : 'border-amber-400/70 bg-amber-50/60 px-2 pt-2 dark:bg-amber-950/20'
+                  : 'border-l-[3px] border-l-pending bg-muted px-2 pt-2'
               }`}
             >
               <div className="min-w-0">
@@ -76,7 +76,7 @@ export function ElectionOutcomeCard({
                 </p>
                 {result?.tieGroupId === null ||
                 result?.tieGroupId === undefined ? null : (
-                  <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                  <p className="text-xs font-medium text-pending">
                     Tied rank · group {result.tieGroupId} · {tieGroupSize}{' '}
                     candidates · {tieLocation}
                   </p>

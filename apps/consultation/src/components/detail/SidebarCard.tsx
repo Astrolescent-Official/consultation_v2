@@ -22,7 +22,7 @@ export function SidebarCard({
     >
       {title ? (
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
             {title}
           </h3>
           {action}
