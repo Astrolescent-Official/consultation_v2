@@ -2,20 +2,10 @@ import { Atom } from '@effect-atom/atom-react'
 import { GatewayApiClient } from '@radix-effects/gateway'
 import { AccountAddress } from '@radix-effects/shared'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import {
-  Array as A,
-  ConfigProvider,
-  Data,
-  Effect,
-  Layer,
-  Option,
-  pipe
-} from 'effect'
-import { GatewayApiClientLayer } from 'shared/gateway'
+import { Array as A, Data, Effect, Option, pipe } from 'effect'
 import {
   GovernanceComponent,
-  type TemperatureCheckId,
-  GovernanceConfigLayer
+  type TemperatureCheckId
 } from 'shared/governance/index'
 import type {
   MakeTemperatureCheckInput,
@@ -26,26 +16,12 @@ import {
   type KeyValueStoreAddress,
   TemperatureCheckCreatedEvent
 } from 'shared/schemas'
-import { makeAtomRuntime } from '@/atom/makeRuntimeAtom'
-import {
-  RadixDappToolkit,
-  SendTransaction,
-  WalletErrorResponse
-} from '@/lib/dappToolkit'
-import { getCurrentAccount } from '@/lib/selectedAccount'
+import { governanceRuntime as runtime } from '@/atom/governanceRuntime'
+import { SendTransaction, WalletErrorResponse } from '@/lib/dappToolkit'
+import { getConnectedAccountAddress } from '@/lib/selectedAccount'
 import { truncateAddress } from '@/lib/utils'
 import { accountsAtom } from './dappToolkitAtom'
-import { withToast } from './withToast'
-import { envVars } from '@/lib/envVars'
-
-const runtime = makeAtomRuntime(
-  Layer.mergeAll(GovernanceComponent.Default, SendTransaction.Default).pipe(
-    Layer.provideMerge(RadixDappToolkit.Live),
-    Layer.provideMerge(GatewayApiClientLayer),
-    Layer.provide(GovernanceConfigLayer),
-    Layer.provide(Layer.setConfigProvider(ConfigProvider.fromJson(envVars)))
-  )
-)
+import { transactionFailureMessage, withToast } from './withToast'
 
 export const temperatureChecksAtom = runtime.atom(
   Effect.gen(function* () {
@@ -56,12 +32,6 @@ export const temperatureChecksAtom = runtime.atom(
 )
 
 export class EventNotFoundError extends Data.TaggedError('EventNotFoundError')<{
-  message: string
-}> {}
-
-export class NoAccountConnectedError extends Data.TaggedError(
-  'NoAccountConnectedError'
-)<{
   message: string
 }> {}
 
@@ -76,17 +46,7 @@ export const makeTemperatureCheckAtom = runtime.fn(
       const governanceComponent = yield* GovernanceComponent
       const gatewayApiClient = yield* GatewayApiClient
       const sendTransaction = yield* SendTransaction
-
-      const currentAccountOption = yield* getCurrentAccount
-
-      if (Option.isNone(currentAccountOption)) {
-        return yield* new NoAccountConnectedError({
-          message: 'Please connect your wallet first'
-        })
-      }
-
-      const currentAccount = currentAccountOption.value
-      const authorAccount = AccountAddress.make(currentAccount.address)
+      const authorAccount = yield* getConnectedAccountAddress()
 
       const manifest = yield* governanceComponent.makeTemperatureCheckManifest({
         ...input,
@@ -96,7 +56,7 @@ export const makeTemperatureCheckAtom = runtime.fn(
 
       yield* Effect.log('Transaction manifest:', manifest)
 
-      const message = `Creating TC ${input.title} with ${truncateAddress(currentAccount.address)}`
+      const message = `Creating TC ${input.title} with ${truncateAddress(authorAccount)}`
       const result = yield* sendTransaction(manifest, message)
 
       const events = yield* gatewayApiClient.transaction
@@ -130,17 +90,7 @@ export const makeTemperatureCheckAtom = runtime.fn(
     withToast({
       whenLoading: 'Making temperature check...',
       whenSuccess: 'Temperature check made successfully',
-      whenFailure: ({ cause }) => {
-        if (cause._tag === 'Fail') {
-          if (cause.error instanceof WalletErrorResponse) {
-            return Option.some(cause.error.message ?? 'Wallet error')
-          }
-          if (cause.error instanceof NoAccountConnectedError) {
-            return Option.some(cause.error.message)
-          }
-        }
-        return Option.some('Failed to make temperature check')
-      }
+      whenFailure: transactionFailureMessage('Failed to make temperature check')
     })
   )
 )

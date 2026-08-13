@@ -14,43 +14,51 @@
 | Layer | Technology |
 | --- | --- |
 | Framework | React 19, Vite |
+| Runtime | Cloudflare Worker with D1 and scheduled polling |
 | Routing | TanStack Router + [TanStack Start](https://tanstack.com/start) |
 | State | [Effect Atom](https://github.com/effect-ts/atom) (reactive atoms with Effect runtime) |
 | Styling | Tailwind CSS v4, Radix UI, shadcn/ui, CVA |
 | Radix | Radix dApp Toolkit (wallet connection, transaction signing), Gateway API client |
 | Forms | TanStack Form |
 
-## Environment variables
+## Public app configuration
 
-All variables use the `VITE_` prefix (Vite injects them at build time via `import.meta.env`).
+Public application and collector values are defined once in the selected
+`wrangler.jsonc` environment. The Worker validates them and serves the same
+values to the browser from `/app-config.js` before hydration.
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `VITE_ENV` | Environment (`dev`, `staging`, `prod`, `local`) | `prod` |
-| `VITE_PUBLIC_DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
-| `VITE_PUBLIC_NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = stokenet) | — (required) |
-| `VITE_VOTE_COLLECTOR_URL` | Vote collector API base URL | — (required) |
-
-Create a `.env` file in `apps/consultation/`:
-
-```sh
-VITE_ENV=dev
-VITE_PUBLIC_DAPP_DEFINITION_ADDRESS=account_rdx...
-VITE_PUBLIC_NETWORK_ID=2
-VITE_VOTE_COLLECTOR_URL=http://localhost:4000
-```
+| `ENV` | Environment (`local`, `preview`, or `production`) | — (required) |
+| `DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
+| `GOVERNANCE_COMPONENT_ADDRESS` | Governance component used by the UI and poller | — (required) |
+| `NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = Stokenet) | — (required) |
 
 ## Scripts
 
 | Script | Command | Description |
 | --- | --- | --- |
-| `dev` | `vite dev --port 3000` | Start dev server on port 3000 |
+| `dev` | `CLOUDFLARE_ENV=preview vite dev --port 3000` | Start the local Stokenet Worker on port 3000 |
 | `build` | `vite build` | Production build |
+| `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
+| `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |
+| `deploy:preview` | `pnpm build:preview && wrangler deploy ...` | Deploy isolated preview Worker |
 | `preview` | `vite preview` | Preview production build |
 | `check-types` | `tsc --noEmit` | Type-check without emitting |
 | `format` | `biome format` | Format with Biome |
 | `lint` | `biome lint` | Lint with Biome |
 | `check` | `biome check` | Biome format + lint |
+
+## Preview environment
+
+The preview Worker builds against Stokenet and uses an isolated D1 database:
+
+```sh
+pnpm deploy:preview
+```
+
+See [`../../docs/environments.md`](../../docs/environments.md) for the full
+environment matrix and release checks.
 
 ## Project structure
 

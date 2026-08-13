@@ -1,0 +1,105 @@
+import { assert, describe, it } from '@effect/vitest'
+import {
+  encodeManifestString,
+  renderCandidateGrades,
+  renderCandidateOrder,
+  renderGovernanceParameterSetInput,
+  renderInstant,
+  renderMajorityJudgmentCandidateInputs,
+  renderParameterSetIdOption,
+  renderTemperatureCheckDraft
+} from './governanceManifests'
+
+describe('governance manifest serialization', () => {
+  it('encodes optional parameter-set identifiers with the Scrypto Option shape', () => {
+    assert.strictEqual(renderParameterSetIdOption(undefined), 'Enum<0u8>()')
+    assert.strictEqual(
+      renderParameterSetIdOption('constitutional'),
+      'Enum<1u8>("constitutional")'
+    )
+  })
+
+  it('escapes every interpolated string as a manifest string literal', () => {
+    const hostile = 'Label"\nCALL_METHOD Address("component_bad") "attack";\\'
+
+    assert.strictEqual(encodeManifestString(hostile), JSON.stringify(hostile))
+    assert.strictEqual(
+      renderGovernanceParameterSetInput({
+        _tag: 'Standard',
+        label: hostile,
+        temperatureCheck: {
+          votingDays: 7,
+          quorum: '1000',
+          approvalThreshold: '0.6'
+        },
+        proposal: {
+          votingDays: 14,
+          quorum: '5000',
+          approvalThreshold: '0.7'
+        }
+      }),
+      `Tuple(${JSON.stringify(hostile)}, Enum<0u8>(Tuple(7u32, Decimal("1000"), Decimal("0.6")), Tuple(14u32, Decimal("5000"), Decimal("0.7"))))`
+    )
+  })
+
+  it('safely serializes TC text, vote options, and links', () => {
+    const hostile = '"\nCALL_METHOD Address("component_bad") "attack";'
+    const rendered = renderTemperatureCheckDraft({
+      title: hostile,
+      shortDescription: hostile,
+      description: hostile,
+      links: [`https://example.com/${hostile}`],
+      followUp: {
+        _tag: 'StandardProposal',
+        voteOptions: [hostile, 'Against'],
+        maxSelections: 1
+      }
+    })
+
+    assert.isTrue(rendered.includes(JSON.stringify(hostile)))
+    assert.isTrue(
+      rendered.includes(JSON.stringify(`https://example.com/${hostile}`))
+    )
+    assert.isFalse(rendered.includes(`Tuple("${hostile}")`))
+  })
+
+  it('renders complete MJ ballots in candidate-id order', () => {
+    assert.strictEqual(
+      renderCandidateGrades([
+        { candidateId: 2, grade: 3 },
+        { candidateId: 0, grade: 4 },
+        { candidateId: 1, grade: 1 }
+      ]),
+      'Array<Tuple>(Tuple(Tuple(0u32), Enum<4u8>()), Tuple(Tuple(1u32), Enum<1u8>()), Tuple(Tuple(2u32), Enum<3u8>()))'
+    )
+  })
+
+  it('renders Instant and candidate permutation values with manifest types', () => {
+    assert.strictEqual(
+      renderInstant(new Date('2026-07-01T00:00:00.000Z')),
+      '1782864000i64'
+    )
+    assert.strictEqual(
+      renderCandidateOrder([2, 0, 1]),
+      'Array<Tuple>(Tuple(2u32), Tuple(0u32), Tuple(1u32))'
+    )
+  })
+
+  it('escapes every MJ candidate field before rendering', () => {
+    const hostile = '"\nCALL_METHOD Address("component_bad") "attack";'
+    const rendered = renderMajorityJudgmentCandidateInputs([
+      {
+        reference: hostile,
+        displayName: hostile,
+        description: hostile,
+        links: [`https://example.com/${hostile}`]
+      }
+    ])
+
+    assert.isTrue(rendered.includes(JSON.stringify(hostile)))
+    assert.isTrue(
+      rendered.includes(JSON.stringify(`https://example.com/${hostile}`))
+    )
+    assert.isFalse(rendered.includes(`Tuple("${hostile}")`))
+  })
+})

@@ -2,13 +2,17 @@ import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Cause } from 'effect'
 import type { ProposalId } from 'shared/governance/brandedTypes'
 import type { Proposal } from 'shared/governance/schemas'
-import { getProposalByIdAtom, getProposalVotesByAccountsAtom } from '@/atom/proposalsAtom'
+import {
+  getProposalByIdAtom,
+  getProposalVotesByAccountsAtom
+} from '@/atom/proposalsAtom'
 import { AccountVotesSection } from '@/components/detail/AccountVotesSection'
 import { DetailPageDetails } from '@/components/detail/DetailPageDetails'
 import { DetailPageHeader } from '@/components/detail/DetailPageHeader'
 import { DetailPageLayout } from '@/components/detail/DetailPageLayout'
 import { HideToggle } from '@/components/detail/HideToggle'
 import { OriginBadge } from '@/components/detail/OriginBadge'
+import { ParameterSetSnapshotDetails } from '@/components/detail/ParameterSetSnapshotDetails'
 import { QuorumBadge } from '@/components/detail/QuorumBadge'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { InlineCode } from '@/components/ui/typography'
@@ -49,7 +53,11 @@ function PageContentInner({
   proposal,
   id,
   isAdmin
-}: { proposal: Proposal; id: ProposalId; isAdmin: boolean }) {
+}: {
+  proposal: Proposal
+  id: ProposalId
+  isAdmin: boolean
+}) {
   const status = getItemStatus(proposal.deadline)
   const accountsVotesResult = useAtomValue(
     getProposalVotesByAccountsAtom(proposal.voters)
@@ -66,7 +74,15 @@ function PageContentInner({
       author={proposal.author}
       links={proposal.links.map((l) => l.toString())}
       quorumBadge={
-        <QuorumBadge entityType="proposal" entityId={id} quorum={Number(proposal.quorum)} />
+        <QuorumBadge
+          entityType="proposal"
+          entityId={id}
+          quorum={Number(
+            proposal.parameterSet.parameters._tag === 'Standard'
+              ? proposal.parameterSet.parameters.proposal.quorum
+              : '0'
+          )}
+        />
       }
       originBadge={
         <div className="flex items-center gap-2">
@@ -84,6 +100,7 @@ function PageContentInner({
           This proposal is hidden from public view.
         </div>
       )}
+      <ParameterSetSnapshotDetails parameterSet={proposal.parameterSet} />
       <DetailPageDetails
         shortDescription={proposal.shortDescription}
         description={proposal.description}

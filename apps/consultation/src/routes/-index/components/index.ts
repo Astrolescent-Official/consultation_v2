@@ -1,4 +1,5 @@
 export { CardSkeleton, CardSkeletonList } from './CardSkeleton'
+export { ElectionsList } from './ElectionsList'
 export { EmptyState } from './EmptyState'
 export { EndingSoonBadge, isEndingSoon } from './EndingSoonBadge'
 export { ItemCard } from './ItemCard'

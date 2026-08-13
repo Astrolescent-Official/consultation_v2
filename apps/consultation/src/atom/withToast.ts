@@ -2,7 +2,11 @@ import { Registry } from '@effect-atom/atom-react'
 import type * as Cause from 'effect/Cause'
 import * as Effect from 'effect/Effect'
 import * as Option from 'effect/Option'
+import * as ParseResult from 'effect/ParseResult'
+import { AdminBadgeNotFoundError } from 'shared/governance/index'
 import { type ExternalToast, toast } from 'sonner'
+import { WalletErrorResponse } from '@/lib/dappToolkit'
+import { NoAccountConnectedError } from '@/lib/selectedAccount'
 
 type ToastOptions<A, E, Args extends ReadonlyArray<unknown>> = {
   whenLoading:
@@ -74,3 +78,28 @@ export const withToast =
       })
       return result
     })
+
+/**
+ * `whenFailure` handler shared by every wallet-signed atom. These four errors
+ * carry a message worth showing; anything else falls back to the caller's
+ * action-specific text.
+ */
+export const transactionFailureMessage =
+  (fallback: string) =>
+  <E>({ cause }: { cause: Cause.Cause<E> }) => {
+    if (cause._tag === 'Fail') {
+      if (cause.error instanceof WalletErrorResponse) {
+        return Option.some(cause.error.message ?? 'Wallet error')
+      }
+      if (
+        cause.error instanceof NoAccountConnectedError ||
+        cause.error instanceof AdminBadgeNotFoundError
+      ) {
+        return Option.some(cause.error.message)
+      }
+      if (cause.error instanceof ParseResult.ParseError) {
+        return Option.some(`Invalid input: ${cause.error.message}`)
+      }
+    }
+    return Option.some(fallback)
+  }

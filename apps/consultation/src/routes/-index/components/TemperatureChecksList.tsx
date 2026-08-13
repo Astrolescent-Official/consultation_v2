@@ -1,6 +1,6 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Cause } from 'effect'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { TemperatureCheck } from 'shared/governance/schemas'
 import {
   paginatedTemperatureChecksAtom,
@@ -24,11 +24,6 @@ export function TemperatureChecksList({
   const result = useAtomValue(paginatedTemperatureChecksAtom(page)(sortOrder))
   const isAdmin = useIsAdmin()
 
-  // Reset to page 1 when sort order changes
-  useEffect(() => {
-    setPage(1)
-  }, [sortOrder])
-
   return Result.builder(result)
     .onInitial(() => <CardSkeletonList />)
     .onSuccess((data) => {
@@ -50,7 +45,9 @@ export function TemperatureChecksList({
                 author={tc.author}
                 start={tc.start}
                 deadline={tc.deadline}
-                quorum={Number(tc.quorum)}
+                quorum={Number(
+                  tc.parameterSet.parameters.temperatureCheck.quorum
+                )}
                 linkPrefix="/tc"
                 hidden={tc.hidden}
               />

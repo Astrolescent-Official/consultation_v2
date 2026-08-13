@@ -63,6 +63,17 @@ export function formatXrd(value: number): string {
   return value.toFixed(2)
 }
 
+/** Renders an on-ledger decimal quorum as an abbreviated XRD amount. */
+export const formatQuorum = (quorum: string): string =>
+  `${formatXrd(Number(quorum))} XRD`
+
+/**
+ * Renders an on-ledger 0–1 approval threshold. Keeps the exact snapshot value
+ * alongside the percentage, since the percentage is rounded.
+ */
+export const formatApprovalThreshold = (threshold: string): string =>
+  `${threshold} (${(Number(threshold) * 100).toFixed(2)}%)`
+
 export function formatDateTime(date: Date): string {
   return date.toLocaleString('en-GB', {
     day: 'numeric',

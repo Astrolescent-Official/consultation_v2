@@ -8,32 +8,32 @@
  *   pnpm tally proposal <id>  # Tally a proposal
  *
  * Environment:
- *   NETWORK_ID         — 1 (mainnet) or 2 (stokenet)
- *   COMPONENT_ADDRESS  — (optional) override the governance component address
+ *   NETWORK_ID                    — 1 (mainnet) or 2 (stokenet)
+ *   GOVERNANCE_COMPONENT_ADDRESS  — optional governance component override
  */
 
 import { GetLedgerStateService } from '@radix-effects/gateway'
 import type { AccountAddress } from '@radix-effects/shared'
-import { ComponentAddress, StateVersion } from '@radix-effects/shared'
+import { StateVersion } from '@radix-effects/shared'
 import BigNumber from 'bignumber.js'
-import { NodeRuntime } from '@effect/platform-node'
 import {
-  Config,
   Effect,
   Layer,
   Logger,
   Option,
+  pipe,
   Record as R,
-  Schedule,
-  pipe
+  Schedule
 } from 'effect'
-import { GovernanceComponent } from 'shared/governance/index'
-import {
-  GovernanceConfig,
-  UnsupportedNetworkIdError
-} from 'shared/governance/config'
-import type { ProposalId, TemperatureCheckId } from 'shared/governance/brandedTypes'
 import { GatewayApiClientLayer } from 'shared/gateway'
+import type {
+  ProposalId,
+  TemperatureCheckId
+} from 'shared/governance/brandedTypes'
+import {
+  GovernanceComponent,
+  GovernanceConfigLayer
+} from 'shared/governance/index'
 import {
   type DedupedVote,
   fetchDedupedProposalVotes,
@@ -42,49 +42,13 @@ import {
 import { VotePowerSnapshot } from '../src/vote-calculation/votePowerSnapshot'
 import { getVotePowerConfig } from '../src/vote-calculation/voteSourceConfig'
 
-/**
- * GovernanceConfigLayer that respects an optional COMPONENT_ADDRESS env var.
- * If set, overrides the component address from the network defaults.
- */
-const TallyGovernanceConfigLayer = Layer.unwrapEffect(
-  Effect.gen(function* () {
-    const networkId = yield* Config.number('NETWORK_ID').pipe(Effect.orDie)
-    const overrideAddress = yield* Config.option(
-      Config.string('COMPONENT_ADDRESS')
-    )
-
-    const baseConfig =
-      networkId === 1
-        ? GovernanceConfig.MainnetLive
-        : networkId === 2
-          ? GovernanceConfig.StokenetLive
-          : yield* Effect.fail(
-              new UnsupportedNetworkIdError({
-                message: `NETWORK_ID must be 1 (mainnet) or 2 (stokenet), got: ${networkId}`,
-              })
-            )
-
-    if (Option.isSome(overrideAddress)) {
-      return Layer.effect(
-        GovernanceConfig,
-        Effect.map(GovernanceConfig, (existing) => ({
-          ...existing,
-          componentAddress: ComponentAddress.make(overrideAddress.value)
-        }))
-      ).pipe(Layer.provide(baseConfig))
-    }
-
-    return baseConfig
-  })
-)
-
 const TallyLayer = Layer.mergeAll(
   VotePowerSnapshot.Default,
   GovernanceComponent.Default,
   GetLedgerStateService.Default
 ).pipe(
   Layer.provideMerge(GatewayApiClientLayer),
-  Layer.provideMerge(TallyGovernanceConfigLayer),
+  Layer.provideMerge(GovernanceConfigLayer),
   Layer.provideMerge(Logger.pretty)
 )
 
@@ -104,10 +68,16 @@ const tallyTemperatureCheck = (id: number) =>
     console.log(
       `  Period: ${tc.start.toISOString()} -> ${tc.deadline.toISOString()}`
     )
-    console.log(`  Quorum: ${tc.quorum} XRD`)
     console.log(
-      `  Options: ${tc.voteOptions.map((o) => o.label).join(', ')}`
+      `  Parameter set: ${tc.parameterSet.label} (${tc.parameterSet.id} v${tc.parameterSet.version})`
     )
+    console.log(
+      `  Quorum: ${tc.parameterSet.parameters.temperatureCheckQuorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${tc.parameterSet.parameters.temperatureCheckApprovalThreshold}`
+    )
+    console.log(`  Options: ${tc.voteOptions.map((o) => o.label).join(', ')}`)
     console.log(`  Total votes on-chain: ${tc.voteCount}`)
     console.log()
 
@@ -163,7 +133,15 @@ const tallyProposal = (id: number) =>
     console.log(
       `  Period: ${proposal.start.toISOString()} -> ${proposal.deadline.toISOString()}`
     )
-    console.log(`  Quorum: ${proposal.quorum} XRD`)
+    console.log(
+      `  Parameter set: ${proposal.parameterSet.label} (${proposal.parameterSet.id} v${proposal.parameterSet.version})`
+    )
+    console.log(
+      `  Quorum: ${proposal.parameterSet.parameters.proposalQuorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${proposal.parameterSet.parameters.proposalApprovalThreshold}`
+    )
     console.log(
       `  Options: ${proposal.voteOptions.map((o) => `[${o.id}] ${o.label}`).join(', ')}`
     )
@@ -256,7 +234,9 @@ const printResults = (
       ? '0.00'
       : power.dividedBy(totalPower).multipliedBy(100).toFixed(2)
     const label = optionLabels.get(vote) ?? vote
-    console.log(`  ${label.padEnd(30)} ${power.toFormat(2).padStart(20)} XRD  (${pct}%)`)
+    console.log(
+      `  ${label.padEnd(30)} ${power.toFormat(2).padStart(20)} XRD  (${pct}%)`
+    )
   }
 
   console.log()
@@ -297,8 +277,12 @@ if (!type || !idStr) {
   console.error('Usage: pnpm tally <tc|proposal> <id>')
   console.error()
   console.error('Environment:')
-  console.error('  NETWORK_ID=1|2              Required — 1 (mainnet) or 2 (stokenet)')
-  console.error('  COMPONENT_ADDRESS=<addr>    Optional — override governance component address')
+  console.error(
+    '  NETWORK_ID=1|2                         Required — mainnet or stokenet'
+  )
+  console.error(
+    '  GOVERNANCE_COMPONENT_ADDRESS=<addr>    Optional component override'
+  )
   process.exit(1)
 }
 
@@ -315,4 +299,9 @@ const program =
       ? tallyProposal(id)
       : Effect.die(`Unknown type: ${type}. Use "tc" or "proposal".`)
 
-NodeRuntime.runMain(program.pipe(Effect.provide(TallyLayer)))
+void Effect.runPromise(program.pipe(Effect.provide(TallyLayer))).catch(
+  (error: unknown) => {
+    console.error(error)
+    process.exitCode = 1
+  }
+)

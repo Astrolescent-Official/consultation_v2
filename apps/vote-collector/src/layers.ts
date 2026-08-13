@@ -1,55 +1,60 @@
-import { Config, Effect, Layer, Logger, ManagedRuntime, Option } from 'effect'
-
+import * as D1Client from '@effect/sql-d1/D1Client'
+import { ConfigProvider, Effect, Layer, Logger } from 'effect'
+import { GatewayApiClientLayer } from 'shared/gateway'
 import { GovernanceConfigLayer } from 'shared/governance/index'
+import { VoteDatabaseLive } from './db/d1'
 import { ORM } from './db/orm'
-import { PgClientLive } from './db/pgClient'
+import { MajorityJudgmentRepo } from './majority-judgment/repo'
 import { PollService } from './poll'
 import { PollLock } from './pollLock'
 import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
-import { GatewayApiClientLayer } from 'shared/gateway'
-import { DatabaseMigrations } from './db/migrate'
 
-const LoggerLayer = Layer.unwrapEffect(
-  Effect.gen(function* () {
-    const ENV = (yield* Config.option(Config.string('ENV'))).pipe(
-      Option.getOrNull
-    )
+export type VoteCollectorWorkerEnv = Env
 
-    if (ENV === 'production') {
-      return Logger.json
-    } else {
-      return Logger.pretty
-    }
-  })
-)
+const configLayer = (env: VoteCollectorWorkerEnv) => {
+  const entries = Object.entries(env).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string'
+  )
+  return Layer.setConfigProvider(ConfigProvider.fromMap(new Map(entries)))
+}
 
-const CronJobHandlerLayer = PollService.Default.pipe(
-  Layer.provideMerge(PollLock.Default),
-  Layer.provide(ORM.Default),
-  Layer.provideMerge(GatewayApiClientLayer),
-  Layer.provideMerge(GovernanceConfigLayer),
-  Layer.provideMerge(PgClientLive),
-  Layer.provideMerge(Logger.json)
-)
+const databaseLayer = (env: VoteCollectorWorkerEnv) =>
+  Layer.mergeAll(VoteDatabaseLive(env.DB), D1Client.layer({ db: env.DB }))
 
-const HttpHandlerLayer = VoteCalculationRepo.Default.pipe(
-  Layer.provide(ORM.Default),
-  Layer.provideMerge(PgClientLive),
-  Layer.provideMerge(Logger.json)
-)
+export const CronJobHandlerLayer = (env: VoteCollectorWorkerEnv) => {
+  const database = databaseLayer(env)
 
-export const CronRuntime = ManagedRuntime.make(CronJobHandlerLayer)
-export const HttpRuntime = ManagedRuntime.make(HttpHandlerLayer)
+  return PollService.Default.pipe(
+    Layer.provideMerge(PollLock.Default),
+    Layer.provide(ORM.Default),
+    Layer.provideMerge(GatewayApiClientLayer),
+    Layer.provideMerge(GovernanceConfigLayer),
+    Layer.provideMerge(database),
+    Layer.provideMerge(Logger.json),
+    Layer.provide(configLayer(env))
+  )
+}
 
-export const HttpServerLayer = Layer.mergeAll(
-  PollService.Default,
-  VoteCalculationRepo.Default,
-  DatabaseMigrations.Default
-).pipe(
-  Layer.provideMerge(PollLock.Default),
-  Layer.provide(ORM.Default),
-  Layer.provideMerge(GatewayApiClientLayer),
-  Layer.provideMerge(GovernanceConfigLayer),
-  Layer.provideMerge(PgClientLive),
-  Layer.provideMerge(LoggerLayer)
-)
+export const HttpHandlerLayer = (env: VoteCollectorWorkerEnv) => {
+  const database = databaseLayer(env)
+
+  return Layer.merge(
+    VoteCalculationRepo.Default,
+    MajorityJudgmentRepo.Default
+  ).pipe(
+    Layer.provide(ORM.Default),
+    Layer.provideMerge(database),
+    Layer.provideMerge(Logger.json),
+    Layer.provide(configLayer(env))
+  )
+}
+
+export const runCronEffect = <A, E>(
+  env: VoteCollectorWorkerEnv,
+  effect: Effect.Effect<A, E, PollService | PollLock>
+) => Effect.runPromise(effect.pipe(Effect.provide(CronJobHandlerLayer(env))))
+
+export const runHttpEffect = <A, E>(
+  env: VoteCollectorWorkerEnv,
+  effect: Effect.Effect<A, E, VoteCalculationRepo | MajorityJudgmentRepo>
+) => Effect.runPromise(effect.pipe(Effect.provide(HttpHandlerLayer(env))))
