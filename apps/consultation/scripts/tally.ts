@@ -1,0 +1,333 @@
+/**
+ * CLI tool to tally votes for a temperature check or proposal.
+ *
+ * Fetches all data directly from the Radix blockchain — no database required.
+ *
+ * Usage:
+ *   pnpm --filter consultation-dapp tally tc <id>        # Tally a temperature check
+ *   pnpm --filter consultation-dapp tally proposal <id>  # Tally a proposal
+ *
+ * Environment:
+ *   NETWORK_ID                    — 1 (mainnet) or 2 (stokenet)
+ */
+
+import { GetLedgerStateService } from '@radix-effects/gateway'
+import type { AccountAddress } from '@radix-effects/shared'
+import { StateVersion } from '@radix-effects/shared'
+import BigNumber from 'bignumber.js'
+import {
+  Effect,
+  Layer,
+  Logger,
+  Option,
+  pipe,
+  Record as R,
+  Schedule
+} from 'effect'
+import { GatewayApiClientLayer } from 'shared/gateway'
+import {
+  ProposalId,
+  TemperatureCheckId
+} from 'shared/governance/brandedTypes'
+import {
+  GovernanceComponent,
+  GovernanceConfigLayer
+} from 'shared/governance/index'
+import {
+  type DedupedVote,
+  fetchDedupedProposalVotes,
+  fetchDedupedTemperatureCheckVotes
+} from '../src/server/voting/vote-calculation/dedupeVotes'
+import { VotePowerSnapshot } from '../src/server/voting/vote-calculation/votePowerSnapshot'
+import { getVotePowerConfig } from '../src/server/voting/vote-calculation/voteSourceConfig'
+import { TC_VOTE_OPTIONS } from '../src/lib/voting'
+
+const TallyLayer = Layer.mergeAll(
+  VotePowerSnapshot.Default,
+  GovernanceComponent.Default,
+  GetLedgerStateService.Default
+).pipe(
+  Layer.provideMerge(GatewayApiClientLayer),
+  Layer.provideMerge(GovernanceConfigLayer),
+  Layer.provideMerge(Logger.pretty)
+)
+
+const tallyTemperatureCheck = (id: number) =>
+  Effect.gen(function* () {
+    const governance = yield* GovernanceComponent
+    const getLedgerState = yield* GetLedgerStateService
+    const votePowerSnapshot = yield* VotePowerSnapshot
+
+    const tc = yield* governance.getTemperatureCheckById(
+      TemperatureCheckId.make(id)
+    )
+
+    console.log()
+    console.log(`Temperature Check #${tc.id}: ${tc.title}`)
+    console.log(`  ${tc.shortDescription}`)
+    console.log(
+      `  Period: ${tc.start.toISOString()} -> ${tc.deadline.toISOString()}`
+    )
+    console.log(
+      `  Parameter set: ${tc.parameterSet.label} (${tc.parameterSet.id} v${tc.parameterSet.version})`
+    )
+    console.log(
+      `  Quorum: ${tc.parameterSet.parameters.temperatureCheck.quorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${tc.parameterSet.parameters.temperatureCheck.approvalThreshold}`
+    )
+    console.log(`  Options: ${TC_VOTE_OPTIONS.map((o) => o.label).join(', ')}`)
+    console.log(`  Total votes on-chain: ${tc.voteCount}`)
+    console.log()
+
+    if (tc.voteCount === 0) {
+      console.log('No votes cast.')
+      return
+    }
+
+    yield* Effect.log('Fetching votes from chain...')
+
+    const dedupedVotes = yield* fetchDedupedTemperatureCheckVotes(governance, {
+      keyValueStoreAddress: tc.votes,
+      fromIndexInclusive: 0,
+      toIndexInclusive: tc.voteCount
+    })
+
+    yield* Effect.log(`Unique voters: ${dedupedVotes.length}`)
+    yield* Effect.log('Snapshotting vote power at TC start date...')
+
+    const snapshotStateVersion = yield* getLedgerState({
+      at_ledger_state: { timestamp: tc.start }
+    }).pipe(
+      Effect.map((r) => StateVersion.make(r.state_version)),
+      Effect.orDie
+    )
+
+    const sourceConfig = getVotePowerConfig(tc.start)
+
+    const retryPolicy = Schedule.exponential('1 second').pipe(
+      Schedule.intersect(Schedule.recurs(3))
+    )
+
+    const { votePower } = yield* votePowerSnapshot({
+      addresses: dedupedVotes.map((v) => v.accountAddress),
+      stateVersion: snapshotStateVersion,
+      sourceConfig
+    }).pipe(Effect.retry(retryPolicy), Effect.orDie)
+
+    printResults(dedupedVotes, votePower, TC_VOTE_OPTIONS)
+  })
+
+const tallyProposal = (id: number) =>
+  Effect.gen(function* () {
+    const governance = yield* GovernanceComponent
+    const getLedgerState = yield* GetLedgerStateService
+    const votePowerSnapshot = yield* VotePowerSnapshot
+
+    const proposal = yield* governance.getProposalById(ProposalId.make(id))
+
+    if (proposal.parameterSet.parameters._tag !== 'Standard') {
+      return yield* Effect.die(
+        'Proposal tally requires a Standard governance parameter set'
+      )
+    }
+
+    const parameters = proposal.parameterSet.parameters.proposal
+
+    console.log()
+    console.log(`Proposal #${proposal.id}: ${proposal.title}`)
+    console.log(`  ${proposal.shortDescription}`)
+    console.log(
+      `  Period: ${proposal.start.toISOString()} -> ${proposal.deadline.toISOString()}`
+    )
+    console.log(
+      `  Parameter set: ${proposal.parameterSet.label} (${proposal.parameterSet.id} v${proposal.parameterSet.version})`
+    )
+    console.log(
+      `  Quorum: ${parameters.quorum} XRD`
+    )
+    console.log(
+      `  Approval threshold: ${parameters.approvalThreshold}`
+    )
+    console.log(
+      `  Options: ${proposal.voteOptions.map((o) => `[${o.id}] ${o.label}`).join(', ')}`
+    )
+    console.log(`  Total votes on-chain: ${proposal.voteCount}`)
+    console.log()
+
+    if (proposal.voteCount === 0) {
+      console.log('No votes cast.')
+      return
+    }
+
+    yield* Effect.log('Fetching votes from chain...')
+
+    const dedupedVotes = yield* fetchDedupedProposalVotes(governance, {
+      keyValueStoreAddress: proposal.votes,
+      fromIndexInclusive: 0,
+      toIndexInclusive: proposal.voteCount
+    })
+
+    yield* Effect.log(`Unique voters: ${dedupedVotes.length}`)
+    yield* Effect.log('Snapshotting vote power at proposal start date...')
+
+    const snapshotStateVersion = yield* getLedgerState({
+      at_ledger_state: { timestamp: proposal.start }
+    }).pipe(
+      Effect.map((r) => StateVersion.make(r.state_version)),
+      Effect.orDie
+    )
+
+    const sourceConfig = getVotePowerConfig(proposal.start)
+
+    const retryPolicy = Schedule.exponential('1 second').pipe(
+      Schedule.intersect(Schedule.recurs(3))
+    )
+
+    const { votePower } = yield* votePowerSnapshot({
+      addresses: dedupedVotes.map((v) => v.accountAddress),
+      stateVersion: snapshotStateVersion,
+      sourceConfig
+    }).pipe(Effect.retry(retryPolicy), Effect.orDie)
+
+    printResults(dedupedVotes, votePower, proposal.voteOptions)
+  })
+
+const printResults = (
+  dedupedVotes: ReadonlyArray<DedupedVote>,
+  votePower: R.ReadonlyRecord<AccountAddress, BigNumber>,
+  voteOptions: ReadonlyArray<{ id: number; label: string }>
+) => {
+  // Build per-option aggregated totals
+  const optionTotals = new Map<string, BigNumber>()
+  let totalPower = new BigNumber(0)
+
+  for (const voter of dedupedVotes) {
+    const power = pipe(
+      R.get(votePower, voter.accountAddress),
+      Option.getOrElse(() => new BigNumber(0))
+    )
+    if (voter.votes.length > 0) {
+      totalPower = totalPower.plus(power)
+    }
+    for (const vote of voter.votes) {
+      const current = optionTotals.get(vote) ?? new BigNumber(0)
+      optionTotals.set(vote, current.plus(power))
+    }
+  }
+
+  // Build option label lookup
+  const optionLabels = new Map<string, string>()
+  for (const opt of voteOptions) {
+    optionLabels.set(String(opt.id), opt.label)
+    optionLabels.set(opt.label, opt.label)
+  }
+
+  console.log('='.repeat(60))
+  console.log('RESULTS')
+  console.log('='.repeat(60))
+  console.log()
+  console.log(`  Unique voters: ${dedupedVotes.length}`)
+  console.log(`  Total vote power: ${totalPower.toFormat(2)} XRD`)
+  console.log()
+
+  // Sort by vote power descending
+  const sorted = [...optionTotals.entries()].sort((a, b) =>
+    b[1].minus(a[1]).toNumber()
+  )
+
+  for (const [vote, power] of sorted) {
+    const pct = totalPower.isZero()
+      ? '0.00'
+      : power.dividedBy(totalPower).multipliedBy(100).toFixed(2)
+    const label = optionLabels.get(vote) ?? vote
+    console.log(
+      `  ${label.padEnd(30)} ${power.toFormat(2).padStart(20)} XRD  (${pct}%)`
+    )
+  }
+
+  console.log()
+
+  // Per-account breakdown
+  console.log('-'.repeat(60))
+  console.log('PER-ACCOUNT VOTES')
+  console.log('-'.repeat(60))
+
+  const accountRows = dedupedVotes
+    .map((voter) => {
+      const power = pipe(
+        R.get(votePower, voter.accountAddress),
+        Option.getOrElse(() => new BigNumber(0))
+      )
+      const voteLabels = voter.votes
+        .map((v) => optionLabels.get(v) ?? v)
+        .join(', ')
+      return { address: voter.accountAddress, power, voteLabels }
+    })
+    .sort((a, b) => b.power.minus(a.power).toNumber())
+
+  for (const row of accountRows) {
+    const shortAddr = `${row.address.slice(0, 20)}...${row.address.slice(-8)}`
+    console.log(
+      `  ${shortAddr}  ${row.power.toFormat(2).padStart(20)} XRD  ${row.voteLabels}`
+    )
+  }
+
+  console.log()
+}
+
+// --- CLI entry point ---
+
+type TallyTarget = 'tc' | 'proposal'
+
+type TallyArguments = {
+  readonly type: TallyTarget
+  readonly id: number
+}
+
+const printUsage = () => {
+  console.error('Usage: pnpm --filter consultation-dapp tally <tc|proposal> <id>')
+  console.error()
+  console.error('Environment:')
+  console.error(
+    '  NETWORK_ID=1|2                         Required — mainnet or stokenet'
+  )
+  console.error(
+  )
+}
+
+const parseArguments = (): TallyArguments | undefined => {
+  const [, , type, idString] = process.argv
+
+  if ((type !== 'tc' && type !== 'proposal') || idString === undefined) {
+    printUsage()
+    process.exitCode = 1
+    return undefined
+  }
+
+  const id = Number(idString)
+  if (!Number.isSafeInteger(id) || id < 0) {
+    console.error(`Invalid id: ${idString}`)
+    process.exitCode = 1
+    return undefined
+  }
+
+  return { type, id }
+}
+
+const arguments_ = parseArguments()
+
+if (arguments_ !== undefined) {
+  const program =
+    arguments_.type === 'tc'
+      ? tallyTemperatureCheck(arguments_.id)
+      : tallyProposal(arguments_.id)
+
+  void Effect.runPromise(program.pipe(Effect.provide(TallyLayer))).catch(
+    (error: unknown) => {
+      console.error(error)
+      process.exitCode = 1
+    }
+  )
+}

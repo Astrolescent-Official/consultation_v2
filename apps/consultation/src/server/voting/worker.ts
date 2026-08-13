@@ -1,0 +1,127 @@
+import { Config, Duration, Effect, ParseResult, Schema } from 'effect'
+import { EntityType } from 'shared/governance/index'
+import { runCronEffect, runHttpEffect, type VotingWorkerEnv } from './layers'
+import { MajorityJudgmentRepo } from './majority-judgment/repo'
+import { PollService } from './poll'
+import { PollLock } from './pollLock'
+import { VoteCalculationRepo } from './vote-calculation/voteCalculationRepo'
+
+const QueryParams = Schema.Struct({
+  type: EntityType,
+  entityId: Schema.NumberFromString
+})
+
+const MajorityJudgmentQueryParams = Schema.Struct({
+  electionId: Schema.NumberFromString.pipe(Schema.int(), Schema.nonNegative())
+})
+
+const jsonHeaders = {
+  'cache-control': 'no-store',
+  'content-type': 'application/json; charset=utf-8'
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: jsonHeaders })
+
+const parseQuery = (request: Request) => {
+  const query = Object.fromEntries(new URL(request.url).searchParams)
+  return Schema.decodeUnknown(QueryParams)(query, { errors: 'all' }).pipe(
+    Effect.mapError((error) =>
+      json(
+        {
+          error: 'Invalid query parameters',
+          details: ParseResult.ArrayFormatter.formatErrorSync(error)
+        },
+        400
+      )
+    )
+  )
+}
+
+const parseMajorityJudgmentQuery = (request: Request) => {
+  const query = Object.fromEntries(new URL(request.url).searchParams)
+  return Schema.decodeUnknown(MajorityJudgmentQueryParams)(query, {
+    errors: 'all'
+  }).pipe(
+    Effect.mapError((error) =>
+      json(
+        {
+          error: 'Invalid query parameters',
+          details: ParseResult.ArrayFormatter.formatErrorSync(error)
+        },
+        400
+      )
+    )
+  )
+}
+
+export const handleVotingRequest = (request: Request, env: VotingWorkerEnv) =>
+  runHttpEffect(
+    env,
+    Effect.gen(function* () {
+      const pathname = new URL(request.url).pathname
+
+      if (pathname === '/majority-judgment-election') {
+        const params = yield* parseMajorityJudgmentQuery(request)
+        const repo = yield* MajorityJudgmentRepo
+        return json(yield* repo.getElectionResponse(params.electionId))
+      }
+
+      const params = yield* parseQuery(request)
+      const repo = yield* VoteCalculationRepo
+
+      if (pathname === '/vote-results') {
+        return json(
+          yield* repo.getResultsByEntity(params.type, params.entityId)
+        )
+      }
+      if (pathname === '/account-votes') {
+        return json(
+          yield* repo.getAccountVotesByEntity(params.type, params.entityId)
+        )
+      }
+      return json({ error: 'Not found' }, 404)
+    }).pipe(
+      Effect.catchTag('MajorityJudgmentProjectionNotFoundError', () =>
+        Effect.succeed(json({ error: 'Election not found' }, 404))
+      ),
+      Effect.catchAll((error) =>
+        error instanceof Response
+          ? Effect.succeed(error)
+          : Effect.logError('Vote API request failed', error).pipe(
+              Effect.as(json({ error: 'Internal server error' }, 500))
+            )
+      ),
+      Effect.catchAllDefect((defect) =>
+        Effect.logError('Unhandled vote API defect', defect).pipe(
+          Effect.as(json({ error: 'Internal server error' }, 500))
+        )
+      )
+    )
+  )
+
+export const runScheduledPoll = (
+  env: VotingWorkerEnv,
+  schedule?: { readonly cron: string; readonly scheduledTime: number }
+) =>
+  runCronEffect(
+    env,
+    Effect.gen(function* () {
+      const withPollLock = yield* PollLock
+      const poll = yield* PollService
+      const runDuration = yield* Config.duration('POLL_RUN_DURATION').pipe(
+        Config.withDefault(Duration.seconds(25)),
+        Effect.orDie
+      )
+      yield* withPollLock(poll()).pipe(Effect.timeout(runDuration))
+    }).pipe(
+      Effect.annotateLogs({
+        cron: schedule?.cron ?? 'manual',
+        scheduledTime: schedule?.scheduledTime ?? Date.now()
+      }),
+      Effect.catchTag('PollLockNotAcquired', () =>
+        Effect.logInfo('Poll lease held by another invocation; skipping')
+      ),
+      Effect.tapErrorCause((cause) => Effect.logError('Poll failed', cause))
+    )
+  )

@@ -9,7 +9,8 @@ import {
   MajorityJudgmentRerunStartedEvent,
   MajorityJudgmentTieResolutionRecordedEvent,
   MajorityJudgmentVoteKeyValueStoreValue,
-  MajorityJudgmentVotersKeyValueStoreValue
+  MajorityJudgmentVotersKeyValueStoreValue,
+  TemperatureCheckOutcomeRecordedEvent
 } from '../schemas'
 
 const number = (fieldName: string, value: number, kind = 'U32') => ({
@@ -83,7 +84,6 @@ const electionParameters = {
   type_name: 'MajorityJudgmentParameters',
   field_name: 'election',
   fields: [
-    number('review_days', 7),
     number('voting_days', 7),
     { kind: 'Decimal', field_name: 'quorum', value: '1000000' },
     grade('minimum_median_grade', 'Good', 2),
@@ -91,25 +91,6 @@ const electionParameters = {
     { kind: 'Decimal', field_name: 'rerun_quorum', value: '500000' },
     grade('rerun_minimum_median_grade', 'VeryGood', 3),
     number('reserve_list_days', 90)
-  ]
-}
-
-const parameterSnapshot = {
-  kind: 'Tuple',
-  type_name: 'GovernanceParameterSetSnapshot',
-  field_name: 'parameter_set',
-  fields: [
-    { kind: 'String', field_name: 'id', value: 'mj-rac' },
-    { kind: 'String', field_name: 'label', value: 'RAC election' },
-    number('version', 1),
-    {
-      kind: 'Enum',
-      type_name: 'GovernanceProcessParameters',
-      field_name: 'parameters',
-      variant_name: 'MajorityJudgment',
-      variant_id: 1,
-      fields: [temperatureCheckParameters, electionParameters]
-    }
   ]
 }
 
@@ -229,53 +210,6 @@ describe('majority judgment SBOR schemas', () => {
       type_name: 'MajorityJudgmentElection',
       fields: [
         number('temperature_check_id', 3, 'U64'),
-        { kind: 'String', field_name: 'title', value: 'RAC election' },
-        { kind: 'String', field_name: 'short_description', value: 'Elect' },
-        { kind: 'String', field_name: 'description', value: 'Profiles' },
-        {
-          kind: 'Array',
-          field_name: 'links',
-          element_kind: 'String',
-          elements: []
-        },
-        {
-          kind: 'Reference',
-          field_name: 'author',
-          value: 'account_tdx_2_author'
-        },
-        { kind: 'String', field_name: 'role_id', value: 'rac-member' },
-        number('seat_count', 1),
-        {
-          kind: 'Array',
-          field_name: 'candidates',
-          element_kind: 'Tuple',
-          elements: [
-            {
-              kind: 'Tuple',
-              type_name: 'MajorityJudgmentCandidate',
-              fields: [
-                candidateId('id', 0),
-                { kind: 'String', field_name: 'reference', value: 'alice' },
-                {
-                  kind: 'String',
-                  field_name: 'display_name',
-                  value: 'Alice'
-                },
-                { kind: 'String', field_name: 'description', value: 'Profile' },
-                {
-                  kind: 'Array',
-                  field_name: 'links',
-                  element_kind: 'String',
-                  elements: []
-                },
-                number('display_order', 0)
-              ]
-            }
-          ]
-        },
-        parameterSnapshot,
-        instant('review_start', 1_700_000_000),
-        instant('review_end', 1_700_604_800),
         round,
         {
           kind: 'Enum',
@@ -310,8 +244,6 @@ describe('majority judgment SBOR schemas', () => {
         number('temperature_check_id', 3, 'U64'),
         { kind: 'String', field_name: 'role_id', value: 'rac-member' },
         number('seat_count', 1),
-        instant('review_start', 1_700_000_000),
-        instant('review_end', 1_700_604_800),
         instant('snapshot', 1_699_000_000),
         instant('voting_start', 1_700_604_800),
         instant('voting_deadline', 1_701_209_600),
@@ -346,6 +278,16 @@ describe('majority judgment SBOR schemas', () => {
         }
       ]
     })
+    const temperatureCheckOutcome =
+      TemperatureCheckOutcomeRecordedEvent.safeParse({
+        kind: 'Tuple',
+        type_name: 'TemperatureCheckOutcomeRecordedEvent',
+        fields: [
+          number('temperature_check_id', 3, 'U64'),
+          { kind: 'Bool', field_name: 'passed', value: true },
+          instant('recorded_at', 1_700_604_800)
+        ]
+      })
     const rerun = MajorityJudgmentRerunStartedEvent.safeParse({
       kind: 'Tuple',
       type_name: 'MajorityJudgmentRerunStartedEvent',
@@ -375,6 +317,7 @@ describe('majority judgment SBOR schemas', () => {
     })
 
     assert.isTrue(created.isOk())
+    assert.isTrue(temperatureCheckOutcome.isOk())
     assert.isTrue(voted.isOk())
     assert.isTrue(rerun.isOk())
     assert.isTrue(tie.isOk())

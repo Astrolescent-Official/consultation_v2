@@ -62,8 +62,10 @@ const commonFields = {
   votes: 'internal_keyvaluestore_votes',
   vote_count: 3,
   revote_count: 1,
+  snapshot: new Date('2026-07-01T00:00:00.000Z'),
   start: new Date('2026-07-01T00:00:00.000Z'),
   deadline: new Date('2026-07-08T00:00:00.000Z'),
+  outcome: { variant: 'None' },
   author: 'account_test',
   hidden: false
 }
@@ -276,7 +278,14 @@ describe('named governance parameter set SBOR integration', () => {
       type_name: 'TemperatureCheckCreatedEvent',
       fields: [
         { kind: 'U64', field_name: 'temperature_check_id', value: '4' },
-        ...baseFields
+        ...baseFields.slice(0, 1),
+        {
+          kind: 'I64',
+          type_name: 'Instant',
+          field_name: 'snapshot',
+          value: '1700000000'
+        },
+        ...baseFields.slice(1)
       ]
     })
     const proposalEvent = ProposalCreatedEvent.safeParse({

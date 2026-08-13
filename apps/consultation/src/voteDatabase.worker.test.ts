@@ -26,16 +26,16 @@ import {
   GovernanceConfigLayer
 } from 'shared/governance/index'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { VoteDatabaseLive } from '../../vote-collector/src/db/d1'
+import { VoteDatabaseLive } from './server/voting/db/d1'
 import {
   guardedBatch,
   type PollLeaseIdentity,
   withPollLease
-} from '../../vote-collector/src/pollLease'
-import { PollLock } from '../../vote-collector/src/pollLock'
-import { VoteCalculationRepo } from '../../vote-collector/src/vote-calculation/voteCalculationRepo'
-import { VotePowerSnapshot } from '../../vote-collector/src/vote-calculation/votePowerSnapshot'
-import { getVotePowerConfig } from '../../vote-collector/src/vote-calculation/voteSourceConfig'
+} from './server/voting/pollLease'
+import { PollLock } from './server/voting/pollLock'
+import { VoteCalculationRepo } from './server/voting/vote-calculation/voteCalculationRepo'
+import { VotePowerSnapshot } from './server/voting/vote-calculation/votePowerSnapshot'
+import { getVotePowerConfig } from './server/voting/vote-calculation/voteSourceConfig'
 
 declare module 'cloudflare:test' {
   interface ProvidedEnv extends Env {
@@ -52,8 +52,13 @@ const lease: PollLeaseIdentity = {
   durationMs: 60_000
 }
 
-const repositoryLayer = () =>
-  VoteCalculationRepo.Default.pipe(Layer.provide(VoteDatabaseLive(env.DB)))
+const repositoryLayer = (
+  governanceConfigLayer: Layer.Layer<GovernanceConfig> = GovernanceConfig.MainnetLive
+) =>
+  VoteCalculationRepo.Default.pipe(
+    Layer.provide(VoteDatabaseLive(env.DB)),
+    Layer.provide(governanceConfigLayer)
+  )
 
 const seedLease = async (owner = lease.owner) => {
   await env.DB.prepare(
@@ -66,10 +71,13 @@ const seedLease = async (owner = lease.owner) => {
 }
 
 const runWithRepository = <A>(
-  effect: Effect.Effect<A, never, VoteCalculationRepo>
+  effect: Effect.Effect<A, never, VoteCalculationRepo>,
+  governanceConfigLayer: Layer.Layer<GovernanceConfig> = GovernanceConfig.MainnetLive
 ) =>
   Effect.runPromise(
-    withPollLease(lease, effect).pipe(Effect.provide(repositoryLayer()))
+    withPollLease(lease, effect).pipe(
+      Effect.provide(repositoryLayer(governanceConfigLayer))
+    )
   )
 
 beforeEach(async () => {
@@ -88,7 +96,7 @@ describe('runtime app configuration', () => {
       'application/javascript; charset=utf-8'
     )
     expect(await scriptResponse.text()).toBe(
-      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","GOVERNANCE_COMPONENT_ADDRESS":"component_rdx1cz8tzcyyj9zlactrq9nqcnnagg56fn84p4e73gvlzp2s6krde89k9y","NETWORK_ID":"1"};'
+      'globalThis.__APP_CONFIG__={"ENV":"production","DAPP_DEFINITION_ADDRESS":"account_rdx128y905cfjwhah5nm8mpx5jnlkshmlamfdd92qnqpy6pgk428qlqxcf","NETWORK_ID":"1"};'
     )
 
     const wellKnownResponse = await SELF.fetch(
@@ -104,30 +112,119 @@ describe('runtime app configuration', () => {
     })
   })
 
-  it('overrides the network default with the configured governance component', async () => {
-    const componentAddress =
-      'component_tdx_2_1cz39h4p559znxv9vxm6vyaxwyewwdyjl0qyswwssw524euat7vjyu4'
+  it('uses the documented Stokenet governance component', async () => {
     const layer = GovernanceConfigLayer.pipe(
       Layer.provide(
-        Layer.setConfigProvider(
-          ConfigProvider.fromJson({
-            GOVERNANCE_COMPONENT_ADDRESS: componentAddress,
-            NETWORK_ID: 2
-          })
-        )
+        Layer.setConfigProvider(ConfigProvider.fromJson({ NETWORK_ID: 2 }))
       )
     )
-    const config = await Effect.runPromise(
-      Effect.gen(function* () {
-        return yield* GovernanceConfig
-      }).pipe(Effect.provide(layer))
-    )
+    const readConfig = <E>(
+      configLayer: Layer.Layer<GovernanceConfig, E, never>
+    ) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          return yield* GovernanceConfig
+        }).pipe(Effect.provide(configLayer))
+      )
+    const [config, expected] = await Promise.all([
+      readConfig(layer),
+      readConfig(GovernanceConfig.StokenetLive)
+    ])
 
-    expect(config.componentAddress).toBe(componentAddress)
+    expect(config.componentAddress).toBe(expected.componentAddress)
   })
 })
 
 describe('D1 vote persistence', () => {
+  it('tracks computed readiness explicitly and backfills each component independently', async () => {
+    const zeroVoteEntityId = EntityId.make(10)
+    const pendingEntityId = EntityId.make(11)
+
+    const mainnet = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        yield* repo.initializeComponentCache([
+          {
+            type: 'temperature_check',
+            entityId: zeroVoteEntityId,
+            voteCount: 0
+          },
+          { type: 'proposal', entityId: pendingEntityId, voteCount: 2 }
+        ])
+        const zeroVote = yield* repo.getResultsByEntity(
+          'temperature_check',
+          zeroVoteEntityId
+        )
+        const pending = yield* repo.getResultsByEntity(
+          'proposal',
+          pendingEntityId
+        )
+        yield* repo.setComponentCacheBackfillProgress(5)
+        const progress = yield* repo.getComponentCacheBackfillProgress()
+        return { zeroVote, pending, progress }
+      })
+    )
+
+    expect(mainnet).toEqual({
+      zeroVote: { cacheAvailable: true, results: [] },
+      pending: { cacheAvailable: false, results: [] },
+      progress: 5
+    })
+
+    const stokenetProgress = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getComponentCacheBackfillProgress()
+      }),
+      GovernanceConfig.StokenetLive
+    )
+    expect(stokenetProgress).toBe(0)
+  })
+
+  it('isolates same-ID vote states from different governance components', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        const state = yield* repo.getOrCreateState(
+          'temperature_check',
+          entityId
+        )
+        yield* repo.commitVoteResults({
+          stateId: state.id,
+          type: 'temperature_check',
+          entityId,
+          lastVoteCount: 1,
+          results: [{ vote: 'For', votePower: '100' }],
+          accountVotes: [
+            { accountAddress: account, vote: 'For', votePower: '100' }
+          ],
+          revoteRemovals: []
+        })
+      }),
+      GovernanceConfig.StokenetLive
+    )
+
+    const mainnetResults = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getResultsByEntity('temperature_check', entityId)
+      })
+    )
+    expect(mainnetResults).toEqual({ cacheAvailable: false, results: [] })
+
+    const stokenetResults = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* VoteCalculationRepo
+        return yield* repo.getResultsByEntity('temperature_check', entityId)
+      }),
+      GovernanceConfig.StokenetLive
+    )
+    expect(stokenetResults).toEqual({
+      cacheAvailable: true,
+      results: [{ vote: 'For', votePower: '100' }]
+    })
+  })
+
   it('commits a revote exactly once and preserves decimal precision', async () => {
     const votePower = '9007199254740993.000000000000000001'
 
@@ -169,6 +266,7 @@ describe('D1 vote persistence', () => {
     )
     expect(resultsResponse.status).toBe(200)
     expect(await resultsResponse.json()).toEqual({
+      cacheAvailable: true,
       results: [
         { vote: 'Against', votePower },
         { vote: 'For', votePower: '0' }

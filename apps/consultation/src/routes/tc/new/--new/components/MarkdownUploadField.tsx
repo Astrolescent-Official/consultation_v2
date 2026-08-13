@@ -112,8 +112,8 @@ export const MarkdownUploadField = withForm({
                 >
                   <UploadIcon className="size-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    Click to upload a{' '}
-                    <span className="font-medium">.md</span> file
+                    Click to upload a <span className="font-medium">.md</span>{' '}
+                    file
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Full proposal details in Markdown format

@@ -27,6 +27,8 @@ export function AddressLink({
   }
 
   return (
+    // A semantic anchor would create invalid nested anchors in linked cards.
+    // biome-ignore lint/a11y/useSemanticElements: this span intentionally behaves as a nested-safe link
     <span
       role="link"
       tabIndex={0}

@@ -17,21 +17,17 @@ import {
   TemperatureCheckCreatedEvent
 } from 'shared/schemas'
 import { governanceRuntime as runtime } from '@/atom/governanceRuntime'
-import { SendTransaction, WalletErrorResponse } from '@/lib/dappToolkit'
+import { SendTransaction } from '@/lib/dappToolkit'
 import { getConnectedAccountAddress } from '@/lib/selectedAccount'
 import { truncateAddress } from '@/lib/utils'
+import {
+  batchTransactionToast,
+  transactionErrorMessage
+} from '@/lib/walletError'
 import { accountsAtom } from './dappToolkitAtom'
 import { transactionFailureMessage, withToast } from './withToast'
 
-export const temperatureChecksAtom = runtime.atom(
-  Effect.gen(function* () {
-    const governanceComponent = yield* GovernanceComponent
-
-    return yield* governanceComponent.getTemperatureChecks()
-  })
-)
-
-export class EventNotFoundError extends Data.TaggedError('EventNotFoundError')<{
+class EventNotFoundError extends Data.TaggedError('EventNotFoundError')<{
   message: string
 }> {}
 
@@ -79,9 +75,11 @@ export const makeTemperatureCheckAtom = runtime.fn(
         Option.match({
           onSome: (sbor) => parseSbor(sbor, TemperatureCheckCreatedEvent),
           onNone: () =>
-            new EventNotFoundError({
-              message: 'TemperatureCheckCreatedEvent not found'
-            })
+            Effect.fail(
+              new EventNotFoundError({
+                message: 'TemperatureCheckCreatedEvent not found'
+              })
+            )
         })
       )
 
@@ -95,7 +93,7 @@ export const makeTemperatureCheckAtom = runtime.fn(
   )
 )
 
-export class AccountAlreadyVotedError extends Data.TaggedError(
+class AccountAlreadyVotedError extends Data.TaggedError(
   'AccountAlreadyVotedError'
 )<{
   message: string
@@ -125,29 +123,11 @@ const voteOnTemperatureCheck = (input: MakeTemperatureCheckVoteInput) =>
               message: 'Account has already voted on this temperature check'
             })
           }
-          return yield* new WalletErrorResponse({
-            error: error.message
-          })
+          return yield* error
         })
       )
     )
   })
-
-export const voteOnTemperatureCheckAtom = runtime.fn(
-  Effect.fn(
-    (input: MakeTemperatureCheckVoteInput) => voteOnTemperatureCheck(input),
-    withToast({
-      whenLoading: 'Submitting vote...',
-      whenSuccess: 'Vote submitted',
-      whenFailure: ({ cause }) => {
-        if (cause._tag === 'Fail' && cause.error.message) {
-          return Option.some(cause.error.message)
-        }
-        return Option.some('Failed to submit vote')
-      }
-    })
-  )
-)
 
 type VoteResult = { account: string; success: boolean; error?: string }
 
@@ -180,8 +160,7 @@ export const voteOnTemperatureCheckBatchAtom = runtime.fn(
             Effect.succeed<VoteResult>({
               account: account.address,
               success: false,
-              error:
-                'message' in error ? (error.message as string) : 'Vote failed'
+              error: transactionErrorMessage(error, 'Vote failed')
             })
           )
         )
@@ -200,13 +179,7 @@ export const voteOnTemperatureCheckBatchAtom = runtime.fn(
     },
     withToast({
       whenLoading: 'Submitting votes...',
-      whenSuccess: ({ result }) => {
-        const successes = result.filter((r) => r.success).length
-        const failures = result.filter((r) => !r.success).length
-        if (failures === 0) return `${successes} vote(s) submitted`
-        if (successes === 0) return 'All votes failed'
-        return `${successes} submitted, ${failures} failed`
-      },
+      whenSuccess: ({ result }) => batchTransactionToast(result, 'vote'),
       whenFailure: () => Option.some('Failed to submit votes')
     })
   )

@@ -1,5 +1,5 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
-import { Cause } from 'effect'
+import { Cause, Option } from 'effect'
 import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
 import type { TemperatureCheckSchema } from 'shared/governance/schemas'
 import {
@@ -20,6 +20,7 @@ import { TC_VOTE_OPTIONS } from '@/lib/voting'
 import { getItemStatus } from '@/routes/-index/components/StatusBadge'
 import { PromoteToProposal } from './components/PromoteToProposal'
 import { SidebarContent } from './components/SidebarContent'
+import { TemperatureCheckOutcomeControls } from './components/TemperatureCheckOutcomeControls'
 import { VotingSection } from './components/VotingSection'
 
 type TemperatureCheck = typeof TemperatureCheckSchema.Type
@@ -123,10 +124,17 @@ function PageContentInner({
   id: TemperatureCheckId
   isAdmin: boolean
 }) {
-  const status = getItemStatus(tc.deadline)
+  const status = getItemStatus(tc.start, tc.deadline)
   const accountsVotesResult = useAtomValue(
     getTemperatureCheckVotesByAccountsAtom(tc.voters)
   )
+  const electionId = Option.match(tc.continuation, {
+    onNone: () => undefined,
+    onSome: (continuation) =>
+      continuation._tag === 'MajorityJudgmentElection'
+        ? continuation.id
+        : undefined
+  })
 
   const header = (
     <DetailPageHeader
@@ -151,7 +159,9 @@ function PageContentInner({
             temperatureCheckId={id}
             followUp={tc.followUp}
             continuation={tc.continuation}
+            outcome={tc.outcome}
             deadline={tc.deadline}
+            isAdmin={isAdmin}
           />
           <HideToggle type="temperature_check" id={id} hidden={tc.hidden} />
         </div>
@@ -167,6 +177,17 @@ function PageContentInner({
         </div>
       )}
       <ParameterSetSnapshotDetails parameterSet={tc.parameterSet} />
+      <TemperatureCheckOutcomeControls
+        temperatureCheckId={id}
+        deadline={tc.deadline}
+        outcome={tc.outcome}
+        isAdmin={isAdmin}
+        quorumXrd={tc.parameterSet.parameters.temperatureCheck.quorum}
+        approvalThreshold={
+          tc.parameterSet.parameters.temperatureCheck.approvalThreshold
+        }
+        electionId={electionId}
+      />
       <DetailPageDetails
         shortDescription={tc.shortDescription}
         description={tc.description}

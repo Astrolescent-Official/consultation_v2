@@ -7,8 +7,8 @@
 **Purpose:** Decentralized governance platform for Radix community decision-making, replacing the Foundation-dependent v1 system before 2026 wind-down.
 
 **Components:**
-1. **Consultation dApp** — TanStack Start web app for creating/voting/viewing governance items
-2. **Vote Collector** — scheduled Cloudflare Worker module for calculating vote results from on-ledger data
+1. **Consultation Worker** — TanStack Start web app, same-origin vote APIs, and scheduled vote calculation
+2. **Governance component** — on-ledger Scrypto state and transaction logic
 
 **Core Flow:**
 
@@ -19,8 +19,7 @@ Community votes on options → Winner determined
 ```
 
 **Tech Stack:**
-*   dApp: TanStack Start, Radix dApp Toolkit, Cloudflare Workers
-*   Vote Collector: Effect, Radix Gateway API, Cloudflare D1
+*   App and voting backend: TanStack Start, Effect, Radix dApp Toolkit, Radix Gateway API, Cloudflare Workers and D1
 *   On-ledger: Scrypto components
 *   Network: Configurable (Stokenet / Mainnet)
 * * *
@@ -143,7 +142,7 @@ Promoted from TC → Voting Open → Deadline Reached →
 *   Submit via wallet transaction
 * * *
 
-## 5\. Vote Collector
+## 5\. Voting Backend
 
 ### 5.1 Purpose
 
@@ -157,8 +156,8 @@ Scheduled Worker module that calculates vote results by:
 
 ```scss
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Radix Gateway  │────▶│  Vote Collector │────▶│ Cloudflare D1   │
-│      API        │     │    (Worker)     │     │                 │
+│  Radix Gateway  │────▶│  Consultation   │────▶│ Cloudflare D1   │
+│      API        │     │     Worker      │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
@@ -202,10 +201,10 @@ Cloudflare Cron Triggers invoke the same Worker that serves the dApp and vote AP
 | ---| --- |
 | Create TC | User can submit TC via wallet transaction, appears on home page |
 | Vote on TC | User can cast For/Against vote, vote recorded on-ledger |
-| TC Results | Vote Collector calculates correct totals with LSU-weighted power |
+| TC Results | Voting backend calculates correct totals with LSU-weighted power |
 | Promote TC | Admin can promote passed TC to RFP with defined options |
 | Vote on RFP | User can select option, vote recorded on-ledger |
-| RFP Results | Vote Collector calculates correct totals with LSU-weighted power |
+| RFP Results | Voting backend calculates correct totals with LSU-weighted power |
 | View Results | dApp displays accurate tallies from D1 through same-origin Worker routes |
 
 ### 6.2 Non-Functional Requirements

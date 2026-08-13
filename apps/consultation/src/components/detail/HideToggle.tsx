@@ -1,15 +1,17 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { Cause } from 'effect'
-import { EyeOff, Eye, LoaderIcon } from 'lucide-react'
+import { Eye, EyeOff, LoaderIcon } from 'lucide-react'
 import { useCallback } from 'react'
 import type {
   ProposalId,
   TemperatureCheckId
 } from 'shared/governance/brandedTypes'
+import type { MajorityJudgmentElectionId } from 'shared/governance/index'
 import {
   isAdminAtom,
-  toggleTemperatureCheckHiddenAtom,
-  toggleProposalHiddenAtom
+  toggleMajorityJudgmentElectionHiddenAtom,
+  toggleProposalHiddenAtom,
+  toggleTemperatureCheckHiddenAtom
 } from '@/atom/adminAtom'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 
@@ -24,13 +26,20 @@ type HideToggleProps =
       id: ProposalId
       hidden: boolean
     }
+  | {
+      type: 'election'
+      id: MajorityJudgmentElectionId
+      hidden: boolean
+    }
 
 export function HideToggle(props: HideToggleProps) {
   const currentAccount = useCurrentAccount()
 
   if (!currentAccount) return null
 
-  return <HideToggleWithAddress {...props} accountAddress={currentAccount.address} />
+  return (
+    <HideToggleWithAddress {...props} accountAddress={currentAccount.address} />
+  )
 }
 
 function HideToggleWithAddress(
@@ -57,19 +66,32 @@ function HideToggleButton(props: HideToggleProps) {
   const [proposalResult, toggleProposalHidden] = useAtom(
     toggleProposalHiddenAtom
   )
+  const [electionResult, toggleElectionHidden] = useAtom(
+    toggleMajorityJudgmentElectionHiddenAtom
+  )
 
   const isSubmitting =
     props.type === 'temperature_check'
       ? tcResult.waiting
-      : proposalResult.waiting
+      : props.type === 'proposal'
+        ? proposalResult.waiting
+        : electionResult.waiting
 
   const handleToggle = useCallback(() => {
     if (props.type === 'temperature_check') {
       toggleTcHidden(props.id)
-    } else {
+    } else if (props.type === 'proposal') {
       toggleProposalHidden(props.id)
+    } else {
+      toggleElectionHidden(props.id)
     }
-  }, [props.type, props.id, toggleTcHidden, toggleProposalHidden])
+  }, [
+    props.type,
+    props.id,
+    toggleTcHidden,
+    toggleProposalHidden,
+    toggleElectionHidden
+  ])
 
   return (
     <button

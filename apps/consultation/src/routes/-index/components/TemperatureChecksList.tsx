@@ -50,6 +50,11 @@ export function TemperatureChecksList({
                 )}
                 linkPrefix="/tc"
                 hidden={tc.hidden}
+                contextLabel={
+                  tc.followUp._tag === 'MajorityJudgmentElection'
+                    ? 'Election candidate-list gate'
+                    : undefined
+                }
               />
             ))}
           </div>

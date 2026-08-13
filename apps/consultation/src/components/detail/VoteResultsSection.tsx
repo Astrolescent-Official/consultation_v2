@@ -17,9 +17,7 @@ export function VoteResultsSection({
   entityId,
   voteOptions
 }: VoteResultsSectionProps) {
-  const voteResultsResult = useAtomValue(
-    voteResultsAtom(entityType)(entityId)
-  )
+  const voteResultsResult = useAtomValue(voteResultsAtom(entityType)(entityId))
 
   return Result.builder(voteResultsResult)
     .onInitial(() => (
@@ -45,7 +43,14 @@ export function VoteResultsSection({
         Failed to load vote results.
       </div>
     ))
-    .onSuccess((results) => {
+    .onSuccess(({ cacheAvailable, results }) => {
+      if (!cacheAvailable) {
+        return (
+          <div className="py-4 text-sm text-muted-foreground">
+            Vote results are still being indexed.
+          </div>
+        )
+      }
       const resultMap = new Map(
         results.map((r) => [r.vote, Number(r.votePower)])
       )
@@ -72,9 +77,7 @@ export function VoteResultsSection({
           <div className="space-y-4">
             {allOptions.map((option) => {
               const percentage =
-                totalVotePower > 0
-                  ? (option.power / totalVotePower) * 100
-                  : 0
+                totalVotePower > 0 ? (option.power / totalVotePower) * 100 : 0
 
               return (
                 <div key={option.key}>

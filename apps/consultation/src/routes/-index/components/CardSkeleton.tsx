@@ -44,6 +44,8 @@ export function CardSkeletonList({ count = 5 }: { count?: number }) {
   return (
     <div className="flex flex-col gap-4">
       {Array.from({ length: count }).map((_, i) => (
+        // Skeleton placeholders are static and carry no component state.
+        // biome-ignore lint/suspicious/noArrayIndexKey: positional identity is intentional for placeholders
         <CardSkeleton key={`skeleton-${i}`} />
       ))}
     </div>

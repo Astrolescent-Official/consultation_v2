@@ -58,7 +58,7 @@ function PageContentInner({
   id: ProposalId
   isAdmin: boolean
 }) {
-  const status = getItemStatus(proposal.deadline)
+  const status = getItemStatus(proposal.start, proposal.deadline)
   const accountsVotesResult = useAtomValue(
     getProposalVotesByAccountsAtom(proposal.voters)
   )

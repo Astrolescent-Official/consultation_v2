@@ -11,8 +11,6 @@ catalog:
   '@effect-atom/atom-react': ^0.4.4
   '@effect/language-service': ^0.62.0
   '@effect/platform': ^0.93.6
-  '@effect/platform-browser': ^0.73.0
-  '@effect/platform-node': ^0.103.0
   '@effect/rpc': ^0.72.2
   '@effect/sql': ^0.48.6
   '@effect/sql-d1': ^0.46.0
@@ -34,7 +32,6 @@ catalog:
 
 ignoredBuiltDependencies:
   - '@parcel/watcher'
-  - aws-sdk
   - cpu-features
   - esbuild
   - msgpackr-extract

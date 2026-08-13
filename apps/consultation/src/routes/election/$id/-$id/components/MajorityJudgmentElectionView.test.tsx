@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, assert, describe, it, vi } from 'vitest'
 import { MajorityJudgmentElectionView } from './MajorityJudgmentElectionView'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children }: { readonly children: ReactNode }) => children
+}))
 
 const candidates = [
   {
@@ -19,25 +24,36 @@ const candidates = [
   }
 ]
 
+// The detail layout renders the details column and the sidebar once per
+// breakpoint, so anything on the page legitimately appears twice in the DOM.
+const first = (matcher: string | RegExp) => screen.getAllByText(matcher)[0]
+const absent = (matcher: string | RegExp) =>
+  screen.queryAllByText(matcher).length === 0
+const gradesPerCandidate = 5
+const layoutCopies = 2
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
 })
 
 describe('majority judgment election view', () => {
-  it('shows candidate review, disables grades, and hides tallies', () => {
+  it('shows the TC stage, disables grades, and hides MJ tallies', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-21T12:00:00.000Z'))
     render(
       <MajorityJudgmentElectionView
+        electionId={7}
         title="RAC election"
-        status="REVIEW_OPEN"
+        status="TC_LIVE"
         candidates={candidates}
         seatCount={1}
         roleId="rac"
         temperatureCheckId={42}
         parameterSetId="rac-election"
         parameterSetVersion={3}
-        reviewStart={new Date('2026-07-21T10:00:00.000Z')}
-        reviewEnd={new Date('2026-07-22T10:00:00.000Z')}
+        tcVotingStart={new Date('2026-07-21T10:00:00.000Z')}
+        tcVotingEnd={new Date('2026-07-22T10:00:00.000Z')}
         votingStart={new Date('2026-07-22T10:00:00.000Z')}
         votingEnd={new Date('2026-07-29T10:00:00.000Z')}
         quorumXrd="1000000"
@@ -45,26 +61,55 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(screen.getByText('Candidate review'))
-    assert.strictEqual(screen.getAllByRole('radio').length, 10)
+    assert.isNotNull(first('Candidate list review — vote For or Against'))
+    assert.strictEqual(
+      screen.getAllByRole('radio').length,
+      candidates.length * gradesPerCandidate * layoutCopies
+    )
     assert.isTrue(
       screen
         .getAllByRole('radio')
         .every((radio) => radio.hasAttribute('disabled'))
     )
-    assert.isNull(screen.queryByText(/provisional/i))
-    assert.isNull(screen.queryByText(/majority grade/i))
-    assert.isNotNull(screen.getByText('Role rac'))
-    assert.isNotNull(screen.getByText('TC #42'))
-    assert.isNotNull(screen.getByText('rac-election v3'))
-    assert.isNotNull(screen.getByText(/voting opens/i))
-    assert.isNull(screen.queryByText(/XRD$/))
-    assert.isNull(screen.queryByText(/participation/i))
+    assert.isTrue(absent(/provisional/i))
+    assert.isTrue(absent(/majority grade/i))
+    assert.isNotNull(first('1 seat · Role rac'))
+    assert.isNotNull(first('Candidate-list TC #42'))
+    assert.isNotNull(first('rac-election · version 3'))
+    assert.isNotNull(first(/TC voting closes/i))
+    assert.isTrue(absent(/XRD$/))
+    assert.isTrue(absent(/participation/i))
+  })
+
+  it('does not describe TC voting as open after its deadline', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-22T10:00:00.000Z'))
+    render(
+      <MajorityJudgmentElectionView
+        electionId={7}
+        title="RAC election"
+        status="TC_LIVE"
+        candidates={candidates}
+        seatCount={1}
+        tcVotingStart={new Date('2026-07-21T10:00:00.000Z')}
+        tcVotingEnd={new Date('2026-07-22T10:00:00.000Z')}
+        votingStart={new Date('2026-07-23T10:00:00.000Z')}
+        votingEnd={new Date('2026-07-30T10:00:00.000Z')}
+        quorumXrd="1000000"
+        totalVotingPower="0"
+      />
+    )
+
+    assert.isNotNull(
+      first('Candidate-list voting closed; awaiting the verified outcome')
+    )
+    assert.isTrue(absent(/TC voting closes/i))
   })
 
   it('requires one grade per candidate and reports the remaining count', () => {
     render(
       <MajorityJudgmentElectionView
+        electionId={7}
         title="RAC election"
         status="LIVE"
         candidates={candidates}
@@ -74,18 +119,39 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(screen.getByText('2 candidates still need a grade'))
+    assert.isNotNull(first('2 candidates still need a grade'))
     assert.isTrue(
       screen
-        .getByRole('button', { name: 'Submit ballot' })
-        .hasAttribute('disabled')
+        .getAllByRole('button', { name: 'Submit ballot' })
+        .every((button) => button.hasAttribute('disabled'))
     )
-    assert.isNotNull(screen.getByText('500000 / 1000000 XRD'))
+    assert.isNotNull(first('500.00K / 1.00M XRD'))
   })
 
-  it('labels live results provisional and discloses reruns and raised grades', () => {
+  it('records a grade chosen against a candidate on the ballot summary', () => {
     render(
       <MajorityJudgmentElectionView
+        electionId={7}
+        title="RAC election"
+        status="LIVE"
+        candidates={candidates}
+        seatCount={1}
+        quorumXrd="1000000"
+        totalVotingPower="500000"
+      />
+    )
+
+    assert.strictEqual(screen.getAllByText('Not graded').length, 2)
+    fireEvent.click(screen.getAllByRole('radio', { name: 'Excellent' })[0])
+
+    assert.strictEqual(screen.getAllByText('Not graded').length, 1)
+    assert.isNotNull(first('1 candidate still needs a grade'))
+  })
+
+  it('labels live results provisional and discloses the rerun grade floor', () => {
+    render(
+      <MajorityJudgmentElectionView
+        electionId={7}
         title="RAC election"
         status="RERUN_LIVE"
         candidates={candidates}
@@ -101,14 +167,15 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(screen.getByText('Provisional results'))
-    assert.isNotNull(screen.getByText(/rerun/i))
-    assert.isNotNull(screen.getByText(/minimum majority grade: Very Good/i))
+    assert.isNotNull(first('Provisional results'))
+    assert.isNotNull(first(/rerun/i))
+    assert.isNotNull(first(/minimum majority grade: Very Good/i))
   })
 
   it('renders unresolved, failed, and final terminal explanations', () => {
     const statuses = [
       ['TIE_UNRESOLVED', 'Governance tie resolution required'],
+      ['ROUND_1_FAILED', 'Turnout below quorum — awaiting a rerun decision'],
       ['FAILED', 'The rerun did not meet quorum'],
       ['FINAL', 'Official result']
     ] as const
@@ -116,6 +183,7 @@ describe('majority judgment election view', () => {
     for (const [status, text] of statuses) {
       const view = render(
         <MajorityJudgmentElectionView
+          electionId={7}
           title="RAC election"
           status={status}
           candidates={candidates}
@@ -129,7 +197,7 @@ describe('majority judgment election view', () => {
           }}
         />
       )
-      assert.isNotNull(screen.getByText(text))
+      assert.isNotNull(first(text))
       view.unmount()
     }
   })
@@ -138,6 +206,7 @@ describe('majority judgment election view', () => {
     const onSubmit = vi.fn()
     const baseProps = {
       candidates,
+      electionId: 7,
       onSubmit,
       quorumXrd: '1000000',
       seatCount: 1,
@@ -159,10 +228,10 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(
-      screen.getByText('This submission will replace your earlier ballot.')
+    assert.isNotNull(first('This submission will replace your earlier ballot.'))
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Replace ballot' })[0]
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Replace ballot' }))
     assert.deepStrictEqual(onSubmit.mock.calls[0], [
       [
         { candidateId: 0, grade: 4 },
@@ -178,6 +247,7 @@ describe('majority judgment election view', () => {
 
     render(
       <MajorityJudgmentElectionView
+        electionId={7}
         title="RAC election"
         status="LIVE"
         candidates={candidates}
@@ -193,7 +263,7 @@ describe('majority judgment election view', () => {
       />
     )
 
-    assert.isNotNull(screen.getByRole('button', { name: 'Replace ballot' }))
+    assert.isNotEmpty(screen.getAllByRole('button', { name: 'Replace ballot' }))
     act(() => vi.advanceTimersByTime(1_000))
 
     assert.isTrue(
@@ -201,8 +271,8 @@ describe('majority judgment election view', () => {
         .getAllByRole('radio')
         .every((radio) => radio.hasAttribute('disabled'))
     )
-    assert.isNull(screen.queryByRole('button', { name: 'Replace ballot' }))
-    assert.isNotNull(screen.getByText('Voting closed; finalizing result'))
+    assert.isTrue(absent('Replace ballot'))
+    assert.isNotNull(first('Voting closed; finalizing result'))
     assert.strictEqual(onSubmit.mock.calls.length, 0)
   })
 })

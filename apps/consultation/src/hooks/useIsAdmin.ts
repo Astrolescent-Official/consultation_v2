@@ -5,9 +5,7 @@ import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 /** Returns whether the currently connected account holds the admin badge */
 export function useIsAdmin(): boolean {
   const currentAccount = useCurrentAccount()
-  const isAdminResult = useAtomValue(
-    isAdminAtom(currentAccount?.address ?? '')
-  )
+  const isAdminResult = useAtomValue(isAdminAtom(currentAccount?.address ?? ''))
 
   if (!currentAccount) return false
 

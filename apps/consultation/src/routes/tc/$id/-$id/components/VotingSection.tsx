@@ -1,6 +1,13 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import { ArrowRightLeft, Check, LoaderIcon, ThumbsDown, ThumbsUp, Wallet } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  Check,
+  LoaderIcon,
+  ThumbsDown,
+  ThumbsUp,
+  Wallet
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
 import type { KeyValueStoreAddress } from 'shared/schemas'
@@ -40,7 +47,8 @@ export function VotingSection({
       if (accountsVotesResult && currentAccount) {
         const votesData = Result.builder(accountsVotesResult)
           .onSuccess((votes) => ({
-            currentVote: votes.find((v) => v.address === currentAccount.address)?.vote,
+            currentVote: votes.find((v) => v.address === currentAccount.address)
+              ?.vote,
             unvotedCount: accountList.filter(
               (acc) => !votes.some((v) => v.address === acc.address)
             ).length
@@ -100,7 +108,9 @@ function ConnectedVoting({
 }: ConnectedVotingProps) {
   const [voteResult, voteBatch] = useAtom(voteOnTemperatureCheckBatchAtom)
   const [isEditing, setIsEditing] = useState(false)
-  const [selectedVote, setSelectedVote] = useState<Vote | null>(currentVote ?? null)
+  const [selectedVote, setSelectedVote] = useState<Vote | null>(
+    currentVote ?? null
+  )
   const [voteAllAccounts, setVoteAllAccounts] = useState(false)
   const currentAccount = useCurrentAccount()
 
@@ -204,13 +214,19 @@ function ConnectedVoting({
                     : 'bg-transparent border-border text-foreground hover:border-muted-foreground hover:bg-secondary/50'
                 }`}
               >
-                <span className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-current bg-white/20' : 'border-current'
-                }`}>
+                <span
+                  className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                    isSelected ? 'border-current bg-white/20' : 'border-current'
+                  }`}
+                >
                   {isSelected && <Check className="size-3" />}
                 </span>
                 <span className="flex items-center gap-2">
-                  {opt === 'For' ? <ThumbsUp className="size-4" /> : <ThumbsDown className="size-4" />}
+                  {opt === 'For' ? (
+                    <ThumbsUp className="size-4" />
+                  ) : (
+                    <ThumbsDown className="size-4" />
+                  )}
                   {opt.toUpperCase()}
                 </span>
               </button>
@@ -226,13 +242,19 @@ function ConnectedVoting({
                   : 'bg-muted border-border text-muted-foreground'
               }`}
             >
-              <span className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                isSelected ? 'border-current bg-white/20' : 'border-current'
-              }`}>
+              <span
+                className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                  isSelected ? 'border-current bg-white/20' : 'border-current'
+                }`}
+              >
                 {isSelected && <Check className="size-3" />}
               </span>
               <span className="flex items-center gap-2">
-                {opt === 'For' ? <ThumbsUp className="size-4" /> : <ThumbsDown className="size-4" />}
+                {opt === 'For' ? (
+                  <ThumbsUp className="size-4" />
+                ) : (
+                  <ThumbsDown className="size-4" />
+                )}
                 {opt.toUpperCase()}
               </span>
             </div>
@@ -248,7 +270,9 @@ function ConnectedVoting({
               <Checkbox
                 id="vote-all"
                 checked={voteAllAccounts}
-                onCheckedChange={(checked) => setVoteAllAccounts(checked === true)}
+                onCheckedChange={(checked) =>
+                  setVoteAllAccounts(checked === true)
+                }
                 disabled={isSubmitting}
               />
               <label htmlFor="vote-all" className="text-sm">
@@ -260,8 +284,10 @@ function ConnectedVoting({
           <Button
             type="button"
             onClick={handleVote}
-            disabled={!selectedVote || isSubmitting || (hasVoted && !hasChanged)}
-            className={`w-full mt-4 ${(hasChanged || (!hasVoted && selectedVote)) ? 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 border-transparent' : ''}`}
+            disabled={
+              !selectedVote || isSubmitting || (hasVoted && !hasChanged)
+            }
+            className={`w-full mt-4 ${hasChanged || (!hasVoted && selectedVote) ? 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:text-white dark:hover:bg-emerald-500 border-transparent' : ''}`}
           >
             {isSubmitting && <LoaderIcon className="size-4 animate-spin" />}
             {hasVoted ? 'Change Vote' : 'Sign Transaction'}
@@ -274,7 +300,7 @@ function ConnectedVoting({
           <ArrowRightLeft className="size-3.5 shrink-0 mt-0.5" />
           <span>
             {unvotedCount === 1
-              ? 'You have 1 connected account that hasn\'t voted yet. Switch accounts to cast their vote.'
+              ? "You have 1 connected account that hasn't voted yet. Switch accounts to cast their vote."
               : `You have ${unvotedCount} connected accounts that haven't voted yet. Switch accounts to cast their votes.`}
           </span>
         </div>

@@ -7,6 +7,14 @@ import { AdminBadgeNotFoundError } from 'shared/governance/index'
 import { type ExternalToast, toast } from 'sonner'
 import { WalletErrorResponse } from '@/lib/dappToolkit'
 import { NoAccountConnectedError } from '@/lib/selectedAccount'
+import {
+  type BatchTransactionToast,
+  walletErrorMessage
+} from '@/lib/walletError'
+
+type ToastMessage = React.ReactNode | string
+
+type ToastCompletion = ToastMessage | BatchTransactionToast
 
 type ToastOptions<A, E, Args extends ReadonlyArray<unknown>> = {
   whenLoading:
@@ -17,13 +25,12 @@ type ToastOptions<A, E, Args extends ReadonlyArray<unknown>> = {
         args: Args
       }) => React.ReactNode | string)
   whenSuccess:
-    | string
-    | React.ReactNode
+    | ToastCompletion
     | ((args: {
         registry: Registry.Registry
         result: A
         args: Args
-      }) => React.ReactNode | string)
+      }) => ToastCompletion)
   whenFailure:
     | string
     | React.ReactNode
@@ -72,10 +79,21 @@ export const withToast =
         typeof options.whenSuccess === 'function'
           ? options.whenSuccess({ registry, result, args })
           : options.whenSuccess
-      toast.success(message, {
-        id: toastId,
-        ...options.options
-      })
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        'severity' in message
+      ) {
+        toast[message.severity](message.message, {
+          id: toastId,
+          ...options.options
+        })
+      } else {
+        toast.success(message, {
+          id: toastId,
+          ...options.options
+        })
+      }
       return result
     })
 
@@ -89,7 +107,7 @@ export const transactionFailureMessage =
   <E>({ cause }: { cause: Cause.Cause<E> }) => {
     if (cause._tag === 'Fail') {
       if (cause.error instanceof WalletErrorResponse) {
-        return Option.some(cause.error.message ?? 'Wallet error')
+        return Option.some(walletErrorMessage(cause.error))
       }
       if (
         cause.error instanceof NoAccountConnectedError ||

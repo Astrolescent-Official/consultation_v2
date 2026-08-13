@@ -1,7 +1,11 @@
 import { Schema } from 'effect'
 import { assert, describe, it } from 'vitest'
+import { msPerGovernanceDurationUnit } from '@/lib/governanceDuration'
 import { temperatureCheckFormOpts } from './formOptions'
-import { TemperatureCheckFormSchema } from './schema'
+import {
+  makeTemperatureCheckFormSchema,
+  TemperatureCheckFormSchema
+} from './schema'
 
 const validForm = {
   processType: 'Standard' as const,
@@ -15,10 +19,15 @@ const validForm = {
     { id: 'two', label: 'Against' }
   ],
   maxSelections: 1,
+  includeAbstain: true,
   roleId: '',
   seatCount: 1,
   candidates: [],
-  parameterSetId: 'default'
+  parameterSetId: 'default',
+  tcVotingStart: temperatureCheckFormOpts.defaultValues.tcVotingStart,
+  tcVotingEnd: temperatureCheckFormOpts.defaultValues.tcVotingEnd,
+  votingStart: temperatureCheckFormOpts.defaultValues.votingStart,
+  votingEnd: temperatureCheckFormOpts.defaultValues.votingEnd
 }
 
 describe('new temperature check parameter-set selection', () => {
@@ -31,6 +40,37 @@ describe('new temperature check parameter-set selection', () => {
     assert.isTrue(
       Schema.decodeUnknownEither(TemperatureCheckFormSchema)(missingSelection)
         ._tag === 'Left'
+    )
+  })
+
+  it('reserves the final option slot for Abstain only on single-choice proposals', () => {
+    const tenVoteOptions = Array.from({ length: 10 }, (_, index) => ({
+      id: String(index),
+      label: `Option ${index + 1}`
+    }))
+
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions
+      })._tag,
+      'Left'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions,
+        includeAbstain: false
+      })._tag,
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...validForm,
+        voteOptions: tenVoteOptions,
+        maxSelections: 2
+      })._tag,
+      'Right'
     )
   })
 
@@ -122,7 +162,21 @@ describe('new temperature check parameter-set selection', () => {
         ...majorityJudgmentForm,
         seatCount: 2
       })._tag,
-      'Left'
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...majorityJudgmentForm,
+        seatCount: 3
+      })._tag,
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
+        ...majorityJudgmentForm,
+        candidates: [majorityJudgmentForm.candidates[0]]
+      })._tag,
+      'Right'
     )
     assert.strictEqual(
       Schema.decodeUnknownEither(TemperatureCheckFormSchema)({
@@ -142,6 +196,109 @@ describe('new temperature check parameter-set selection', () => {
           links: index === 0 ? ['ftp://example.com/alice'] : candidate.links
         }))
       })._tag,
+      'Left'
+    )
+  })
+})
+
+describe('parameter-set-derived duration minimums', () => {
+  const localDateTime = (offsetMs: number) => {
+    const date = new Date(Date.now() + offsetMs)
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16)
+  }
+
+  const baseMajorityJudgmentForm = {
+    ...temperatureCheckFormOpts.defaultValues,
+    processType: 'MajorityJudgment' as const,
+    parameterSetId: 'mj-rac',
+    title: 'A proposal',
+    shortDescription: 'Summary',
+    description: 'Description',
+    radixTalkUrl: 'https://radixtalk.com/t/1',
+    roleId: 'rac-member',
+    seatCount: 1,
+    candidates: [
+      {
+        id: 'alice',
+        reference: 'alice',
+        displayName: 'Alice',
+        description: 'Alice profile',
+        links: []
+      },
+      {
+        id: 'bob',
+        reference: 'bob',
+        displayName: 'Bob',
+        description: 'Bob profile',
+        links: []
+      }
+    ]
+  }
+
+  it('rejects a schedule shorter than the selected parameter set requires', () => {
+    const schema = makeTemperatureCheckFormSchema({
+      temperatureCheckVotingUnits: 3,
+      electionVotingUnits: 2
+    })
+
+    const tooShortTc = {
+      ...baseMajorityJudgmentForm,
+      tcVotingStart: localDateTime(1 * msPerGovernanceDurationUnit),
+      // Only 1 unit long, but this parameter set requires 3.
+      tcVotingEnd: localDateTime(2 * msPerGovernanceDurationUnit),
+      votingStart: localDateTime(3 * msPerGovernanceDurationUnit),
+      votingEnd: localDateTime(6 * msPerGovernanceDurationUnit)
+    }
+    assert.strictEqual(
+      Schema.decodeUnknownEither(schema)(tooShortTc)._tag,
+      'Left'
+    )
+  })
+
+  it('accepts a schedule that meets the selected parameter set minimum', () => {
+    const schema = makeTemperatureCheckFormSchema({
+      temperatureCheckVotingUnits: 3,
+      electionVotingUnits: 2
+    })
+
+    const validSchedule = {
+      ...baseMajorityJudgmentForm,
+      tcVotingStart: localDateTime(1 * msPerGovernanceDurationUnit),
+      tcVotingEnd: localDateTime(4 * msPerGovernanceDurationUnit),
+      votingStart: localDateTime(4 * msPerGovernanceDurationUnit),
+      votingEnd: localDateTime(6 * msPerGovernanceDurationUnit)
+    }
+    assert.strictEqual(
+      Schema.decodeUnknownEither(schema)(validSchedule)._tag,
+      'Right'
+    )
+  })
+
+  it('rejects a schedule that meets a looser default but not a stricter parameter set', () => {
+    // The unparameterized default schema only requires >0 duration, so this
+    // would pass without parameter-set-derived minimums wired in.
+    const looseSchema = makeTemperatureCheckFormSchema()
+    const strictSchema = makeTemperatureCheckFormSchema({
+      temperatureCheckVotingUnits: 5,
+      electionVotingUnits: 5
+    })
+
+    const barelyValidForDefault = {
+      ...baseMajorityJudgmentForm,
+      tcVotingStart: localDateTime(1 * msPerGovernanceDurationUnit),
+      tcVotingEnd: localDateTime(2 * msPerGovernanceDurationUnit),
+      votingStart: localDateTime(2 * msPerGovernanceDurationUnit),
+      votingEnd: localDateTime(3 * msPerGovernanceDurationUnit)
+    }
+
+    assert.strictEqual(
+      Schema.decodeUnknownEither(looseSchema)(barelyValidForDefault)._tag,
+      'Right'
+    )
+    assert.strictEqual(
+      Schema.decodeUnknownEither(strictSchema)(barelyValidForDefault)._tag,
       'Left'
     )
   })

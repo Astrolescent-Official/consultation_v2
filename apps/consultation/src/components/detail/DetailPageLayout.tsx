@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
 import { Vote } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -46,14 +46,10 @@ export function DetailPageLayout({
               <TabsTrigger value="results">Results</TabsTrigger>
             </TabsList>
             <TabsContent value="details">
-              <div className="space-y-8 pt-4">
-                {details}
-              </div>
+              <div className="space-y-8 pt-4">{details}</div>
             </TabsContent>
             <TabsContent value="results">
-              <div className="space-y-6 pt-4">
-                {resultsContent}
-              </div>
+              <div className="space-y-6 pt-4">{resultsContent}</div>
             </TabsContent>
           </Tabs>
 
@@ -73,9 +69,7 @@ export function DetailPageLayout({
             </Button>
           </DrawerTrigger>
           <DrawerContent className="max-h-[80vh]">
-            <div className="overflow-y-auto p-6">
-              {votingContent}
-            </div>
+            <div className="overflow-y-auto p-6">{votingContent}</div>
           </DrawerContent>
         </Drawer>
       </div>

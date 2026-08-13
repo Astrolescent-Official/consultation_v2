@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react'
-import type {
-  MajorityJudgmentElectionStatus,
-  MajorityJudgmentRoundId
+import {
+  canStartMajorityJudgmentRerun,
+  type MajorityJudgmentElectionStatus,
+  type MajorityJudgmentRoundId
 } from 'shared/governance/index'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,14 +11,12 @@ import { Input } from '@/components/ui/input'
 type MajorityJudgmentOwnerControlsProps = {
   readonly status: MajorityJudgmentElectionStatus
   readonly round: MajorityJudgmentRoundId
-  readonly hidden: boolean
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly busy: boolean
   readonly onStartRerun: (votingStart: Date) => void
   readonly onRecordTieResolution: (
     orderedCandidateIds: ReadonlyArray<number>
   ) => void
-  readonly onToggleVisibility: () => void
 }
 
 const moveCandidate = (
@@ -37,12 +36,10 @@ const moveCandidate = (
 export function MajorityJudgmentOwnerControls({
   status,
   round,
-  hidden,
   unresolvedCandidateIds,
   busy,
   onStartRerun,
-  onRecordTieResolution,
-  onToggleVisibility
+  onRecordTieResolution
 }: MajorityJudgmentOwnerControlsProps) {
   const rerunStartId = useId()
   const [rerunStart, setRerunStart] = useState('')
@@ -52,23 +49,26 @@ export function MajorityJudgmentOwnerControls({
     setTieOrder([...unresolvedCandidateIds])
   }, [unresolvedCandidateIds])
 
+  const canRerun = canStartMajorityJudgmentRerun(status)
+  const canResolveTie =
+    status === 'TIE_UNRESOLVED' &&
+    tieOrder.length === unresolvedCandidateIds.length &&
+    tieOrder.length > 0
+
+  // Visibility moved to the header badge every detail page shares, so an
+  // election with nothing to adjudicate has no operator card at all.
+  if (!canRerun && !canResolveTie) return null
+
   return (
-    <Card>
+    <Card className="shadow-none">
       <CardHeader>
-        <CardTitle>Election owner controls</CardTitle>
+        <CardTitle className="text-base">
+          Governance Operator controls
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={onToggleVisibility}
-        >
-          {hidden ? 'Show election' : 'Hide election'}
-        </Button>
-
-        {status === 'RERUN_PENDING' ? (
-          <div className="space-y-2 border-t pt-4">
+        {canRerun ? (
+          <div className="space-y-2">
             <label htmlFor={rerunStartId} className="block space-y-1 text-sm">
               <span>Rerun voting start</span>
               <Input
@@ -84,15 +84,13 @@ export function MajorityJudgmentOwnerControls({
               disabled={busy || rerunStart.length === 0}
               onClick={() => onStartRerun(new Date(rerunStart))}
             >
-              Schedule rerun
+              Open Round 2 rerun
             </Button>
           </div>
         ) : null}
 
-        {status === 'TIE_UNRESOLVED' &&
-        tieOrder.length === unresolvedCandidateIds.length &&
-        tieOrder.length > 0 ? (
-          <div className="space-y-3 border-t pt-4">
+        {canResolveTie ? (
+          <div className="space-y-3 first:border-t-0 first:pt-0 border-t pt-4">
             <div>
               <p className="text-sm font-medium">Recorded adjudication order</p>
               <p className="text-xs text-muted-foreground">

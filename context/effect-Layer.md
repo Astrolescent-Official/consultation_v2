@@ -364,27 +364,25 @@ Use `fresh()` when:
 
 ### Pattern: Layer cake with `provideMerge` for shared Config
 
-From `apps/vote-collector/src/index.ts`:
+From `apps/consultation/src/server/voting/layers.ts`:
 
 ```typescript
-// Domain services — provideMerge so Config is available to both internal services and the main program
-const BaseServicesLayer = Layer.mergeAll(
-  GovernanceComponent.Default,
-  GovernanceEventProcessor.Default,
-  Snapshot.Default,
-  GetLedgerStateService.Default,
-  VoteCalculation.Default,
-  StartupReconciliation.Default,
-  TriggerConsumer.Default,
-  TransactionListener.Default
-).pipe(
-  Layer.provide(ORM.Default),                   // ORM consumed internally
-  Layer.provide(StokenetGatewayApiClientLayer),  // Gateway consumed internally
-  Layer.provideMerge(Config.StokenetLive)        // Config ALSO available to main program
-)
+const CronJobHandlerLayer = (env: VotingWorkerEnv) =>
+  PollService.Default.pipe(
+    Layer.provideMerge(PollLock.Default),
+    Layer.provide(ORM.Default),
+    Layer.provideMerge(GatewayApiClientLayer),
+    Layer.provideMerge(GovernanceConfigLayer),
+    Layer.provideMerge(databaseLayer(env)),
+    Layer.provideMerge(Logger.json),
+    Layer.provide(configLayer(env))
+  )
 ```
 
-Read bottom-to-top for dependency direction: Config feeds into Gateway, which feeds into ORM, which feeds into the merged services.
+Read bottom-to-top for dependency direction: the Worker bindings provide
+configuration and D1, which feed the Gateway, governance, repository, and poll
+services. `provideMerge` keeps services available to sibling layers that also
+need them.
 
 ### Pattern: `provideMerge` for Ref-based mutable state
 

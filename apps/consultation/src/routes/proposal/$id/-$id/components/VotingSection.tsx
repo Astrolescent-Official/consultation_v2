@@ -39,10 +39,12 @@ function OptionButton({
         disabled && 'opacity-50 cursor-not-allowed'
       )}
     >
-      <span className={cn(
-        'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
-        selected ? 'border-current bg-white/20' : 'border-current'
-      )}>
+      <span
+        className={cn(
+          'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
+          selected ? 'border-current bg-white/20' : 'border-current'
+        )}
+      >
         {selected && <Check className="size-3" />}
       </span>
       <span className="font-medium text-sm">{label}</span>
@@ -79,7 +81,9 @@ export function VotingSection({
       if (accountsVotesResult && currentAccount) {
         const votesData = Result.builder(accountsVotesResult)
           .onSuccess((votes) => ({
-            currentVote: votes.find((v) => v.address === currentAccount.address),
+            currentVote: votes.find(
+              (v) => v.address === currentAccount.address
+            ),
             unvotedCount: accountList.filter(
               (acc) => !votes.some((v) => v.address === acc.address)
             ).length
@@ -178,10 +182,10 @@ function ConnectedVoting({
   const hasVoted = currentVoteOptions !== undefined
   const showForm = !hasVoted || isEditing
   const currentSet = new Set(currentVoteOptions ?? [])
-  const hasChanged = hasVoted && (
-    selectedOptions.size !== currentSet.size ||
-    [...selectedOptions].some((id) => !currentSet.has(id))
-  )
+  const hasChanged =
+    hasVoted &&
+    (selectedOptions.size !== currentSet.size ||
+      [...selectedOptions].some((id) => !currentSet.has(id)))
 
   const handleOptionToggle = (optionId: number) => {
     setSelectedOptions((prev) => {
@@ -280,10 +284,12 @@ function ConnectedVoting({
                   : 'bg-muted border-border text-muted-foreground'
               }`}
             >
-              <span className={cn(
-                'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
-                isSelected ? 'border-current bg-white/20' : 'border-current'
-              )}>
+              <span
+                className={cn(
+                  'size-5 rounded-full border-2 flex items-center justify-center shrink-0',
+                  isSelected ? 'border-current bg-white/20' : 'border-current'
+                )}
+              >
                 {isSelected && <Check className="size-3" />}
               </span>
               <span className="font-medium text-sm">{opt.label}</span>
@@ -300,7 +306,9 @@ function ConnectedVoting({
               <Checkbox
                 id="vote-all-proposal"
                 checked={voteAllAccounts}
-                onCheckedChange={(checked) => setVoteAllAccounts(checked === true)}
+                onCheckedChange={(checked) =>
+                  setVoteAllAccounts(checked === true)
+                }
                 disabled={isSubmitting}
               />
               <label htmlFor="vote-all-proposal" className="text-sm">
@@ -330,7 +338,7 @@ function ConnectedVoting({
           <ArrowRightLeft className="size-3.5 shrink-0 mt-0.5" />
           <span>
             {unvotedCount === 1
-              ? 'You have 1 connected account that hasn\'t voted yet. Switch accounts to cast their vote.'
+              ? "You have 1 connected account that hasn't voted yet. Switch accounts to cast their vote."
               : `You have ${unvotedCount} connected accounts that haven't voted yet. Switch accounts to cast their votes.`}
           </span>
         </div>

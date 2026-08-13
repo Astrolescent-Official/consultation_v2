@@ -1,9 +1,5 @@
 import { Button } from '@/components/ui/button'
-import {
-  Field,
-  FieldError,
-  FieldLabel
-} from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { withForm } from '../formHook'
 import { temperatureCheckFormOpts } from '../formOptions'
@@ -59,7 +55,9 @@ export const MaxSelectionsField = withForm({
                       max={maxAllowed}
                       value={field.state.value}
                       onChange={(e) =>
-                        field.handleChange(Number.parseInt(e.target.value) || 2)
+                        field.handleChange(
+                          Number.parseInt(e.target.value, 10) || 2
+                        )
                       }
                       className="max-w-[120px]"
                       aria-invalid={isInvalid}

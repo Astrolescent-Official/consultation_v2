@@ -2,12 +2,13 @@
 
 ## Features
 
-- Browse and filter temperature checks and proposals
+- Browse and filter temperature checks, proposals, and majority-judgment elections
 - Vote on active consultations via Radix Wallet
 - Create new temperature checks
 - Promote temperature checks to proposals (admin)
 - Admin panel for governance parameters
 - Vote results and account vote tracking
+- Scheduled on-ledger vote collection and D1 persistence
 
 ## Tech stack
 
@@ -23,7 +24,7 @@
 
 ## Public app configuration
 
-Public application and collector values are defined once in the selected
+Public application and voting values are defined once in the selected
 `wrangler.jsonc` environment. The Worker validates them and serves the same
 values to the browser from `/app-config.js` before hydration.
 
@@ -31,7 +32,6 @@ values to the browser from `/app-config.js` before hydration.
 | --- | --- | --- |
 | `ENV` | Environment (`local`, `preview`, or `production`) | — (required) |
 | `DAPP_DEFINITION_ADDRESS` | Radix dApp definition account address | — (required) |
-| `GOVERNANCE_COMPONENT_ADDRESS` | Governance component used by the UI and poller | — (required) |
 | `NETWORK_ID` | Radix network ID (`1` = mainnet, `2` = Stokenet) | — (required) |
 
 ## Scripts
@@ -40,6 +40,8 @@ values to the browser from `/app-config.js` before hydration.
 | --- | --- | --- |
 | `dev` | `CLOUDFLARE_ENV=preview vite dev --port 3000` | Start the local Stokenet Worker on port 3000 |
 | `build` | `vite build` | Production build |
+| `tally` | `tsx scripts/tally.ts` | Direct-ledger TC/proposal tally; no D1 access required |
+| `test` | `vitest run --config vitest.config.ts` | Frontend and voting-domain unit tests |
 | `test:worker` | `vitest run --config vitest.worker.config.ts` | Workerd/D1 integration tests |
 | `deploy` | `pnpm build && wrangler deploy ...` | Deploy production Worker |
 | `deploy:preview` | `pnpm build:preview && wrangler deploy ...` | Deploy isolated preview Worker |
@@ -80,6 +82,7 @@ src/
   components/           Shared UI components (shadcn/ui, detail views)
   hooks/                React hooks (useCurrentAccount, useIsAdmin)
   lib/                  Utilities (envVars, dappToolkit, voting helpers)
+  server/voting/        Scheduled polling, vote calculation, and D1 repositories
 ```
 
 ## Routes
@@ -91,5 +94,9 @@ src/
 | `/tc/:id` | Temperature check detail, vote results, voting |
 | `/tc/new` | Create a new temperature check (admin only) |
 | `/proposal/:id` | Proposal detail, vote results, voting |
+| `/election/:id` | Majority-judgment election detail, grading, and results |
+| `/vote-results` | Aggregated temperature-check and proposal results API |
+| `/account-votes` | Per-account temperature-check and proposal votes API |
+| `/majority-judgment-election` | Majority-judgment results API |
 | `/about` | About page |
 | `/about/admin` | Admin panel — governance parameters |

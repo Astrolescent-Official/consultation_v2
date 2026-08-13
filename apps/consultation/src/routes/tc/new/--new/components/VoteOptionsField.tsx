@@ -1,9 +1,13 @@
 import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { useId } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Field,
+  FieldDescription,
   FieldError,
-  FieldGroup
+  FieldGroup,
+  FieldLabel
 } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { withForm } from '../formHook'
@@ -16,9 +20,13 @@ import {
 export const VoteOptionsField = withForm({
   ...temperatureCheckFormOpts,
   props: {
-    maxOptions: 10
+    maxOptions: 10,
+    isSingleChoice: true,
+    isAdmin: false
   },
-  render: function Render({ form, maxOptions }) {
+  render: function Render({ form, maxOptions, isSingleChoice, isAdmin }) {
+    const abstainId = useId()
+
     return (
       <form.Field
         name="voteOptions"
@@ -52,9 +60,7 @@ export const VoteOptionsField = withForm({
                       name={`voteOptions[${index}].label`}
                       validators={{
                         onBlur: ({ value }) =>
-                          !value
-                            ? { message: 'Label is required' }
-                            : undefined,
+                          !value ? { message: 'Label is required' } : undefined,
                         onChange: () => undefined
                       }}
                     >
@@ -101,6 +107,35 @@ export const VoteOptionsField = withForm({
                     )}
                   </div>
                 ))}
+
+                {isSingleChoice ? (
+                  <form.Field name="includeAbstain">
+                    {(abstainField) => (
+                      <Field
+                        orientation="horizontal"
+                        className="rounded-md border bg-muted/40 p-3"
+                      >
+                        <Checkbox
+                          id={abstainId}
+                          checked={isAdmin ? abstainField.state.value : true}
+                          disabled={!isAdmin}
+                          onCheckedChange={(checked) =>
+                            abstainField.handleChange(checked === true)
+                          }
+                        />
+                        <div className="grid gap-1">
+                          <FieldLabel htmlFor={abstainId}>Abstain</FieldLabel>
+                          <FieldDescription>
+                            Added as the final option.
+                            {isAdmin
+                              ? ' Your owner badge lets you remove it.'
+                              : ' Only an owner-badge account can remove it.'}
+                          </FieldDescription>
+                        </div>
+                      </Field>
+                    )}
+                  </form.Field>
+                ) : null}
               </div>
 
               {voteOptions.length < maxOptions && (

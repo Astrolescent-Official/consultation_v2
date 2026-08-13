@@ -1,5 +1,10 @@
 # Majority Judgment Elections
 
+> **Superseded (2026-08-01).** This pre-change-request design is retained only
+> as implementation history. It must not be used as the current specification.
+> The authoritative post-CR decisions and shipped-system corrections are in
+> [2026-08-01-majority-judgment-post-cr-remediation.md](./2026-08-01-majority-judgment-post-cr-remediation.md).
+
 ## Review Brief
 
 This document is a self-contained design and implementation plan for adding Majority Judgment (MJ) role elections to Consultation V2. It is written for a reviewer who has this repository and this file, but no access to the design conversation that produced it.
