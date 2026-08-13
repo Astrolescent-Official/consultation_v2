@@ -135,6 +135,15 @@ describe('majority judgment shared schemas', () => {
       })._tag === 'Left'
     )
     assert.isTrue(
+      Schema.decodeUnknownEither(MakeMajorityJudgmentElectionInputSchema)(
+        {
+          ...creation,
+          gradeQuantile: { num: 3, den: 5 }
+        },
+        { onExcessProperty: 'error' }
+      )._tag === 'Left'
+    )
+    assert.isTrue(
       Schema.decodeUnknownEither(MakeMajorityJudgmentTieResolutionInputSchema)({
         accountAddress,
         electionId: 7,
@@ -250,14 +259,20 @@ describe('majority judgment shared schemas', () => {
         quorumXrd: '1000000',
         quorumMet: false,
         minimumMedianGrade: 2,
+        gradeQuantileApplied: '1/2',
         candidateResults: [
           {
             candidateId: 0,
             histogram: ['0', '0', '100000', '200000', '200000'],
-            majorityGrade: 3,
-            finalMajorityGrade: 3,
+            qualifyingGrade: 3,
+            powerAbove: '200000',
+            powerBelow: '100000',
+            p: '0.4',
+            q: '0.2',
+            band: 'A',
             electable: true,
             rank: 1,
+            tieGroupId: null,
             outcome: 'SEATED'
           }
         ],
@@ -265,7 +280,6 @@ describe('majority judgment shared schemas', () => {
         reserveCandidateIds: [],
         reserveExpiresAt: null,
         referredSeats: 1,
-        tieBreakIterations: 0,
         unresolvedCandidateIds: []
       }
     }

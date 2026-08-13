@@ -131,6 +131,98 @@ beforeEach(async () => {
 })
 
 describe('D1 majority judgment persistence', () => {
+  it('derives gauge evidence for historical removal-era result rows without rewriting rank', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection(projection)
+        yield* repo.commitCalculation({
+          electionId: 7,
+          round: 1,
+          lastVoteCount: 1n,
+          ballots: [],
+          histograms: [],
+          result: {
+            computedAt: new Date('2026-07-15T00:00:00.000Z'),
+            totalVotingPower: '10',
+            quorumXrd: '100',
+            quorumMet: false,
+            minimumMedianGrade: 2,
+            candidateResults: [],
+            seatedCandidateIds: [],
+            reserveCandidateIds: [],
+            reserveExpiresAt: null,
+            referredSeats: 1,
+            tieBreakIterations: 3,
+            unresolvedCandidateIds: [],
+            status: 'LIVE'
+          }
+        })
+      })
+    )
+
+    await env.DB.prepare(
+      'UPDATE mj_result SET candidate_results = ? WHERE election_id = 7 AND round = 1'
+    )
+      .bind(
+        JSON.stringify([
+          {
+            candidateId: 0,
+            histogram: ['5', '0', '0', '0', '5'],
+            majorityGrade: 4,
+            finalMajorityGrade: 4,
+            electable: true,
+            rank: 2,
+            outcome: 'RESERVE'
+          },
+          {
+            candidateId: 1,
+            histogram: ['4', '0', '5', '0', '1'],
+            median: 2,
+            powerAbove: '1',
+            powerBelow: '4',
+            p: '0.1',
+            q: '0.4',
+            band: 'C',
+            electable: true,
+            rank: 1,
+            tieGroupId: null,
+            outcome: 'SEATED'
+          }
+        ])
+      )
+      .run()
+
+    const response = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(response.result?.candidateResults[0]).toMatchObject({
+      candidateId: 0,
+      qualifyingGrade: 4,
+      powerAbove: '0',
+      powerBelow: '5',
+      p: '0',
+      q: '0.5',
+      band: 'C',
+      rank: 2,
+      tieGroupId: null
+    })
+    expect(response.result?.candidateResults[1]).toMatchObject({
+      candidateId: 1,
+      qualifyingGrade: 2,
+      powerAbove: '1',
+      powerBelow: '4',
+      p: '0.1',
+      q: '0.4',
+      band: 'C',
+      rank: 1,
+      tieGroupId: null
+    })
+  })
+
   it('indexes and finalizes the TC gate without requiring a round row', async () => {
     await runWithRepository(
       Effect.gen(function* () {
@@ -524,6 +616,7 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
+    expect(response.election.result?.gradeQuantileApplied).toBe('3/5')
     expect(response.election.currentRound?.round).toBe('RoundOne')
     expect(response.election.rounds).toHaveLength(2)
     expect(response.election.results).toHaveLength(1)
@@ -543,6 +636,17 @@ describe('D1 majority judgment persistence', () => {
       outcomeConsistent: true,
       passed: true
     })
+
+    const persistedQuantile = await env.DB.prepare(
+      `SELECT election.grade_quantile_num AS num,
+              election.grade_quantile_den AS den,
+              result.grade_quantile_applied AS applied
+       FROM mj_election AS election
+       JOIN mj_result AS result
+         ON result.election_id = election.id
+       WHERE election.id = 7 AND result.round = 1`
+    ).first<{ num: number; den: number; applied: string }>()
+    expect(persistedQuantile).toEqual({ num: 3, den: 5, applied: '3/5' })
 
     await expect(
       runWithRepository(

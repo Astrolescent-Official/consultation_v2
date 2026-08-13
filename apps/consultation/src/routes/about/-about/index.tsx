@@ -1,6 +1,11 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
 import { Link } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import {
+  formatGradeQuantile,
+  GRADE_QUANTILE,
+  gradeName
+} from 'shared/governance/index'
 import type { GovernanceParameterSet } from 'shared/governance/schemas'
 import { isAdminAtom } from '@/atom/adminAtom'
 import { governanceParameterSetsAtom } from '@/atom/governanceParametersAtom'
@@ -8,6 +13,10 @@ import { Button } from '@/components/ui/button'
 import { H1 } from '@/components/ui/typography'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
 import { formatGovernanceDuration } from '@/lib/governanceDuration'
+import {
+  gradeQuantileDisclosure,
+  gradeQuantileLabel
+} from '@/lib/gradeQuantile'
 import { formatApprovalThreshold, formatQuorum } from '@/lib/utils'
 
 export const Page = () => {
@@ -136,10 +145,22 @@ const ParameterSetDetails = ({
               </li>
               <li>Fixed quorum: {formatQuorum(parameters.election.quorum)}</li>
               <li>
+                Minimum qualifying grade:{' '}
+                {gradeName(parameters.election.minimumMedianGrade)}
+              </li>
+              <li>
+                Grade quantile:{' '}
+                {gradeQuantileLabel(formatGradeQuantile(GRADE_QUANTILE))} ·
+                fixed counting rule
+              </li>
+              <li>
                 Rerun fixed quorum:{' '}
                 {formatQuorum(parameters.election.rerunQuorum)}
               </li>
             </ul>
+            <p className="text-sm text-neutral-500">
+              {gradeQuantileDisclosure(formatGradeQuantile(GRADE_QUANTILE))}
+            </p>
           </div>
         )}
       </div>

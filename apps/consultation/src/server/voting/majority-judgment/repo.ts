@@ -1,3 +1,4 @@
+import BigNumber from 'bignumber.js'
 import {
   type MajorityJudgmentCandidateGradeJson,
   type MajorityJudgmentCandidateResultJson,
@@ -14,6 +15,8 @@ import {
   CandidateHttpUrlStringSchema,
   calculateTemperatureCheckOutcome,
   canTransitionFromRoundOneFailure,
+  formatGradeQuantile,
+  GRADE_QUANTILE,
   GradeSchema,
   MajorityJudgmentCandidateIdSchema,
   MajorityJudgmentCandidateResult,
@@ -41,9 +44,134 @@ const StoredCandidateGradesSchema = Schema.Array(
 const StoredCandidateLinksSchema = Schema.Array(
   CandidateHttpUrlStringSchema
 ).pipe(Schema.maxItems(5))
+const StoredLegacyCandidateResultSchema = Schema.Struct({
+  candidateId: MajorityJudgmentCandidateIdSchema,
+  histogram: Schema.Tuple(
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String
+  ),
+  majorityGrade: Schema.NullOr(GradeSchema),
+  finalMajorityGrade: Schema.NullOr(GradeSchema),
+  electable: Schema.Boolean,
+  rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
+  outcome: Schema.Literal('SEATED', 'RESERVE', 'NOT_ELECTABLE', 'UNRESOLVED')
+})
+const StoredMedianCandidateResultSchema = Schema.Struct({
+  candidateId: MajorityJudgmentCandidateIdSchema,
+  histogram: Schema.Tuple(
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String,
+    Schema.String
+  ),
+  median: Schema.NullOr(GradeSchema),
+  powerAbove: Schema.String,
+  powerBelow: Schema.String,
+  p: Schema.String,
+  q: Schema.String,
+  band: Schema.NullOr(Schema.Literal('A', 'B', 'C')),
+  electable: Schema.Boolean,
+  rank: Schema.NullOr(Schema.Number.pipe(Schema.int(), Schema.positive())),
+  tieGroupId: Schema.NullOr(
+    Schema.Number.pipe(Schema.int(), Schema.nonNegative())
+  ),
+  outcome: Schema.Literal('SEATED', 'RESERVE', 'NOT_ELECTABLE', 'UNRESOLVED')
+})
+type StoredCandidateResult =
+  | MajorityJudgmentCandidateResult
+  | typeof StoredMedianCandidateResultSchema.Type
+  | typeof StoredLegacyCandidateResultSchema.Type
+
+const normalizeStoredCandidateResult = (
+  candidate: StoredCandidateResult,
+  totalVotingPower: string
+): MajorityJudgmentCandidateResult => {
+  if ('qualifyingGrade' in candidate) return candidate
+  if ('median' in candidate) {
+    const { median, ...storedResult } = candidate
+    return new MajorityJudgmentCandidateResult({
+      ...storedResult,
+      qualifyingGrade: median
+    })
+  }
+
+  // Legacy rows were tallied at τ = 1/2, before the Grade Quantile existed,
+  // and terminal results are immutable (FR-RESULT-004). This halving is
+  // deliberately NOT generalized to GRADE_QUANTILE: re-deriving at the
+  // current quantile would silently restate published outcomes.
+  const weights = candidate.histogram.map((value) => new BigNumber(value))
+  const total = weights.reduce(
+    (sum, value) => sum.plus(value),
+    new BigNumber(0)
+  )
+  let qualifyingGrade: 0 | 1 | 2 | 3 | 4 | null = null
+  let cumulative = new BigNumber(0)
+  for (const grade of [4, 3, 2, 1, 0] as const) {
+    cumulative = cumulative.plus(weights[grade])
+    if (
+      !total.isZero() &&
+      cumulative.multipliedBy(2).isGreaterThanOrEqualTo(total)
+    ) {
+      qualifyingGrade = grade
+      break
+    }
+  }
+  const powerAbove = weights.reduce(
+    (sum, value, grade) =>
+      qualifyingGrade !== null && grade > qualifyingGrade
+        ? sum.plus(value)
+        : sum,
+    new BigNumber(0)
+  )
+  const powerBelow = weights.reduce(
+    (sum, value, grade) =>
+      qualifyingGrade !== null && grade < qualifyingGrade
+        ? sum.plus(value)
+        : sum,
+    new BigNumber(0)
+  )
+  const denominator = new BigNumber(totalVotingPower)
+  const share = (power: BigNumber) =>
+    denominator.isZero() ? '0' : power.dividedBy(denominator).toFixed()
+  const comparison = powerAbove.comparedTo(powerBelow) ?? 0
+
+  return new MajorityJudgmentCandidateResult({
+    candidateId: candidate.candidateId,
+    histogram: candidate.histogram,
+    qualifyingGrade,
+    powerAbove: powerAbove.toFixed(),
+    powerBelow: powerBelow.toFixed(),
+    p: share(powerAbove),
+    q: share(powerBelow),
+    band:
+      candidate.electable && qualifyingGrade !== null
+        ? comparison > 0
+          ? 'A'
+          : comparison < 0
+            ? 'C'
+            : 'B'
+        : null,
+    electable: candidate.electable,
+    rank: candidate.rank,
+    // Historical removal-based ranks remain frozen; legacy rows are marked as
+    // having no majority-gauge tie group rather than silently rewriting them.
+    tieGroupId: null,
+    outcome: candidate.outcome
+  })
+}
 const StoredResultJsonSchema = Schema.Struct({
   minimumMedianGrade: GradeSchema,
-  candidateResults: Schema.Array(MajorityJudgmentCandidateResult),
+  candidateResults: Schema.Array(
+    Schema.Union(
+      MajorityJudgmentCandidateResult,
+      StoredMedianCandidateResultSchema,
+      StoredLegacyCandidateResultSchema
+    )
+  ),
   seatedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   reserveCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
   unresolvedCandidateIds: Schema.Array(MajorityJudgmentCandidateIdSchema),
@@ -186,7 +314,11 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           ])
           yield* db
             .insert(mjElection)
-            .values(input.election)
+            .values({
+              ...input.election,
+              gradeQuantileNum: GRADE_QUANTILE.num,
+              gradeQuantileDen: GRADE_QUANTILE.den
+            })
             .onConflictDoUpdate({
               target: mjElection.id,
               set: {
@@ -377,7 +509,16 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
             status: result.value.status
           }
         )
-        return Option.some({ ...result.value, ...decodedJson })
+        return Option.some({
+          ...result.value,
+          ...decodedJson,
+          candidateResults: decodedJson.candidateResults.map((candidate) =>
+            normalizeStoredCandidateResult(
+              candidate,
+              result.value.totalVotingPower
+            )
+          )
+        })
       })
 
       const getTemperatureCheckVerdict = Effect.fn(
@@ -631,11 +772,11 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
               `INSERT INTO mj_result (
                  election_id, round, computed_at, total_voting_power,
                  quorum_xrd, quorum_met, minimum_median_grade,
-                 candidate_results, seated_candidate_ids,
+                 grade_quantile_applied, candidate_results, seated_candidate_ids,
                  reserve_candidate_ids, reserve_expires_at, referred_seats,
                  tie_break_iterations, unresolved_candidate_ids, status
                )
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(election_id, round) DO UPDATE SET
                  computed_at = excluded.computed_at,
                  total_voting_power = excluded.total_voting_power,
@@ -659,6 +800,7 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
               input.result.quorumXrd,
               input.result.quorumMet ? 1 : 0,
               input.result.minimumMedianGrade,
+              formatGradeQuantile(GRADE_QUANTILE),
               JSON.stringify(input.result.candidateResults),
               JSON.stringify(input.result.seatedCandidateIds),
               JSON.stringify(input.result.reserveCandidateIds),
@@ -779,13 +921,18 @@ export class MajorityJudgmentRepo extends Effect.Service<MajorityJudgmentRepo>()
           quorumXrd: storedResult.quorumXrd,
           quorumMet: storedResult.quorumMet,
           minimumMedianGrade: storedResult.minimumMedianGrade,
-          candidateResults: storedResult.candidateResults,
+          gradeQuantileApplied: storedResult.gradeQuantileApplied,
+          candidateResults: storedResult.candidateResults.map((candidate) =>
+            normalizeStoredCandidateResult(
+              candidate as StoredCandidateResult,
+              storedResult.totalVotingPower
+            )
+          ),
           seatedCandidateIds: storedResult.seatedCandidateIds,
           reserveCandidateIds: storedResult.reserveCandidateIds,
           reserveExpiresAt:
             storedResult.reserveExpiresAt?.toISOString() ?? null,
           referredSeats: storedResult.referredSeats,
-          tieBreakIterations: storedResult.tieBreakIterations,
           unresolvedCandidateIds: storedResult.unresolvedCandidateIds
         })
 

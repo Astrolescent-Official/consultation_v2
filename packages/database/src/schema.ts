@@ -104,10 +104,15 @@ export type MajorityJudgmentCandidateGradeJson = {
 export type MajorityJudgmentCandidateResultJson = {
   readonly candidateId: number
   readonly histogram: readonly [string, string, string, string, string]
-  readonly majorityGrade: 0 | 1 | 2 | 3 | 4 | null
-  readonly finalMajorityGrade: 0 | 1 | 2 | 3 | 4 | null
+  readonly qualifyingGrade: 0 | 1 | 2 | 3 | 4 | null
+  readonly powerAbove: string
+  readonly powerBelow: string
+  readonly p: string
+  readonly q: string
+  readonly band: 'A' | 'B' | 'C' | null
   readonly electable: boolean
   readonly rank: number | null
+  readonly tieGroupId: number | null
   readonly outcome: 'SEATED' | 'RESERVE' | 'NOT_ELECTABLE' | 'UNRESOLVED'
 }
 
@@ -121,6 +126,10 @@ export const mjElection = sqliteTable(
     shortDescription: text('short_description').notNull(),
     description: text('description').notNull(),
     seatCount: integer('seat_count').notNull(),
+    // Defaults backfill elections created before CR-004. All application
+    // inserts still write the active code constant explicitly.
+    gradeQuantileNum: integer('grade_quantile_num').notNull().default(1),
+    gradeQuantileDen: integer('grade_quantile_den').notNull().default(2),
     snapshotAt: integer('snapshot_at', { mode: 'timestamp_ms' }).notNull(),
     tcVotingStart: integer('tc_voting_start', {
       mode: 'timestamp_ms'
@@ -301,6 +310,11 @@ export const mjResult = sqliteTable(
     quorumXrd: text('quorum_xrd').notNull(),
     quorumMet: integer('quorum_met', { mode: 'boolean' }).notNull(),
     minimumMedianGrade: integer('minimum_median_grade').notNull(),
+    // The legacy default backfills already-published results; new results are
+    // always committed from the active code constant.
+    gradeQuantileApplied: text('grade_quantile_applied')
+      .notNull()
+      .default('1/2'),
     candidateResults: text('candidate_results', { mode: 'json' })
       .$type<ReadonlyArray<MajorityJudgmentCandidateResultJson>>()
       .notNull(),

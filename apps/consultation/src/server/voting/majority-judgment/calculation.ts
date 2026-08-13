@@ -6,7 +6,7 @@ import type {
   Grade,
   MajorityJudgmentElectionStatus
 } from 'shared/governance/index'
-import { GovernanceComponent } from 'shared/governance/index'
+import { GovernanceComponent, GRADE_QUANTILE } from 'shared/governance/index'
 import { KeyValueStoreAddress } from 'shared/schemas'
 import { VotePowerSnapshot } from '../vote-calculation/votePowerSnapshot'
 import { getVotePowerConfig } from '../vote-calculation/voteSourceConfig'
@@ -195,6 +195,7 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
           seatCount: election.election.seatCount,
           quorumXrd: round.quorumXrd,
           minimumMedianGrade: round.minimumMedianGrade,
+          gradeQuantile: GRADE_QUANTILE,
           reserveListDays: election.election.reserveListDays,
           roundEndsAt: round.votingEnd,
           round: action.round
@@ -214,7 +215,6 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
           seatedCandidateIds: result.seatedCandidateIds,
           reserveCandidateIds: result.reserveCandidateIds,
           referredSeats: result.referredSeats,
-          tieBreakIterations: result.tieBreakIterations,
           unresolvedCandidateIds: result.unresolvedCandidateIds
         })
 
@@ -241,7 +241,9 @@ export class MajorityJudgmentCalculation extends Effect.Service<MajorityJudgment
             reserveCandidateIds: result.reserveCandidateIds,
             reserveExpiresAt: result.reserveExpiresAt,
             referredSeats: result.referredSeats,
-            tieBreakIterations: result.tieBreakIterations,
+            // Retained only for the legacy checked database column. The
+            // majority gauge never removes ballots or runs iterations.
+            tieBreakIterations: 0,
             unresolvedCandidateIds: result.unresolvedCandidateIds,
             status
           }

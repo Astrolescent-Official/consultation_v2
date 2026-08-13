@@ -1,5 +1,6 @@
 import type { MajorityJudgmentElectionStatus } from 'shared/governance/index'
 import { Card } from '@/components/ui/card'
+import { gradeQuantileLabel } from '@/lib/gradeQuantile'
 import { formatXrd } from '@/lib/utils'
 import { electionStatusCopy } from '../electionDisplay'
 
@@ -9,6 +10,7 @@ export type HistoricalRound = {
   readonly totalVotingPower: string
   readonly quorumXrd: string
   readonly quorumMet?: boolean
+  readonly gradeQuantileApplied?: string
 }
 
 export function RoundAuditHistory({
@@ -40,6 +42,11 @@ export function RoundAuditHistory({
               {formatXrd(Number(round.quorumXrd))} XRD ·{' '}
               {round.quorumMet ? 'quorum met' : 'below quorum'}
             </p>
+            {round.gradeQuantileApplied === undefined ? null : (
+              <p className="text-sm text-muted-foreground">
+                Grade quantile: {gradeQuantileLabel(round.gradeQuantileApplied)}
+              </p>
+            )}
           </Card>
         ))}
       </div>

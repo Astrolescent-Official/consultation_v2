@@ -1,0 +1,1075 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "52756fd8-faef-443e-8bc3-62e8b6ff77e6",
+  "prevId": "0eec83a2-66b2-4446-864f-d29282d883d1",
+  "tables": {
+    "config": {
+      "name": "config",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "mj_account_ballot": {
+      "name": "mj_account_ballot",
+      "columns": {
+        "election_id": {
+          "name": "election_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_address": {
+          "name": "account_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vote_id": {
+          "name": "vote_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "grades": {
+          "name": "grades",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voting_power": {
+          "name": "voting_power",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cast_at": {
+          "name": "cast_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mj_account_ballot_round_fk": {
+          "name": "mj_account_ballot_round_fk",
+          "tableFrom": "mj_account_ballot",
+          "tableTo": "mj_round",
+          "columnsFrom": [
+            "election_id",
+            "round"
+          ],
+          "columnsTo": [
+            "election_id",
+            "round"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mj_account_ballot_election_id_round_account_address_pk": {
+          "columns": [
+            "election_id",
+            "round",
+            "account_address"
+          ],
+          "name": "mj_account_ballot_election_id_round_account_address_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_account_ballot_round": {
+          "name": "mj_account_ballot_round",
+          "value": "\"mj_account_ballot\".\"round\" IN (1, 2)"
+        },
+        "mj_account_ballot_vote_id_non_negative": {
+          "name": "mj_account_ballot_vote_id_non_negative",
+          "value": "CAST(\"mj_account_ballot\".\"vote_id\" AS INTEGER) >= 0"
+        },
+        "mj_account_ballot_power_positive": {
+          "name": "mj_account_ballot_power_positive",
+          "value": "CAST(\"mj_account_ballot\".\"voting_power\" AS REAL) > 0"
+        }
+      }
+    },
+    "mj_candidate": {
+      "name": "mj_candidate",
+      "columns": {
+        "election_id": {
+          "name": "election_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "links": {
+          "name": "links",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_order": {
+          "name": "display_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "mj_candidate_reference_unique": {
+          "name": "mj_candidate_reference_unique",
+          "columns": [
+            "election_id",
+            "reference"
+          ],
+          "isUnique": true
+        },
+        "mj_candidate_display_order_unique": {
+          "name": "mj_candidate_display_order_unique",
+          "columns": [
+            "election_id",
+            "display_order"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "mj_candidate_election_id_mj_election_id_fk": {
+          "name": "mj_candidate_election_id_mj_election_id_fk",
+          "tableFrom": "mj_candidate",
+          "tableTo": "mj_election",
+          "columnsFrom": [
+            "election_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mj_candidate_election_id_candidate_id_pk": {
+          "columns": [
+            "election_id",
+            "candidate_id"
+          ],
+          "name": "mj_candidate_election_id_candidate_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_candidate_id_non_negative": {
+          "name": "mj_candidate_id_non_negative",
+          "value": "\"mj_candidate\".\"candidate_id\" >= 0"
+        },
+        "mj_candidate_display_order_non_negative": {
+          "name": "mj_candidate_display_order_non_negative",
+          "value": "\"mj_candidate\".\"display_order\" >= 0"
+        }
+      }
+    },
+    "mj_election": {
+      "name": "mj_election",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "temperature_check_id": {
+          "name": "temperature_check_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role_id": {
+          "name": "role_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "short_description": {
+          "name": "short_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "seat_count": {
+          "name": "seat_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "grade_quantile_num": {
+          "name": "grade_quantile_num",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "grade_quantile_den": {
+          "name": "grade_quantile_den",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 2
+        },
+        "snapshot_at": {
+          "name": "snapshot_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tc_voting_start": {
+          "name": "tc_voting_start",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tc_voting_end": {
+          "name": "tc_voting_end",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tc_quorum_xrd": {
+          "name": "tc_quorum_xrd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tc_approval_threshold": {
+          "name": "tc_approval_threshold",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tc_outcome": {
+          "name": "tc_outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tc_outcome_recorded_at": {
+          "name": "tc_outcome_recorded_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "parameter_set_id": {
+          "name": "parameter_set_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parameter_set_version": {
+          "name": "parameter_set_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reserve_list_days": {
+          "name": "reserve_list_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hidden": {
+          "name": "hidden",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "mj_election_temperature_check_unique": {
+          "name": "mj_election_temperature_check_unique",
+          "columns": [
+            "temperature_check_id"
+          ],
+          "isUnique": true
+        },
+        "mj_election_status_idx": {
+          "name": "mj_election_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_election_seat_count_positive": {
+          "name": "mj_election_seat_count_positive",
+          "value": "\"mj_election\".\"seat_count\" > 0"
+        },
+        "mj_election_parameter_version_positive": {
+          "name": "mj_election_parameter_version_positive",
+          "value": "\"mj_election\".\"parameter_set_version\" > 0"
+        },
+        "mj_election_reserve_days_non_negative": {
+          "name": "mj_election_reserve_days_non_negative",
+          "value": "\"mj_election\".\"reserve_list_days\" >= 0"
+        }
+      }
+    },
+    "mj_grade_histogram": {
+      "name": "mj_grade_histogram",
+      "columns": {
+        "election_id": {
+          "name": "election_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "candidate_id": {
+          "name": "candidate_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "grade": {
+          "name": "grade",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voting_power": {
+          "name": "voting_power",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'0'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mj_grade_histogram_round_fk": {
+          "name": "mj_grade_histogram_round_fk",
+          "tableFrom": "mj_grade_histogram",
+          "tableTo": "mj_round",
+          "columnsFrom": [
+            "election_id",
+            "round"
+          ],
+          "columnsTo": [
+            "election_id",
+            "round"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "mj_grade_histogram_candidate_fk": {
+          "name": "mj_grade_histogram_candidate_fk",
+          "tableFrom": "mj_grade_histogram",
+          "tableTo": "mj_candidate",
+          "columnsFrom": [
+            "election_id",
+            "candidate_id"
+          ],
+          "columnsTo": [
+            "election_id",
+            "candidate_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mj_grade_histogram_election_id_round_candidate_id_grade_pk": {
+          "columns": [
+            "election_id",
+            "round",
+            "candidate_id",
+            "grade"
+          ],
+          "name": "mj_grade_histogram_election_id_round_candidate_id_grade_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_grade_histogram_round": {
+          "name": "mj_grade_histogram_round",
+          "value": "\"mj_grade_histogram\".\"round\" IN (1, 2)"
+        },
+        "mj_grade_histogram_grade": {
+          "name": "mj_grade_histogram_grade",
+          "value": "\"mj_grade_histogram\".\"grade\" BETWEEN 0 AND 4"
+        },
+        "mj_grade_histogram_power_non_negative": {
+          "name": "mj_grade_histogram_power_non_negative",
+          "value": "CAST(\"mj_grade_histogram\".\"voting_power\" AS REAL) >= 0"
+        }
+      }
+    },
+    "mj_result": {
+      "name": "mj_result",
+      "columns": {
+        "election_id": {
+          "name": "election_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "computed_at": {
+          "name": "computed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "total_voting_power": {
+          "name": "total_voting_power",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quorum_xrd": {
+          "name": "quorum_xrd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quorum_met": {
+          "name": "quorum_met",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "minimum_median_grade": {
+          "name": "minimum_median_grade",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "grade_quantile_applied": {
+          "name": "grade_quantile_applied",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'1/2'"
+        },
+        "candidate_results": {
+          "name": "candidate_results",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "seated_candidate_ids": {
+          "name": "seated_candidate_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reserve_candidate_ids": {
+          "name": "reserve_candidate_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reserve_expires_at": {
+          "name": "reserve_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "referred_seats": {
+          "name": "referred_seats",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tie_break_iterations": {
+          "name": "tie_break_iterations",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unresolved_candidate_ids": {
+          "name": "unresolved_candidate_ids",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mj_result_round_fk": {
+          "name": "mj_result_round_fk",
+          "tableFrom": "mj_result",
+          "tableTo": "mj_round",
+          "columnsFrom": [
+            "election_id",
+            "round"
+          ],
+          "columnsTo": [
+            "election_id",
+            "round"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mj_result_election_id_round_pk": {
+          "columns": [
+            "election_id",
+            "round"
+          ],
+          "name": "mj_result_election_id_round_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_result_round": {
+          "name": "mj_result_round",
+          "value": "\"mj_result\".\"round\" IN (1, 2)"
+        },
+        "mj_result_total_power_non_negative": {
+          "name": "mj_result_total_power_non_negative",
+          "value": "CAST(\"mj_result\".\"total_voting_power\" AS REAL) >= 0"
+        },
+        "mj_result_quorum_positive": {
+          "name": "mj_result_quorum_positive",
+          "value": "CAST(\"mj_result\".\"quorum_xrd\" AS REAL) > 0"
+        },
+        "mj_result_minimum_grade": {
+          "name": "mj_result_minimum_grade",
+          "value": "\"mj_result\".\"minimum_median_grade\" BETWEEN 0 AND 4"
+        },
+        "mj_result_referred_seats_non_negative": {
+          "name": "mj_result_referred_seats_non_negative",
+          "value": "\"mj_result\".\"referred_seats\" >= 0"
+        },
+        "mj_result_tie_iterations_non_negative": {
+          "name": "mj_result_tie_iterations_non_negative",
+          "value": "\"mj_result\".\"tie_break_iterations\" >= 0"
+        }
+      }
+    },
+    "mj_round": {
+      "name": "mj_round",
+      "columns": {
+        "election_id": {
+          "name": "election_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_at": {
+          "name": "snapshot_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "snapshot_state_version": {
+          "name": "snapshot_state_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "voting_start": {
+          "name": "voting_start",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voting_end": {
+          "name": "voting_end",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quorum_xrd": {
+          "name": "quorum_xrd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "minimum_median_grade": {
+          "name": "minimum_median_grade",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "votes_kvs_address": {
+          "name": "votes_kvs_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "voters_kvs_address": {
+          "name": "voters_kvs_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_vote_count": {
+          "name": "last_vote_count",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "mj_round_election_id_mj_election_id_fk": {
+          "name": "mj_round_election_id_mj_election_id_fk",
+          "tableFrom": "mj_round",
+          "tableTo": "mj_election",
+          "columnsFrom": [
+            "election_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "mj_round_election_id_round_pk": {
+          "columns": [
+            "election_id",
+            "round"
+          ],
+          "name": "mj_round_election_id_round_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "mj_round_number": {
+          "name": "mj_round_number",
+          "value": "\"mj_round\".\"round\" IN (1, 2)"
+        },
+        "mj_round_quorum_positive": {
+          "name": "mj_round_quorum_positive",
+          "value": "CAST(\"mj_round\".\"quorum_xrd\" AS REAL) > 0"
+        },
+        "mj_round_minimum_grade": {
+          "name": "mj_round_minimum_grade",
+          "value": "\"mj_round\".\"minimum_median_grade\" BETWEEN 0 AND 4"
+        },
+        "mj_round_last_vote_count_non_negative": {
+          "name": "mj_round_last_vote_count_non_negative",
+          "value": "CAST(\"mj_round\".\"last_vote_count\" AS INTEGER) >= 0"
+        }
+      }
+    },
+    "poll_lease": {
+      "name": "poll_lease",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "vote_calculation_account_votes": {
+      "name": "vote_calculation_account_votes",
+      "columns": {
+        "state_id": {
+          "name": "state_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_address": {
+          "name": "account_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vote": {
+          "name": "vote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vote_power": {
+          "name": "vote_power",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'0'"
+        },
+        "vote_power_sort_key": {
+          "name": "vote_power_sort_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "vote_calculation_account_votes_entity_power_idx": {
+          "name": "vote_calculation_account_votes_entity_power_idx",
+          "columns": [
+            "state_id",
+            "vote_power_sort_key"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "vote_calculation_account_votes_state_id_vote_calculation_state_id_fk": {
+          "name": "vote_calculation_account_votes_state_id_vote_calculation_state_id_fk",
+          "tableFrom": "vote_calculation_account_votes",
+          "tableTo": "vote_calculation_state",
+          "columnsFrom": [
+            "state_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "vote_calculation_account_votes_state_id_account_address_vote_pk": {
+          "columns": [
+            "state_id",
+            "account_address",
+            "vote"
+          ],
+          "name": "vote_calculation_account_votes_state_id_account_address_vote_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "vote_calculation_results": {
+      "name": "vote_calculation_results",
+      "columns": {
+        "state_id": {
+          "name": "state_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vote": {
+          "name": "vote",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "vote_power": {
+          "name": "vote_power",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'0'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "vote_calculation_results_state_id_vote_calculation_state_id_fk": {
+          "name": "vote_calculation_results_state_id_vote_calculation_state_id_fk",
+          "tableFrom": "vote_calculation_results",
+          "tableTo": "vote_calculation_state",
+          "columnsFrom": [
+            "state_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "vote_calculation_results_state_id_vote_pk": {
+          "columns": [
+            "state_id",
+            "vote"
+          ],
+          "name": "vote_calculation_results_state_id_vote_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "vote_calculation_state": {
+      "name": "vote_calculation_state",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "governance_component_address": {
+          "name": "governance_component_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_vote_count": {
+          "name": "last_vote_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "results_computed": {
+          "name": "results_computed",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {
+        "vote_calculation_state_component_type_entity_id_unique": {
+          "name": "vote_calculation_state_component_type_entity_id_unique",
+          "columns": [
+            "governance_component_address",
+            "type",
+            "entity_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

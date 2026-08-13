@@ -567,20 +567,20 @@ histogram[c][g] = sum(voter voting power where ballot[c] == g)
 
 Because partial ballots are rejected, the sum across all grades is the same for every candidate and equals total valid ballot voting power.
 
-### Majority grade
+### Grade Quantile and qualifying grade
 
 For each candidate:
 
 1. Traverse grades from Excellent to Poor.
 2. Accumulate the exact decimal voting power.
-3. Select the first grade where `2 * cumulative >= total`.
+3. Select the first grade where `5 * cumulative >= 3 * total`.
 
-The multiplication form avoids division and midpoint rounding. When total power is zero, the candidate has no majority grade and cannot be ranked or elected.
+The fixed Grade Quantile is `τ = 3/5`: a candidate's qualifying grade is the highest grade that at least 60% of the voting power cast placed them at or above. The multiplication form avoids division and rounding. When total power is zero, the candidate has no qualifying grade and cannot be ranked or elected. Grade Quantile is a counting-mechanics constant, not a DAO parameter or election-creation input.
 
 ### Electability and seating
 
-1. Mark a candidate electable only when their majority grade is at least the round's minimum median grade.
-2. Rank electable candidates by majority grade descending, applying the deterministic tie procedure where the tie affects the seat boundary.
+1. Mark a candidate electable only when their qualifying grade is at least the round's Minimum Qualifying Grade (persisted on-ledger as `minimum_median_grade`).
+2. Rank electable candidates by qualifying grade descending and then by the majority gauge. Leave gauge-equal reserve candidates tied; halt only when a gauge-equal group straddles the seat boundary.
 3. Seat the first `seat_count` electable candidates.
 4. Record `referred_seats = seat_count - seated_count`.
 5. Put remaining electable candidates on the reserve list in calculated order.
@@ -588,32 +588,19 @@ The multiplication form avoids division and midpoint rounding. When total power 
 
 The collector records the result. KYC, willingness to serve, concurrent-role limits, and actual legal seating remain outside Consultation V2.
 
-### Deterministic tie procedure
+### Majority-gauge tie procedure
 
-Follow the adopted interpretation of the framework instruction to remove a median-grade ballot from each tied candidate in turn.
+For every candidate with qualifying grade `a`, derive exact voting-power sums from the immutable five-bucket histogram:
 
-For a tied group affecting the seat boundary:
+- `powerAbove`: power grading the candidate strictly above `a`;
+- `powerBelow`: power grading the candidate strictly below `a`;
+- `p = powerAbove / W` and `q = powerBelow / W`, published for display only.
 
-1. Create a candidate-local in-memory copy of ballot contributions. Never mutate persisted ballots or histograms.
-2. Sort tied candidates by candidate ID for stable iteration.
-3. For each tied candidate, select a contribution whose grade equals that candidate's current majority grade using this total order:
-   - voting power ascending;
-   - account address lexicographically ascending;
-   - vote ID ascending.
-4. Remove that contribution from that candidate's working distribution only.
-5. Recompute all tied candidates after the full iteration cycle.
-6. Repeat until the seat-boundary order changes or no qualifying contribution remains.
+All comparisons use the exact power sums, never the divided shares. At an equal qualifying grade, band A (`powerAbove > powerBelow`) precedes band B (equal sums), which precedes band C (`powerAbove < powerBelow`). Within band A, higher `powerAbove` ranks first; within band C, lower `powerBelow` ranks first. Band-B candidates are inseparable regardless of magnitude. Equal-power candidates within A or C are likewise inseparable. The comparator never falls through to candidate ID.
 
-Candidate-ID ordering is only an execution order; it is not itself a tie winner. A tie that remains after all applicable contributions are exhausted becomes `TIE_UNRESOLVED`.
+Ranks are competition ranks (`1, 2, 2, 4`). Every comparator-equal group receives a published tie-group marker. A reserve-list tie remains standing in a `FINAL` result. If and only if a group straddles the seat boundary, seat assignment halts with `TIE_UNRESOLVED`; the complete group is published in `unresolvedCandidateIds` regardless of its size. The calculator neither selects nor publishes a governance route. The existing on-ledger adjudication input may later order that one boundary group.
 
-Persist:
-
-- whether a tie-break was used;
-- the number of iterations;
-- the final working majority grade used for ordering; and
-- the unresolved candidate group when applicable.
-
-Debug logs include the same information but never include wallet secrets or unrelated account data.
+Persist and publish the applied Grade Quantile, qualifying grade, histogram, exact powers, `p`, `q`, band, competition rank, tie-group marker, and candidate outcome. The legacy checked `tie_break_iterations` database column remains at zero until a later table-rebuild migration removes it. No recorded grade is removed, reweighted, or mutated.
 
 ### Round and election status
 
@@ -719,7 +706,7 @@ A mismatched record is an invariant error requiring operator review; the collect
 - **Determinism:** the same normalized ballots and voting powers must produce byte-for-byte equivalent domain results regardless of database insertion order.
 - **Idempotency:** replaying projected events or rerunning finalization must not change the semantic result.
 - **Performance:** after voting powers are available, applying a vote/revote batch and recalculating an election with 20 candidates and 10,000 stored ballots should complete within 2 seconds on the representative collector/database environment. Benchmark this separately from Gateway snapshot latency.
-- **Auditability:** DEBUG logs record round identity, histogram totals, majority grades, grade-floor decisions, tie iterations, quorum classification, seating, reserves, and referrals. Logs must not be the only source of result data.
+- **Auditability:** DEBUG logs record round identity, histogram totals, median grades, exact gauge powers, gauge bands, grade-floor decisions, competition ranks, tie groups, quorum classification, seating, reserves, and referrals. Logs must not be the only source of result data.
 - **Atomicity:** ballot, histogram, result, and round vote-count cursor changes commit or roll back together.
 
 ## Database Design
@@ -955,12 +942,13 @@ During `REVIEW_OPEN`:
 
 During live rounds, label every result provisional. For each candidate display:
 
-- majority-grade label;
+- median-grade label;
 - five-bucket weighted histogram;
-- provisional or final rank;
+- exact `powerAbove` and `powerBelow`, display shares `p` and `q`, and gauge band;
+- provisional or final competition rank with visible tie-group treatment;
 - grade-floor comparison;
 - seated, reserve, or not-electable state; and
-- tie-break disclosure where applicable.
+- a boundary-tie explanation where applicable.
 
 Show participation as:
 
