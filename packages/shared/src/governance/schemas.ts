@@ -971,7 +971,7 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
     Schema.Struct({
       id: MajorityJudgmentElectionIdSchema,
       temperature_check_id: Schema.Number,
-      round_one: MajorityJudgmentRoundSchema,
+      round_one: ScryptoOptionalRoundSchema,
       rerun: ScryptoOptionalRoundSchema,
       tie_resolution: ScryptoOptionalTieResolutionSchema,
       hidden: Schema.Boolean
@@ -979,7 +979,9 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
     Schema.Struct({
       id: MajorityJudgmentElectionIdSchema,
       temperatureCheckId: TemperatureCheckId,
-      roundOne: Schema.typeSchema(MajorityJudgmentRoundSchema),
+      roundOne: Schema.OptionFromSelf(
+        Schema.typeSchema(MajorityJudgmentRoundSchema)
+      ),
       rerun: Schema.OptionFromSelf(
         Schema.typeSchema(MajorityJudgmentRoundSchema)
       ),
@@ -997,7 +999,10 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
       decode: (value) => ({
         id: value.id,
         temperatureCheckId: TemperatureCheckId.make(value.temperature_check_id),
-        roundOne: value.round_one,
+        roundOne:
+          value.round_one.variant === 'Some'
+            ? Option.some(value.round_one.value)
+            : Option.none(),
         rerun:
           value.rerun.variant === 'Some'
             ? Option.some(value.rerun.value)
@@ -1018,7 +1023,13 @@ export const MajorityJudgmentElectionSchema = Schema.asSchema(
       encode: (value) => ({
         id: MajorityJudgmentElectionIdSchema.make(value.id),
         temperature_check_id: value.temperatureCheckId,
-        round_one: value.roundOne,
+        round_one: Option.match(value.roundOne, {
+          onNone: () => ({ variant: 'None' as const }),
+          onSome: (roundOne) => ({
+            variant: 'Some' as const,
+            value: roundOne
+          })
+        }),
         rerun: Option.match(value.rerun, {
           onNone: () => ({ variant: 'None' as const }),
           onSome: (rerun) => ({ variant: 'Some' as const, value: rerun })

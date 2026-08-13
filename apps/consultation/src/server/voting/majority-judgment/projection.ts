@@ -15,6 +15,11 @@ export type MajorityJudgmentPhaseBoundaries = {
   readonly tcOutcome: 'PENDING' | 'PASSED' | 'FAILED'
 }
 
+export type MajorityJudgmentTemperatureCheckPhaseBoundaries = Pick<
+  MajorityJudgmentPhaseBoundaries,
+  'tcVotingStart' | 'tcVotingEnd' | 'tcOutcome'
+>
+
 export const deriveAuthoritativeTemperatureCheckOutcome = (
   recorded: 'PENDING' | 'PASSED' | 'FAILED',
   calculatedPassed: boolean
@@ -27,14 +32,26 @@ export const deriveProjectedTemperatureCheckOutcome = (
   recordedPassed: boolean | null
 ): 'PENDING' | 'FAILED' => (recordedPassed === false ? 'FAILED' : 'PENDING')
 
-export const deriveMajorityJudgmentPhase = (
+export const deriveMajorityJudgmentTemperatureCheckPhase = (
   now: Date,
-  boundaries: MajorityJudgmentPhaseBoundaries
-): MajorityJudgmentElectionStatus => {
+  boundaries: MajorityJudgmentTemperatureCheckPhaseBoundaries
+): 'TC_FAILED' | 'PENDING' | 'TC_LIVE' | 'MJ_PENDING' => {
   if (boundaries.tcOutcome === 'FAILED') return 'TC_FAILED'
   if (boundaries.tcOutcome === 'PENDING') {
     return now < boundaries.tcVotingStart ? 'PENDING' : 'TC_LIVE'
   }
+  return 'MJ_PENDING'
+}
+
+export const deriveMajorityJudgmentPhase = (
+  now: Date,
+  boundaries: MajorityJudgmentPhaseBoundaries
+): MajorityJudgmentElectionStatus => {
+  const temperatureCheckPhase = deriveMajorityJudgmentTemperatureCheckPhase(
+    now,
+    boundaries
+  )
+  if (temperatureCheckPhase !== 'MJ_PENDING') return temperatureCheckPhase
   if (now < boundaries.votingStart) return 'MJ_PENDING'
   if (now >= boundaries.votingStart && now < boundaries.votingEnd) {
     return 'LIVE'
@@ -64,20 +81,34 @@ const deriveElectionStatus = (
 ): MajorityJudgmentElectionStatus =>
   Option.match(election.rerun, {
     onNone: () =>
-      deriveMajorityJudgmentPhase(now, {
-        tcVotingStart: temperatureCheck.start,
-        tcVotingEnd: temperatureCheck.deadline,
-        votingStart: election.roundOne.start,
-        votingEnd: election.roundOne.deadline,
-        // A recorded pass is necessary but not sufficient. Keep the
-        // projection at the TC gate until the collector verifies the
-        // component-scoped weighted tally. The finalizer alone opens MJ.
-        tcOutcome: deriveProjectedTemperatureCheckOutcome(
-          Option.match(temperatureCheck.outcome, {
-            onNone: () => null,
-            onSome: (outcome) => outcome.passed
+      Option.match(election.roundOne, {
+        onNone: () =>
+          deriveMajorityJudgmentTemperatureCheckPhase(now, {
+            tcVotingStart: temperatureCheck.start,
+            tcVotingEnd: temperatureCheck.deadline,
+            tcOutcome: deriveProjectedTemperatureCheckOutcome(
+              Option.match(temperatureCheck.outcome, {
+                onNone: () => null,
+                onSome: (outcome) => outcome.passed
+              })
+            )
+          }),
+        onSome: (roundOne) =>
+          deriveMajorityJudgmentPhase(now, {
+            tcVotingStart: temperatureCheck.start,
+            tcVotingEnd: temperatureCheck.deadline,
+            votingStart: roundOne.start,
+            votingEnd: roundOne.deadline,
+            // A recorded pass is necessary but not sufficient. Keep the
+            // projection at the TC gate until the collector verifies the
+            // component-scoped weighted tally. The finalizer alone opens MJ.
+            tcOutcome: deriveProjectedTemperatureCheckOutcome(
+              Option.match(temperatureCheck.outcome, {
+                onNone: () => null,
+                onSome: (outcome) => outcome.passed
+              })
+            )
           })
-        )
       }),
     onSome: (rerun) => {
       const recordedTcPassed = Option.exists(
@@ -141,8 +172,14 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
           election,
           temperatureCheck
         )
+        type OnLedgerRound =
+          MajorityJudgmentElection['roundOne'] extends Option.Option<
+            infer Round
+          >
+            ? Round
+            : never
         const makeRound = (
-          round: MajorityJudgmentElection['roundOne'],
+          round: OnLedgerRound,
           roundNumber: 1 | 2,
           roundStatus: MajorityJudgmentElectionStatus
         ) => ({
@@ -202,7 +239,10 @@ export class MajorityJudgmentProjection extends Effect.Service<MajorityJudgmentP
             links: candidate.links,
             displayOrder: candidate.displayOrder
           })),
-          round: makeRound(election.roundOne, 1, status)
+          round: Option.match(election.roundOne, {
+            onNone: () => undefined,
+            onSome: (roundOne) => makeRound(roundOne, 1, status)
+          })
         })
 
         yield* Option.match(election.rerun, {

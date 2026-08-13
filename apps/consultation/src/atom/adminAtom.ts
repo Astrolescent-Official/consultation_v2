@@ -14,6 +14,7 @@ import type {
 } from 'shared/governance/index'
 import {
   AdminBadgeService,
+  canOpenMajorityJudgmentRoundOne,
   canStartMajorityJudgmentRerun,
   GovernanceComponent,
   MajorityJudgmentElectionIdSchema,
@@ -37,6 +38,14 @@ class EventNotFoundError extends Data.TaggedError('EventNotFoundError')<{
 export class InvalidMajorityJudgmentRerunStatusError extends Schema.TaggedError<InvalidMajorityJudgmentRerunStatusError>(
   'InvalidMajorityJudgmentRerunStatusError'
 )('InvalidMajorityJudgmentRerunStatusError', {
+  electionId: MajorityJudgmentElectionIdSchema,
+  status: MajorityJudgmentElectionStatusSchema,
+  message: Schema.String
+}) {}
+
+export class InvalidMajorityJudgmentRoundOneStatusError extends Schema.TaggedError<InvalidMajorityJudgmentRoundOneStatusError>(
+  'InvalidMajorityJudgmentRoundOneStatusError'
+)('InvalidMajorityJudgmentRoundOneStatusError', {
   electionId: MajorityJudgmentElectionIdSchema,
   status: MajorityJudgmentElectionStatusSchema,
   message: Schema.String
@@ -190,10 +199,7 @@ export const recordTemperatureCheckOutcomeAtom = governanceRuntime.fn(
 export const startMajorityJudgmentRerunAtom = governanceRuntime.fn(
   Effect.fn(
     function* (
-      input: {
-        readonly electionId: MajorityJudgmentElectionId
-        readonly votingStart: Date
-      },
+      input: { readonly electionId: MajorityJudgmentElectionId },
       get
     ) {
       const governance = yield* GovernanceComponent
@@ -212,8 +218,7 @@ export const startMajorityJudgmentRerunAtom = governanceRuntime.fn(
       const accountAddress = yield* getConnectedAccountAddress()
       const manifest = yield* governance.startMajorityJudgmentRerunManifest({
         accountAddress,
-        electionId: input.electionId,
-        votingStart: input.votingStart
+        electionId: input.electionId
       })
       const result = yield* sendTransaction(
         manifest,
@@ -224,8 +229,48 @@ export const startMajorityJudgmentRerunAtom = governanceRuntime.fn(
     },
     withToast({
       whenLoading: 'Starting election rerun...',
-      whenSuccess: 'Election rerun scheduled',
+      whenSuccess: 'Election rerun opened',
       whenFailure: transactionFailureMessage('Failed to start election rerun')
+    })
+  )
+)
+
+export const startMajorityJudgmentRoundOneAtom = governanceRuntime.fn(
+  Effect.fn(
+    function* (
+      input: { readonly electionId: MajorityJudgmentElectionId },
+      get
+    ) {
+      const governance = yield* GovernanceComponent
+      const sendTransaction = yield* SendTransaction
+      const voteClient = yield* VoteClient
+      const election = yield* voteClient.GetMajorityJudgmentElection({
+        electionId: input.electionId
+      })
+      if (!canOpenMajorityJudgmentRoundOne(election.election.status)) {
+        return yield* new InvalidMajorityJudgmentRoundOneStatusError({
+          electionId: input.electionId,
+          status: election.election.status,
+          message:
+            'Round 1 can only be opened after the candidate list is approved'
+        })
+      }
+      const accountAddress = yield* getConnectedAccountAddress()
+      const manifest = yield* governance.startMajorityJudgmentRoundOneManifest({
+        accountAddress,
+        electionId: input.electionId
+      })
+      const result = yield* sendTransaction(
+        manifest,
+        `Opening Round 1 for Majority Judgment election #${input.electionId}`
+      )
+      get.refresh(majorityJudgmentElectionAtom(input.electionId))
+      return result
+    },
+    withToast({
+      whenLoading: 'Opening Round 1 grading...',
+      whenSuccess: 'Round 1 grading opened',
+      whenFailure: transactionFailureMessage('Failed to open Round 1 grading')
     })
   )
 )

@@ -1,5 +1,23 @@
 import { assert, describe, it } from '@effect/vitest'
 import {
+  GetComponentStateService,
+  GetKeyValueStoreService,
+  GetLedgerStateService,
+  KeyValueStoreDataService,
+  StateEntityDetails
+} from '@radix-effects/gateway'
+import {
+  AccountAddress,
+  ComponentAddress,
+  FungibleResourceAddress,
+  NonFungibleResourceAddress,
+  PackageAddress
+} from '@radix-effects/shared'
+import { Effect, Layer, Option } from 'effect'
+import { AdminBadgeService } from './adminBadge'
+import { GovernanceConfig } from './config'
+import { GovernanceComponent } from './governanceComponent'
+import {
   encodeManifestString,
   renderCandidateGrades,
   renderCandidateOrder,
@@ -9,6 +27,29 @@ import {
   renderParameterSetIdOption,
   renderTemperatureCheckDraft
 } from './governanceManifests'
+
+const accountAddress = AccountAddress.make('account_test')
+const governanceLayer = GovernanceComponent.DefaultWithoutDependencies.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      Layer.succeed(GetKeyValueStoreService, null as never),
+      Layer.succeed(GetLedgerStateService, null as never),
+      Layer.succeed(StateEntityDetails, null as never),
+      Layer.succeed(GetComponentStateService, null as never),
+      Layer.succeed(KeyValueStoreDataService, null as never),
+      Layer.succeed(AdminBadgeService, {
+        getForAccount: () =>
+          Effect.succeed(Option.some({ _tag: 'FungibleAdminBadge' as const }))
+      } as never),
+      Layer.succeed(GovernanceConfig, {
+        packageAddress: PackageAddress.make('package_test'),
+        componentAddress: ComponentAddress.make('component_test'),
+        adminBadgeAddress: NonFungibleResourceAddress.make('resource_admin'),
+        xrdResourceAddress: FungibleResourceAddress.make('resource_xrd')
+      })
+    )
+  )
+)
 
 describe('governance manifest serialization', () => {
   it('encodes optional parameter-set identifiers with the Scrypto Option shape', () => {
@@ -102,4 +143,28 @@ describe('governance manifest serialization', () => {
     )
     assert.isFalse(rendered.includes(`Tuple("${hostile}")`))
   })
+
+  it.effect('opens both MJ rounds immediately with an admin proof', () =>
+    Effect.gen(function* () {
+      const governance = yield* GovernanceComponent
+      const roundOne = yield* governance.startMajorityJudgmentRoundOneManifest({
+        accountAddress,
+        electionId: 7
+      })
+      const rerun = yield* governance.startMajorityJudgmentRerunManifest({
+        accountAddress,
+        electionId: 7
+      })
+
+      for (const [method, manifest] of [
+        ['start_majority_judgment_round_one', roundOne],
+        ['start_majority_judgment_rerun', rerun]
+      ] as const) {
+        assert.include(manifest, '"create_proof_of_amount"')
+        assert.include(manifest, `"${method}"`)
+        assert.include(manifest, '7u64')
+        assert.notInclude(manifest, 'Instant(')
+      }
+    }).pipe(Effect.provide(governanceLayer))
+  )
 })

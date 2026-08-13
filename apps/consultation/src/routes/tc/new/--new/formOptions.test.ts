@@ -1,9 +1,7 @@
 import { assert, describe, it } from 'vitest'
-import { msPerGovernanceDurationUnit } from '@/lib/governanceDuration'
 import {
   ABSTAIN_VOTE_OPTION_LABEL,
   getProposalVoteOptionLabels,
-  makeMajorityJudgmentSchedule,
   temperatureCheckFormOpts
 } from './formOptions'
 
@@ -62,32 +60,6 @@ describe('proposal Abstain option', () => {
         isAdmin: false
       }),
       ['For', 'Against']
-    )
-  })
-})
-
-describe('Majority Judgment schedule defaults', () => {
-  it('meets each selected parameter set minimum with a future start', () => {
-    const now = new Date(2026, 6, 30, 12, 0, 30)
-    const schedule = makeMajorityJudgmentSchedule(
-      { temperatureCheckVotingUnits: 5, electionVotingUnits: 10 },
-      now
-    )
-
-    const tcStart = new Date(schedule.tcVotingStart)
-    const tcEnd = new Date(schedule.tcVotingEnd)
-    const votingStart = new Date(schedule.votingStart)
-    const votingEnd = new Date(schedule.votingEnd)
-
-    assert.isAtLeast(tcStart.getTime() - now.getTime(), 60 * 60 * 1000)
-    assert.strictEqual(
-      tcEnd.getTime() - tcStart.getTime(),
-      5 * msPerGovernanceDurationUnit
-    )
-    assert.strictEqual(votingStart.getTime(), tcEnd.getTime())
-    assert.strictEqual(
-      votingEnd.getTime() - votingStart.getTime(),
-      10 * msPerGovernanceDurationUnit
     )
   })
 })

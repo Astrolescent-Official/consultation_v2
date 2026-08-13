@@ -54,4 +54,33 @@ describe('election temperature-check stage', () => {
     assert.isNull(screen.queryByText('vote results'))
     assert.isNull(screen.queryByText('account votes'))
   })
+
+  it('keeps candidate-list tallies visible during the operator wait', () => {
+    render(
+      <ElectionTemperatureCheckStage
+        temperatureCheckId={3}
+        electionId={MajorityJudgmentElectionIdSchema.make(7)}
+        status="MJ_PENDING"
+        tcVotingEnd={new Date('2026-07-08T00:00:00.000Z')}
+        tcOutcome="PASSED"
+        tcOutcomeRecordedAt={new Date('2026-07-08T00:00:00.000Z')}
+        result={{
+          tcParametersProjected: true,
+          cacheAvailable: true,
+          forVotingPower: '60',
+          againstVotingPower: '40',
+          participationXrd: '100',
+          quorumXrd: '50',
+          quorumMet: true,
+          approvalThreshold: '0.5',
+          forShare: '0.6',
+          approvalMet: true,
+          passed: true
+        }}
+      />
+    )
+
+    assert.isNotNull(screen.getByText('For / Against'))
+    assert.isNotNull(screen.getByText('60.00 / 40.00 XRD'))
+  })
 })

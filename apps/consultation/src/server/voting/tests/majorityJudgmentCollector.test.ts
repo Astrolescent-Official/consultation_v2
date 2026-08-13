@@ -8,6 +8,7 @@ import {
   deriveAuthoritativeTemperatureCheckOutcome,
   deriveMajorityJudgmentPhase,
   deriveMajorityJudgmentRerunPhase,
+  deriveMajorityJudgmentTemperatureCheckPhase,
   deriveProjectedTemperatureCheckOutcome
 } from '../majority-judgment/projection'
 
@@ -178,5 +179,30 @@ describe('majority judgment projected phase', () => {
     assert.strictEqual(deriveProjectedTemperatureCheckOutcome(null), 'PENDING')
     assert.strictEqual(deriveProjectedTemperatureCheckOutcome(true), 'PENDING')
     assert.strictEqual(deriveProjectedTemperatureCheckOutcome(false), 'FAILED')
+  })
+
+  it('derives the round-free operator wait from TC boundaries alone', () => {
+    assert.strictEqual(
+      deriveMajorityJudgmentTemperatureCheckPhase(
+        new Date('2026-07-08T00:00:00.000Z'),
+        {
+          tcVotingStart: boundaries.tcVotingStart,
+          tcVotingEnd: boundaries.tcVotingEnd,
+          tcOutcome: 'PASSED'
+        }
+      ),
+      'MJ_PENDING'
+    )
+    assert.strictEqual(
+      deriveMajorityJudgmentTemperatureCheckPhase(
+        new Date('2026-07-08T00:00:00.000Z'),
+        {
+          tcVotingStart: boundaries.tcVotingStart,
+          tcVotingEnd: boundaries.tcVotingEnd,
+          tcOutcome: 'FAILED'
+        }
+      ),
+      'TC_FAILED'
+    )
   })
 })

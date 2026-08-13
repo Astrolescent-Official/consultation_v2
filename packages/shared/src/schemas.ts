@@ -253,7 +253,7 @@ export const ProposalVotersKeyValueStoreValue = s.struct({
 export const MajorityJudgmentElectionKeyValueStoreKey = s.number()
 export const MajorityJudgmentElectionKeyValueStoreValue = s.struct({
   temperature_check_id: s.number(),
-  round_one: MajorityJudgmentRound,
+  round_one: s.option(MajorityJudgmentRound),
   rerun: s.option(MajorityJudgmentRound),
   tie_resolution: s.option(MajorityJudgmentTieResolution),
   hidden: s.bool()
@@ -336,8 +336,6 @@ export const MajorityJudgmentElectionCreatedEvent = s.struct({
   role_id: s.string(),
   seat_count: s.number(),
   snapshot: s.instant(),
-  voting_start: s.instant(),
-  voting_deadline: s.instant(),
   parameter_set_id: s.string(),
   parameter_set_version: s.number()
 })
@@ -351,8 +349,9 @@ export const MajorityJudgmentElectionVotedEvent = s.struct({
   replacing_vote_id: s.option(s.number())
 })
 
-export const MajorityJudgmentRerunStartedEvent = s.struct({
+export const MajorityJudgmentRoundStartedEvent = s.struct({
   election_id: s.number(),
+  round: MajorityJudgmentRoundId,
   snapshot: s.instant(),
   start: s.instant(),
   deadline: s.instant(),

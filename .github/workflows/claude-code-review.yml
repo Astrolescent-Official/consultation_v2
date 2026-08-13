@@ -41,6 +41,23 @@ jobs:
           plugins: 'code-review@claude-code-plugins'
           prompt: |
             /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+          settings: |
+            {
+              "permissions": {
+                "allow": [
+                  "Skill",
+                  "Task",
+                  "Read",
+                  "Glob",
+                  "Grep",
+                  "Bash(gh:*)",
+                  "Bash(git diff:*)",
+                  "Bash(git log:*)",
+                  "Bash(git show:*)",
+                  "Bash(git blame:*)"
+                ]
+              }
+            }
           additional_permissions: |
             actions: read
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md

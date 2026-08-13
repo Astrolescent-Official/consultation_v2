@@ -131,6 +131,96 @@ beforeEach(async () => {
 })
 
 describe('D1 majority judgment persistence', () => {
+  it('indexes and finalizes the TC gate without requiring a round row', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection({
+          ...projection,
+          election: { ...projection.election, status: 'TC_LIVE' },
+          round: undefined
+        })
+        const awaiting = yield* repo.getElectionsAwaitingTemperatureCheckGate()
+        expect(awaiting.map(({ id }) => id)).toContain(7)
+        const response = yield* repo.getElectionResponse(7)
+        expect(response.currentRound).toBeNull()
+        expect(response.rounds).toEqual([])
+      })
+    )
+
+    const indexes = await env.DB.prepare(
+      `PRAGMA index_list('mj_election')`
+    ).all<{ name: string }>()
+    expect(indexes.results.map(({ name }) => name)).toContain(
+      'mj_election_status_idx'
+    )
+
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 9,
+          proposerRoundTimestamp: new Date('2026-07-09T00:00:00.000Z')
+        })
+      })
+    )
+    const failed = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(failed.election.status).toBe('TC_FAILED')
+    expect(failed.currentRound).toBeNull()
+  })
+
+  it('uses fresh post-gate rows to open a projected round in one drain', async () => {
+    await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        yield* repo.projectElection({
+          ...projection,
+          temperatureCheckVoteCount: 1,
+          election: { ...projection.election, status: 'TC_LIVE' },
+          round: { ...projection.round, status: 'TC_LIVE' }
+        })
+      })
+    )
+    const state = await env.DB.prepare(
+      `SELECT id FROM vote_calculation_state
+       WHERE type = 'temperature_check' AND entity_id = 3`
+    ).first<{ id: number }>()
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE vote_calculation_state
+         SET last_vote_count = '1', results_computed = 1
+         WHERE id = ?`
+      ).bind(state?.id),
+      env.DB.prepare(
+        `INSERT INTO vote_calculation_results (state_id, vote, vote_power)
+         VALUES (?, 'For', '100')`
+      ).bind(state?.id)
+    ])
+
+    await runWithFinalizer(
+      Effect.gen(function* () {
+        const finalizer = yield* MajorityJudgmentFinalizer
+        yield* finalizer.finalize({
+          stateVersion: 10,
+          proposerRoundTimestamp: new Date('2026-07-09T00:00:00.000Z')
+        })
+      })
+    )
+    const response = await runWithRepository(
+      Effect.gen(function* () {
+        const repo = yield* MajorityJudgmentRepo
+        return yield* repo.getElectionResponse(7)
+      })
+    )
+    expect(response.election.status).toBe('LIVE')
+    expect(response.currentRound?.round).toBe('RoundOne')
+  })
+
   it('defers a missing cache, fails an initialized zero-vote tally, and never reopens the TC gate', async () => {
     const tcLiveProjection: MajorityJudgmentProjectionInput = {
       ...projection,
@@ -188,6 +278,10 @@ describe('D1 majority judgment persistence', () => {
       })
     )
     expect(failed.election.status).toBe('TC_FAILED')
+    const resultCount = await env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM mj_result WHERE election_id = 7`
+    ).first<{ count: number }>()
+    expect(resultCount?.count).toBe(0)
 
     await env.DB.prepare(
       `UPDATE mj_election SET status = 'LIVE' WHERE id = 7`
@@ -278,7 +372,7 @@ describe('D1 majority judgment persistence', () => {
         const repo = yield* MajorityJudgmentRepo
         const response = yield* repo.getElectionResponse(7)
         expect(response.election.status).toBe('RERUN_LIVE')
-        expect(response.currentRound.round).toBe('Rerun')
+        expect(response.currentRound?.round).toBe('Rerun')
         expect(response.results).toHaveLength(1)
         expect(response.results[0]?.status).toBe('ROUND_1_FAILED')
       })
@@ -430,7 +524,7 @@ describe('D1 majority judgment persistence', () => {
     expect(response.election.result?.totalVotingPower).toBe(
       '9007199254740993.000000000000000001'
     )
-    expect(response.election.currentRound.round).toBe('RoundOne')
+    expect(response.election.currentRound?.round).toBe('RoundOne')
     expect(response.election.rounds).toHaveLength(2)
     expect(response.election.results).toHaveLength(1)
     expect(response.election.results[0]?.round).toBe('RoundOne')

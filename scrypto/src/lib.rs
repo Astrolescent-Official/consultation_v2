@@ -346,7 +346,7 @@ pub struct MajorityJudgmentTieResolution {
 #[derive(ScryptoSbor)]
 pub struct MajorityJudgmentElection {
     pub temperature_check_id: u64,
-    pub round_one: MajorityJudgmentRound,
+    pub round_one: Option<MajorityJudgmentRound>,
     pub rerun: Option<MajorityJudgmentRound>,
     pub tie_resolution: Option<MajorityJudgmentTieResolution>,
     pub hidden: bool,
@@ -443,8 +443,6 @@ pub struct MajorityJudgmentElectionCreatedEvent {
     pub role_id: String,
     pub seat_count: u32,
     pub snapshot: Instant,
-    pub voting_start: Instant,
-    pub voting_deadline: Instant,
     pub parameter_set_id: String,
     pub parameter_set_version: u32,
 }
@@ -460,8 +458,9 @@ pub struct MajorityJudgmentElectionVotedEvent {
 }
 
 #[derive(ScryptoSbor, ScryptoEvent, Clone, Debug)]
-pub struct MajorityJudgmentRerunStartedEvent {
+pub struct MajorityJudgmentRoundStartedEvent {
     pub election_id: u64,
+    pub round: MajorityJudgmentRoundId,
     pub snapshot: Instant,
     pub start: Instant,
     pub deadline: Instant,

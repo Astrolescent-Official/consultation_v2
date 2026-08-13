@@ -161,6 +161,10 @@ export const canStartMajorityJudgmentRerun = (
   status: MajorityJudgmentElectionStatus
 ) => status === 'ROUND_1_FAILED'
 
+export const canOpenMajorityJudgmentRoundOne = (
+  status: MajorityJudgmentElectionStatus
+) => status === 'MJ_PENDING'
+
 export const MajorityJudgmentCandidateOutcomeSchema = Schema.Literal(
   'SEATED',
   'RESERVE',
@@ -278,10 +282,6 @@ export const MakeMajorityJudgmentElectionInputSchema = Schema.Struct({
     Schema.maxItems(20)
   ),
   parameterSetId: Schema.String.pipe(Schema.minLength(1)),
-  tcVotingStart: Schema.DateFromSelf,
-  tcVotingEnd: Schema.DateFromSelf,
-  votingStart: Schema.DateFromSelf,
-  votingEnd: Schema.DateFromSelf,
   candidateOrder: CandidateOrderSchema
 }).pipe(
   Schema.filter(
@@ -293,13 +293,6 @@ export const MakeMajorityJudgmentElectionInputSchema = Schema.Struct({
       )
     },
     { message: () => 'Candidate order must be a complete permutation' }
-  ),
-  Schema.filter(
-    ({ tcVotingStart, tcVotingEnd, votingStart, votingEnd }) =>
-      tcVotingStart < tcVotingEnd &&
-      tcVotingEnd <= votingStart &&
-      votingStart < votingEnd,
-    { message: () => 'Election voting timestamps must be ordered' }
   )
 )
 export type MakeMajorityJudgmentElectionInput =
@@ -307,11 +300,17 @@ export type MakeMajorityJudgmentElectionInput =
 
 export const StartMajorityJudgmentRerunInputSchema = Schema.Struct({
   accountAddress: AccountAddress,
-  electionId: MajorityJudgmentElectionIdSchema,
-  votingStart: Schema.DateFromSelf
+  electionId: MajorityJudgmentElectionIdSchema
 })
 export type StartMajorityJudgmentRerunInput =
   typeof StartMajorityJudgmentRerunInputSchema.Encoded
+
+export const StartMajorityJudgmentRoundOneInputSchema = Schema.Struct({
+  accountAddress: AccountAddress,
+  electionId: MajorityJudgmentElectionIdSchema
+})
+export type StartMajorityJudgmentRoundOneInput =
+  typeof StartMajorityJudgmentRoundOneInputSchema.Encoded
 
 export const MakeMajorityJudgmentTieResolutionInputSchema = Schema.Struct({
   accountAddress: AccountAddress,
@@ -437,7 +436,7 @@ export class MajorityJudgmentElectionResponse extends Schema.Class<MajorityJudgm
 )({
   election: MajorityJudgmentElectionProjection,
   candidates: Schema.Array(MajorityJudgmentCandidateProjection),
-  currentRound: MajorityJudgmentRoundProjection,
+  currentRound: Schema.NullOr(MajorityJudgmentRoundProjection),
   rounds: Schema.Array(MajorityJudgmentRoundProjection),
   temperatureCheckResult: TemperatureCheckResultResponse,
   result: Schema.optional(MajorityJudgmentResultResponse),

@@ -111,7 +111,7 @@ export function buildElectionStages({
   const rerun = rounds.find(({ round }) => round === 'Rerun')
   const window = (round?: RoundWindow) =>
     round === undefined
-      ? 'Scheduled on-ledger'
+      ? 'Opens when the operator starts it'
       : formatDateRange(round.votingStart, round.votingEnd)
 
   const stages: Array<ElectionStage> = [
@@ -119,7 +119,7 @@ export function buildElectionStages({
       label: 'Candidate list',
       detail:
         tcVotingStart === undefined || tcVotingEnd === undefined
-          ? 'Scheduled on-ledger'
+          ? 'Opens immediately on creation'
           : formatDateRange(tcVotingStart, tcVotingEnd),
       state: candidateListState(status)
     },

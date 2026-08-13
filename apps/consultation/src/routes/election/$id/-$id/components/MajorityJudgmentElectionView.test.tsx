@@ -38,6 +38,25 @@ afterEach(() => {
 })
 
 describe('majority judgment election view', () => {
+  it('renders the operator wait without a grading countdown or round quorum', () => {
+    render(
+      <MajorityJudgmentElectionView
+        electionId={7}
+        title="RAC election"
+        status="MJ_PENDING"
+        candidates={candidates}
+        seatCount={1}
+        tcVotingStart={new Date('2026-07-21T10:00:00.000Z')}
+        tcVotingEnd={new Date('2026-07-22T10:00:00.000Z')}
+        totalVotingPower="0"
+      />
+    )
+
+    assert.isNotNull(first('Awaiting the Governance Operator to open grading'))
+    assert.isTrue(absent(/grading opens/i))
+    assert.isTrue(absent(/Quorum Reached/i))
+  })
+
   it('shows the TC stage, disables grades, and hides MJ tallies', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-21T12:00:00.000Z'))

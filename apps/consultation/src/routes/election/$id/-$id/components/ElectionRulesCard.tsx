@@ -15,7 +15,7 @@ export function ElectionRulesCard({
   readonly roleId?: string
   readonly parameterSetId?: string
   readonly parameterSetVersion?: number
-  readonly quorumXrd: string
+  readonly quorumXrd?: string
   readonly minimumMedianGrade: Grade
   readonly reserveListDays?: number
 }) {
@@ -46,9 +46,15 @@ export function ElectionRulesCard({
         </dl>
         <dl className="space-y-2">
           <dt className="font-medium">Majority Judgment</dt>
-          <dd className="text-muted-foreground">
-            {formatQuorum(quorumXrd)} fixed quorum
-          </dd>
+          {quorumXrd === undefined ? (
+            <dd className="text-muted-foreground">
+              Round rules are fixed when the operator opens grading.
+            </dd>
+          ) : (
+            <dd className="text-muted-foreground">
+              {formatQuorum(quorumXrd)} fixed quorum
+            </dd>
+          )}
           <dd className="text-muted-foreground">
             Grade floor: {gradeName(minimumMedianGrade)}
           </dd>

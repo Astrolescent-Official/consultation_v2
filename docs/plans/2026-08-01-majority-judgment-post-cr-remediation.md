@@ -9,12 +9,25 @@ CR-001 and CR-002. The superseded design remains useful history, but its
 candidate-review phase, automatic rerun, threshold, snapshot, candidate-count,
 and public-creation rules are no longer valid.
 
+## Scheduling amendment (2026-08-02)
+
+The scheduling model in this document is superseded by
+[`2026-08-02-mj-operator-triggered-scheduling-implementation.md`](./2026-08-02-mj-operator-triggered-scheduling-implementation.md).
+Creation starts the linked Temperature Check immediately, but creates no MJ
+round. After the verified TC gate passes, a Governance Operator explicitly
+opens Round 1; after a failed Round 1, a Governance Operator may explicitly
+open the single rerun. Each round starts at the accepted ledger transaction
+time and derives its deadline from the election's frozen parameter snapshot.
+The operation remains atomic and all snapshot, gate, authority, and tally rules
+below remain authoritative.
+
 ## Authoritative lifecycle
 
 1. Nomination and discussion happen outside the Consultation App.
 2. A Governance Operator creates one election operation. It atomically creates
    a normal Temperature Check and an MJ election over one immutable candidate
-   list, with one creation-time voting-power snapshot.
+   list. The Temperature Check takes its creation-time voting-power snapshot;
+   each MJ round carries its own snapshot.
 3. The candidate-list TC is a real For/Against vote using the existing TC vote,
    KVS, and aggregation path. It is not a passive review period.
 4. MJ Round 1 can open only after the TC deadline and an on-ledger outcome that
@@ -25,8 +38,10 @@ and public-creation rules are no longer valid.
    The system never schedules a rerun automatically.
 7. The RAC may deliberately open one Round 2 rerun. The collector accepts that
    transition only from a published `ROUND_1_FAILED` result.
-8. Round 2 reuses the election-creation snapshot, Round 1 quorum, and Round 1
-   minimum median grade. Its extended voting duration is the only changed rule.
+8. Round 2 reuses Round 1's snapshot, quorum, and minimum median grade. Its
+   extended voting duration is the only changed rule. This refines rather than
+   reverses the original rule: a rerun still changes only the duration, never
+   the electorate or the bar.
 9. A quorate result or recorded tie adjudication cannot be replaced by a rerun.
 
 ## Validation and calculation rules
@@ -45,7 +60,7 @@ and public-creation rules are no longer valid.
 
 ## Authority boundary for weighted outcomes
 
-Voting power is resolved off-ledger at the election snapshot, so the Scrypto
+Voting power is resolved off-ledger at each round's snapshot, so the Scrypto
 component cannot independently reproduce a weighted TC or MJ tally. The
 Governance Operator records the TC outcome on-ledger, but that record is not the
 public application's sole source of truth:
@@ -141,3 +156,20 @@ network until a new package/component is deployed and the canonical
 `GovernanceConfig` address for that network is updated. A code merge alone does
 not upgrade the existing Mainnet component. Deployment and address rotation are
 therefore an explicit release gate, not an assumption hidden in the application.
+
+For the operator-triggered scheduling release, use this reset procedure:
+
+1. Deploy a new package and instantiate a new Governance component; record both
+   addresses for the target network.
+2. Stop the collector before changing its configured component address.
+3. Update the canonical network configuration to the new component address.
+4. Wipe and recreate D1 from every migration, including the MJ election status
+   index migration, resetting the collector watermark and caches.
+5. Restart the collector against only the new component and allow a fresh
+   re-index. Do not run a dual-address compatibility interval.
+6. On Stokenet, smoke-test creation, TC finalization, explicit Round 1 opening,
+   and explicit rerun opening before promoting the release.
+
+The reset is intentional: there are no production users or in-flight elections
+to migrate, and the new deployment does not decode events from the superseded
+component.

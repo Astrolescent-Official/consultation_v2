@@ -1,10 +1,6 @@
 import { ParseResult, Schema } from 'effect'
 import { CandidateHttpUrlStringSchema } from 'shared/governance/index'
 import { GovernanceParameterSetIdSchema } from 'shared/governance/schemas'
-import {
-  formatGovernanceDuration,
-  msPerGovernanceDurationUnit
-} from '@/lib/governanceDuration'
 
 export function effectSchemaValidator<T, I>(schema: Schema.Schema<T, I>) {
   return ({ value }: { value: unknown }) => {
@@ -110,11 +106,7 @@ const sharedFields = {
     Schema.Number.pipe(Schema.greaterThan(1))
   ),
   includeAbstain: Schema.Boolean,
-  seatCount: Schema.Number.pipe(Schema.int(), Schema.positive()),
-  tcVotingStart: Schema.String,
-  tcVotingEnd: Schema.String,
-  votingStart: Schema.String,
-  votingEnd: Schema.String
+  seatCount: Schema.Number.pipe(Schema.int(), Schema.positive())
 }
 
 const StandardTemperatureCheckFormSchema = Schema.Struct({
@@ -138,85 +130,26 @@ const StandardTemperatureCheckFormSchema = Schema.Struct({
   )
 )
 
-// The on-chain contract rejects a TC/election window shorter than the selected
-// governance parameter set's own `voting_days` (interpreted in minutes on
-// stokenet, days elsewhere) — so the client minimum must be derived from the
-// same parameter set rather than a fixed constant, or a form-valid schedule
-// could still be rejected on submission, or a legitimate short schedule
-// blocked client-side.
-
-// A parameter set always enforces voting_days > 0 on-chain, so one unit is the
-// least permissive floor to apply before a concrete parameter set is known.
-const DEFAULT_MIN_VOTING_UNITS = 1
-
-export const makeMajorityJudgmentTemperatureCheckFormSchema = (
-  minimums: {
-    temperatureCheckVotingUnits: number
-    electionVotingUnits: number
-  } = {
-    temperatureCheckVotingUnits: DEFAULT_MIN_VOTING_UNITS,
-    electionVotingUnits: DEFAULT_MIN_VOTING_UNITS
-  }
-) => {
-  const minTcDurationMs =
-    minimums.temperatureCheckVotingUnits * msPerGovernanceDurationUnit
-  const minElectionDurationMs =
-    minimums.electionVotingUnits * msPerGovernanceDurationUnit
-
-  return Schema.Struct({
-    ...sharedFields,
-    processType: Schema.Literal('MajorityJudgment'),
-    voteOptions: Schema.Array(UnusedVoteOptionSchema),
-    roleId: Schema.String.pipe(
-      Schema.filter((value) => value.trim().length > 0, {
-        message: () => 'Role identifier is required'
-      })
-    ),
-    candidates: Schema.Array(CandidateFormSchema).pipe(
-      Schema.minItems(1, { message: () => 'At least 1 candidate required' }),
-      Schema.maxItems(20, { message: () => 'At most 20 candidates allowed' }),
-      Schema.filter(
-        (candidates) =>
-          new Set(candidates.map(({ reference }) => reference)).size ===
-          candidates.length,
-        { message: () => 'Candidate references must be unique' }
-      )
-    )
-  }).pipe(
+const MajorityJudgmentTemperatureCheckFormSchema = Schema.Struct({
+  ...sharedFields,
+  processType: Schema.Literal('MajorityJudgment'),
+  voteOptions: Schema.Array(UnusedVoteOptionSchema),
+  roleId: Schema.String.pipe(
+    Schema.filter((value) => value.trim().length > 0, {
+      message: () => 'Role identifier is required'
+    })
+  ),
+  candidates: Schema.Array(CandidateFormSchema).pipe(
+    Schema.minItems(1, { message: () => 'At least 1 candidate required' }),
+    Schema.maxItems(20, { message: () => 'At most 20 candidates allowed' }),
     Schema.filter(
-      ({ tcVotingStart, tcVotingEnd, votingStart, votingEnd }) => {
-        const tcStart = new Date(tcVotingStart).getTime()
-        const tcEnd = new Date(tcVotingEnd).getTime()
-        const mjStart = new Date(votingStart).getTime()
-        const mjEnd = new Date(votingEnd).getTime()
-        return (
-          Number.isFinite(tcStart) &&
-          tcStart > Date.now() &&
-          tcEnd - tcStart >= minTcDurationMs &&
-          mjStart >= tcEnd &&
-          mjEnd - mjStart >= minElectionDurationMs
-        )
-      },
-      {
-        message: () =>
-          `TC must start in the future and last at least ${formatGovernanceDuration(minimums.temperatureCheckVotingUnits)}; ` +
-          `MJ voting must start after it closes and last at least ${formatGovernanceDuration(minimums.electionVotingUnits)}`
-      }
+      (candidates) =>
+        new Set(candidates.map(({ reference }) => reference)).size ===
+        candidates.length,
+      { message: () => 'Candidate references must be unique' }
     )
   )
-}
-
-const MajorityJudgmentTemperatureCheckFormSchema =
-  makeMajorityJudgmentTemperatureCheckFormSchema()
-
-export const makeTemperatureCheckFormSchema = (minimums?: {
-  temperatureCheckVotingUnits: number
-  electionVotingUnits: number
-}) =>
-  Schema.Union(
-    StandardTemperatureCheckFormSchema,
-    makeMajorityJudgmentTemperatureCheckFormSchema(minimums)
-  )
+})
 
 export const TemperatureCheckFormSchema = Schema.Union(
   StandardTemperatureCheckFormSchema,

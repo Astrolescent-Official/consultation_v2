@@ -120,10 +120,6 @@ describe('majority judgment shared schemas', () => {
         links: [`https://example.com/${reference}`]
       })),
       parameterSetId: 'mj-rac',
-      tcVotingStart: new Date('2026-08-01T00:00:00.000Z'),
-      tcVotingEnd: new Date('2026-08-02T00:00:00.000Z'),
-      votingStart: new Date('2026-08-03T00:00:00.000Z'),
-      votingEnd: new Date('2026-08-10T00:00:00.000Z'),
       candidateOrder: [2, 0, 1]
     }
 
@@ -283,6 +279,15 @@ describe('majority judgment shared schemas', () => {
       Schema.decodeUnknownEither(MajorityJudgmentElectionResponseSchema)(
         responseWithHistory
       )._tag === 'Right'
+    )
+    assert.isTrue(
+      Schema.decodeUnknownEither(MajorityJudgmentElectionResponseSchema)({
+        ...responseWithHistory,
+        currentRound: null,
+        rounds: [],
+        result: undefined,
+        results: []
+      })._tag === 'Right'
     )
     assert.isTrue(
       Schema.decodeUnknownEither(MajorityJudgmentElectionResponseSchema)({

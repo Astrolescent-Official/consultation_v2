@@ -1,22 +1,42 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
+  canOpenMajorityJudgmentRoundOne,
   canStartMajorityJudgmentRerun,
   type MajorityJudgmentElectionStatus,
   type MajorityJudgmentRoundId
 } from 'shared/governance/index'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import {
+  formatGovernanceDuration,
+  msPerGovernanceDurationUnit
+} from '@/lib/governanceDuration'
 
 type MajorityJudgmentOwnerControlsProps = {
   readonly status: MajorityJudgmentElectionStatus
-  readonly round: MajorityJudgmentRoundId
+  readonly round?: MajorityJudgmentRoundId
+  readonly roundDurations?: {
+    readonly votingDays: number
+    readonly rerunVotingDays: number
+  }
   readonly unresolvedCandidateIds: ReadonlyArray<number>
   readonly busy: boolean
-  readonly onStartRerun: (votingStart: Date) => void
+  readonly onOpenRoundOne: () => void
+  readonly onStartRerun: () => void
   readonly onRecordTieResolution: (
     orderedCandidateIds: ReadonlyArray<number>
   ) => void
+}
+
+export const roundOpenConfirmationMessage = (
+  label: string,
+  duration: number,
+  now = new Date()
+) => {
+  const estimatedClose = new Date(
+    now.getTime() + duration * msPerGovernanceDurationUnit
+  )
+  return `${label} will open immediately and remain open for ${formatGovernanceDuration(duration)}.\n\nEstimated closing time: ${estimatedClose.toLocaleString()}.\n\nThe exact deadline is set from ledger time when the transaction commits. Continue?`
 }
 
 const moveCandidate = (
@@ -36,19 +56,20 @@ const moveCandidate = (
 export function MajorityJudgmentOwnerControls({
   status,
   round,
+  roundDurations,
   unresolvedCandidateIds,
   busy,
+  onOpenRoundOne,
   onStartRerun,
   onRecordTieResolution
 }: MajorityJudgmentOwnerControlsProps) {
-  const rerunStartId = useId()
-  const [rerunStart, setRerunStart] = useState('')
   const [tieOrder, setTieOrder] = useState(() => [...unresolvedCandidateIds])
 
   useEffect(() => {
     setTieOrder([...unresolvedCandidateIds])
   }, [unresolvedCandidateIds])
 
+  const canOpenRoundOne = canOpenMajorityJudgmentRoundOne(status)
   const canRerun = canStartMajorityJudgmentRerun(status)
   const canResolveTie =
     status === 'TIE_UNRESOLVED' &&
@@ -57,7 +78,13 @@ export function MajorityJudgmentOwnerControls({
 
   // Visibility moved to the header badge every detail page shares, so an
   // election with nothing to adjudicate has no operator card at all.
-  if (!canRerun && !canResolveTie) return null
+  if (!canOpenRoundOne && !canRerun && !canResolveTie) return null
+
+  const confirmOpen = (label: string, duration: number, action: () => void) => {
+    if (window.confirm(roundOpenConfirmationMessage(label, duration))) {
+      action()
+    }
+  }
 
   return (
     <Card className="shadow-none">
@@ -67,22 +94,36 @@ export function MajorityJudgmentOwnerControls({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {canOpenRoundOne ? (
+          <Button
+            type="button"
+            disabled={busy || roundDurations === undefined}
+            onClick={() => {
+              if (roundDurations === undefined) return
+              confirmOpen(
+                'Round 1 grading',
+                roundDurations.votingDays,
+                onOpenRoundOne
+              )
+            }}
+          >
+            Open Round 1 grading
+          </Button>
+        ) : null}
+
         {canRerun ? (
-          <div className="space-y-2">
-            <label htmlFor={rerunStartId} className="block space-y-1 text-sm">
-              <span>Rerun voting start</span>
-              <Input
-                id={rerunStartId}
-                type="datetime-local"
-                value={rerunStart}
-                disabled={busy}
-                onChange={(event) => setRerunStart(event.target.value)}
-              />
-            </label>
+          <div>
             <Button
               type="button"
-              disabled={busy || rerunStart.length === 0}
-              onClick={() => onStartRerun(new Date(rerunStart))}
+              disabled={busy || roundDurations === undefined}
+              onClick={() => {
+                if (roundDurations === undefined) return
+                confirmOpen(
+                  'Round 2 rerun',
+                  roundDurations.rerunVotingDays,
+                  onStartRerun
+                )
+              }}
             >
               Open Round 2 rerun
             </Button>
@@ -95,7 +136,7 @@ export function MajorityJudgmentOwnerControls({
               <p className="text-sm font-medium">Recorded adjudication order</p>
               <p className="text-xs text-muted-foreground">
                 This order must match the adopted governance determination for
-                the unresolved {round} tie.
+                the unresolved {round ?? 'selected round'} tie.
               </p>
             </div>
             <ol className="space-y-2">

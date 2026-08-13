@@ -12,11 +12,13 @@ import {
 } from 'shared/governance/index'
 import {
   recordMajorityJudgmentTieResolutionAtom,
-  startMajorityJudgmentRerunAtom
+  startMajorityJudgmentRerunAtom,
+  startMajorityJudgmentRoundOneAtom
 } from '@/atom/adminAtom'
 import { accountsAtom } from '@/atom/dappToolkitAtom'
 import {
   majorityJudgmentElectionAtom,
+  majorityJudgmentRoundDurationsAtom,
   majorityJudgmentVoterEntriesAtom,
   voteOnMajorityJudgmentBatchAtom
 } from '@/atom/majorityJudgmentAtom'
@@ -76,7 +78,13 @@ export function Page({
     majorityJudgmentVoterEntriesAtom(electionId)
   )
   const accountsResult = useAtomValue(accountsAtom)
+  const roundDurationsResult = useAtomValue(
+    majorityJudgmentRoundDurationsAtom(electionId)
+  )
   const [voteResult, vote] = useAtom(voteOnMajorityJudgmentBatchAtom)
+  const [roundOneResult, openRoundOne] = useAtom(
+    startMajorityJudgmentRoundOneAtom
+  )
   const [rerunResult, startRerun] = useAtom(startMajorityJudgmentRerunAtom)
   const [tieResult, recordTieResolution] = useAtom(
     recordMajorityJudgmentTieResolutionAtom
@@ -141,7 +149,12 @@ export function Page({
         : currentAccount === undefined
           ? []
           : [currentAccount]
-      if (!Result.isSuccess(electionResult) || accounts.length === 0) return
+      if (
+        !Result.isSuccess(electionResult) ||
+        electionResult.value.currentRound === null ||
+        accounts.length === 0
+      )
+        return
 
       vote({
         accounts,
@@ -217,7 +230,12 @@ export function Page({
         response.election.status === 'RERUN_LIVE'
       const temperatureCheckStageActive =
         response.election.status === 'TC_LIVE' ||
-        response.election.status === 'TC_FAILED'
+        response.election.status === 'TC_FAILED' ||
+        response.election.status === 'MJ_PENDING'
+      const currentRound = response.currentRound
+      const roundDurations = Result.isSuccess(roundDurationsResult)
+        ? roundDurationsResult.value
+        : undefined
 
       return (
         <MajorityJudgmentElectionView
@@ -235,12 +253,12 @@ export function Page({
           reserveListDays={response.election.reserveListDays}
           tcVotingStart={response.election.tcVotingStart}
           tcVotingEnd={response.election.tcVotingEnd}
-          votingStart={response.currentRound.votingStart}
-          votingEnd={response.currentRound.votingEnd}
+          votingStart={currentRound?.votingStart}
+          votingEnd={currentRound?.votingEnd}
           rounds={response.rounds}
-          quorumXrd={response.currentRound.quorumXrd}
+          quorumXrd={currentRound?.quorumXrd}
           totalVotingPower={response.result?.totalVotingPower ?? '0'}
-          minimumMedianGrade={response.currentRound.minimumMedianGrade}
+          minimumMedianGrade={currentRound?.minimumMedianGrade}
           initialGrades={mixedBallots ? NO_GRADES : currentEntry?.grades}
           result={response.result}
           results={response.results}
@@ -332,24 +350,29 @@ export function Page({
             isAdmin ? (
               <MajorityJudgmentOwnerControls
                 status={response.election.status}
-                round={response.currentRound.round}
+                round={currentRound?.round}
+                roundDurations={roundDurations}
                 unresolvedCandidateIds={
                   response.result?.unresolvedCandidateIds ?? NO_CANDIDATE_IDS
                 }
-                busy={rerunResult.waiting || tieResult.waiting}
-                onStartRerun={(votingStart) =>
-                  startRerun({ electionId, votingStart })
+                busy={
+                  roundOneResult.waiting ||
+                  rerunResult.waiting ||
+                  tieResult.waiting
                 }
-                onRecordTieResolution={(orderedCandidateIds) =>
+                onOpenRoundOne={() => openRoundOne({ electionId })}
+                onStartRerun={() => startRerun({ electionId })}
+                onRecordTieResolution={(orderedCandidateIds) => {
+                  if (currentRound === null) return
                   recordTieResolution({
                     electionId,
-                    round: response.currentRound.round,
+                    round: currentRound.round,
                     orderedCandidateIds: orderedCandidateIds.map(
                       (candidateId) =>
                         MajorityJudgmentCandidateIdSchema.make(candidateId)
                     )
                   })
-                }
+                }}
               />
             ) : undefined
           }
