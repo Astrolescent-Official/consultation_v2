@@ -57,7 +57,7 @@ export default function Header() {
           >
             <Wordmark />
             <span className="font-mono text-[0.65625rem] uppercase tracking-[0.09em] text-muted-foreground">
-              v2
+              v3
             </span>
           </Link>
         </div>
