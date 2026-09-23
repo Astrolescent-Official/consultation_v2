@@ -1,13 +1,6 @@
 import { Result, useAtom, useAtomValue } from '@effect-atom/atom-react'
 import type { WalletDataStateAccount } from '@radixdlt/radix-dapp-toolkit'
-import {
-  ArrowRightLeft,
-  Check,
-  LoaderIcon,
-  ThumbsDown,
-  ThumbsUp,
-  Wallet
-} from 'lucide-react'
+import { ArrowRightLeft, LoaderIcon, Wallet } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TemperatureCheckId } from 'shared/governance/brandedTypes'
 import type { KeyValueStoreAddress } from 'shared/schemas'
@@ -16,20 +9,26 @@ import { voteOnTemperatureCheckBatchAtom } from '@/atom/temperatureChecksAtom'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useCurrentAccount } from '@/hooks/useCurrentAccount'
+import type { TemperatureCheckBallotWording } from '@/lib/tcBallotWording'
 import type { VotedAccount } from '../types'
-
-type Vote = 'For' | 'Against'
+import {
+  TemperatureCheckBallotHeading,
+  TemperatureCheckBallotOptions,
+  type Vote
+} from './TemperatureCheckBallotOptions'
 
 type VotingSectionProps = {
   temperatureCheckId: TemperatureCheckId
   keyValueStoreAddress: KeyValueStoreAddress
   accountsVotesResult: Result.Result<VotedAccount[], unknown> | undefined
+  wording: TemperatureCheckBallotWording
 }
 
 export function VotingSection({
   temperatureCheckId,
   keyValueStoreAddress,
-  accountsVotesResult
+  accountsVotesResult,
+  wording
 }: VotingSectionProps) {
   const accounts = useAtomValue(accountsAtom)
   const currentAccount = useCurrentAccount()
@@ -68,6 +67,7 @@ export function VotingSection({
           accountList={accountList}
           currentVote={currentVote}
           unvotedCount={unvotedCount}
+          wording={wording}
         />
       )
     })
@@ -97,6 +97,7 @@ type ConnectedVotingProps = {
   accountList: WalletDataStateAccount[]
   currentVote?: Vote
   unvotedCount: number
+  wording: TemperatureCheckBallotWording
 }
 
 function ConnectedVoting({
@@ -104,7 +105,8 @@ function ConnectedVoting({
   keyValueStoreAddress,
   accountList,
   currentVote,
-  unvotedCount
+  unvotedCount,
+  wording
 }: ConnectedVotingProps) {
   const [voteResult, voteBatch] = useAtom(voteOnTemperatureCheckBatchAtom)
   const [isEditing, setIsEditing] = useState(false)
@@ -198,71 +200,14 @@ function ConnectedVoting({
         )}
       </div>
 
-      <div className="flex flex-col gap-3">
-        {(['For', 'Against'] as const).map((opt) => {
-          const isSelected = selectedVote === opt
-          if (showForm) {
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => setSelectedVote(opt)}
-                disabled={isSubmitting}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm border transition-all duration-200 cursor-pointer ${
-                  isSelected
-                    ? 'bg-primary text-primary-foreground border-primary font-medium'
-                    : 'bg-transparent border-border text-foreground hover:border-muted-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <span
-                  className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    isSelected
-                      ? 'border-current bg-current/20'
-                      : 'border-current'
-                  }`}
-                >
-                  {isSelected && <Check className="size-3" />}
-                </span>
-                <span className="flex items-center gap-2">
-                  {opt === 'For' ? (
-                    <ThumbsUp className="size-4" />
-                  ) : (
-                    <ThumbsDown className="size-4" />
-                  )}
-                  {opt.toUpperCase()}
-                </span>
-              </button>
-            )
-          }
-
-          return (
-            <div
-              key={opt}
-              className={`w-full flex items-center gap-3 px-4 py-3 text-sm border transition-all ${
-                isSelected
-                  ? 'bg-primary text-primary-foreground border-primary font-medium'
-                  : 'bg-muted border-border text-muted-foreground'
-              }`}
-            >
-              <span
-                className={`size-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  isSelected ? 'border-current bg-current/20' : 'border-current'
-                }`}
-              >
-                {isSelected && <Check className="size-3" />}
-              </span>
-              <span className="flex items-center gap-2">
-                {opt === 'For' ? (
-                  <ThumbsUp className="size-4" />
-                ) : (
-                  <ThumbsDown className="size-4" />
-                )}
-                {opt.toUpperCase()}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+      <TemperatureCheckBallotHeading wording={wording} />
+      <TemperatureCheckBallotOptions
+        wording={wording}
+        selectedVote={selectedVote}
+        onSelect={setSelectedVote}
+        interactive={showForm}
+        disabled={isSubmitting}
+      />
 
       {showForm && (
         <>
