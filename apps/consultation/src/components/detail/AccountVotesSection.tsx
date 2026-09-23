@@ -113,7 +113,7 @@ export function AccountVotesSection({
                     : 'bg-transparent text-muted-foreground border-border hover:border-muted-foreground'
                 }`}
               >
-                {String.fromCharCode(65 + i)}: {opt.label}
+                {String.fromCharCode(65 + i)}: {opt.shortLabel}
               </button>
             ))}
           </div>

@@ -75,6 +75,7 @@ function ElectionTemperatureCheckVoting({
       temperatureCheckId={temperatureCheckId}
       keyValueStoreAddress={voters}
       accountsVotesResult={accountVotes}
+      wording="legacy"
     />
   )
 }

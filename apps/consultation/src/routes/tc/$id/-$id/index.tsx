@@ -16,11 +16,15 @@ import { QuorumBadge } from '@/components/detail/QuorumBadge'
 import { VoteResultsSection } from '@/components/detail/VoteResultsSection'
 import { InlineCode } from '@/components/ui/typography'
 import { useIsAdmin } from '@/hooks/useIsAdmin'
-import { TC_VOTE_OPTIONS } from '@/lib/voting'
+import {
+  getTemperatureCheckBallotWording,
+  getTemperatureCheckVoteOptions
+} from '@/lib/tcBallotWording'
 import { getItemStatus } from '@/routes/-index/components/StatusBadge'
 import { PromoteToProposal } from './components/PromoteToProposal'
 import { SidebarContent } from './components/SidebarContent'
 import { TemperatureCheckOutcomeControls } from './components/TemperatureCheckOutcomeControls'
+import { TemperatureCheckResultStatus } from './components/TemperatureCheckResultStatus'
 import { VotingSection } from './components/VotingSection'
 
 type TemperatureCheck = typeof TemperatureCheckSchema.Type
@@ -125,6 +129,8 @@ function PageContentInner({
   isAdmin: boolean
 }) {
   const status = getItemStatus(tc.start, tc.deadline)
+  const wording = getTemperatureCheckBallotWording(tc.followUp)
+  const voteOptions = getTemperatureCheckVoteOptions(wording)
   const accountsVotesResult = useAtomValue(
     getTemperatureCheckVotesByAccountsAtom(tc.voters)
   )
@@ -209,12 +215,19 @@ function PageContentInner({
       <VoteResultsSection
         entityType="temperature_check"
         entityId={id}
-        voteOptions={TC_VOTE_OPTIONS}
+        voteOptions={voteOptions}
+        renderStatus={
+          wording === 'legacy'
+            ? undefined
+            : (results) => (
+                <TemperatureCheckResultStatus tc={tc} results={results} />
+              )
+        }
       />
       <AccountVotesSection
         entityType="temperature_check"
         entityId={id}
-        voteOptions={TC_VOTE_OPTIONS}
+        voteOptions={voteOptions}
       />
     </>
   )
@@ -224,6 +237,7 @@ function PageContentInner({
       temperatureCheckId={id}
       keyValueStoreAddress={tc.voters}
       accountsVotesResult={accountsVotesResult}
+      wording={wording}
     />
   )
 

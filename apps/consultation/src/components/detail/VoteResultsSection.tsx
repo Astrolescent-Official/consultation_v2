@@ -1,4 +1,5 @@
 import { Result, useAtomValue } from '@effect-atom/atom-react'
+import type { ReactNode } from 'react'
 import type { EntityId, EntityType } from 'shared/governance/brandedTypes'
 import { voteResultsAtom } from '@/atom/voteResultsAtom'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,12 +11,17 @@ type VoteResultsSectionProps = {
   entityType: EntityType
   entityId: EntityId
   voteOptions: readonly VoteOption[]
+  /** Optional status shown under the heading, derived from the loaded tally. */
+  renderStatus?: (
+    results: ReadonlyArray<{ vote: string; votePower: string }>
+  ) => ReactNode
 }
 
 export function VoteResultsSection({
   entityType,
   entityId,
-  voteOptions
+  voteOptions,
+  renderStatus
 }: VoteResultsSectionProps) {
   const voteResultsResult = useAtomValue(voteResultsAtom(entityType)(entityId))
 
@@ -72,6 +78,7 @@ export function VoteResultsSection({
             <h3 className="text-sm font-semibold uppercase tracking-[0.09em] font-mono text-muted-foreground">
               Current Results
             </h3>
+            {renderStatus?.(results)}
           </div>
 
           <div className="space-y-4">
